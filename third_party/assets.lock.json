@@ -1,0 +1,63 @@
+{
+  "schema_version": 2,
+  "assets": [
+    {
+      "id": "onnxruntime",
+      "version": "1.26.0",
+      "os": "darwin",
+      "arch": "arm64",
+      "url": "https://github.com/microsoft/onnxruntime/releases/download/v1.26.0/onnxruntime-osx-arm64-1.26.0.tgz",
+      "archive_type": "tgz",
+      "archive_sha256": "7a1280bbb1701ea514f71828765237e7896e0f2e1cd332f1f70dbd5c3e33aca3",
+      "archive_size": 31717869,
+      "library_path": "onnxruntime-osx-arm64-1.26.0/lib/libonnxruntime.1.26.0.dylib",
+      "library_sha256": "30afadcfc3c704f7671f8430d6252956651c1972373901d2be629da2e6a4d8ee",
+      "library_size": 37310032,
+      "license_path": "onnxruntime-osx-arm64-1.26.0/LICENSE",
+      "license": "MIT"
+    },
+    {
+      "id": "onnxruntime",
+      "version": "1.26.0",
+      "os": "windows",
+      "arch": "amd64",
+      "url": "https://github.com/microsoft/onnxruntime/releases/download/v1.26.0/onnxruntime-win-x64-1.26.0.zip",
+      "archive_type": "zip",
+      "archive_sha256": "6ebe99b5564bf4d029b6e93eac9ff423682b6212eade769e9ca3f685eaf500b4",
+      "archive_size": 75675381,
+      "library_path": "onnxruntime-win-x64-1.26.0/lib/onnxruntime.dll",
+      "library_sha256": "b2ba7ca16e0e4fe71ad5148744ab885a2f5809e52a0c3de4d9ba3853a03977f9",
+      "library_size": 14897976,
+      "license_path": "onnxruntime-win-x64-1.26.0/LICENSE",
+      "license": "MIT"
+    }
+  ],
+  "voice_models": [
+    {
+      "id": "campplus",
+      "version": "1.0.0-ms1",
+      "model_id": "iic/speech_campplus_sv_zh-cn_16k-common",
+      "upstream_version": "v1.0.0",
+      "upstream_revision": "065629c313eaf1a01c65c640c46d77e61e9607b4",
+      "upstream_checkpoint_sha256": "3388cf5fd3493c9ac9c69851d8e7a8badcfb4f3dc631020c4961371646d5ada8",
+      "url": "https://github.com/liuzhiyong-alt/meet-sieve/releases/download/voice-model-campplus-1.0.0-ms1/meetsieve-voice-campplus-1.0.0-ms1.zip",
+      "archive_sha256": "a5a49b38a76f0778ddd01ee2219518aaccbe32a97966108a1a481d5aed1da45c",
+      "archive_size": 25788529,
+      "model_path": "model.onnx",
+      "model_sha256": "57f6b2439b06fc453ed36159a44b97693610fb0a67c0dafd696d54e24d2b1ae1",
+      "model_size": 28243826,
+      "manifest_path": "manifest.json",
+      "manifest_sha256": "2cb61148fc163cff6b76ec487a446b96a505cef9d2f6b2ae6e4fb395292a02f2",
+      "license_path": "LICENSE",
+      "license_sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+      "notice_path": "NOTICE",
+      "notice_sha256": "40700b8f8f244efc54577e853bf4ee203ee35fea52bfdf6aba9874ffddabe143",
+      "license": "Apache-2.0",
+      "opset": 11,
+      "input_name": "feature",
+      "output_name": "embedding",
+      "feature_bins": 80,
+      "embedding_dimension": 192
+    }
+  ]
+}

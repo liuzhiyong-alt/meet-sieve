@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>会议记录 · MeetSieve</title><link rel="stylesheet" href="assets/meetsieve.css"><script src="assets/meetsieve.js" defer></script></head>
+<body>
+  <div class="app">
+    <aside class="sidebar"><a class="brand" href="index.html"><span class="brand-mark">M</span><span>MeetSieve</span></a><nav class="nav"><a href="start.html">开始会议</a><a class="active" href="records.html">会议记录</a><a href="people.html">常用小组</a><a href="settings.html">设置</a></nav><div class="sidebar-foot"><span class="status ok">所有更改已保存</span></div></aside>
+    <main class="main"><header class="titlebar"><span class="meta">会议记录</span><div class="window-controls"><i></i><i></i><i></i></div></header><div class="content">
+      <section class="page-head" data-od-id="records-head"><div><p class="eyebrow">本地会议</p><h1>会议记录</h1><p>按日期与状态查找本机会议；批量操作不会影响工作目录外的文件。</p></div><a class="btn btn-primary" href="start.html">创建会议</a></section>
+      <section class="card" data-od-id="records-filter"><div class="grid grid-3"><label class="label">搜索<input class="field" placeholder="主题、会议号或参会人"></label><label class="label">保存状态<select class="select"><option>全部</option><option>保存完成</option><option>需要处理</option><option>删除失败</option></select></label><label class="label">纪要状态<select class="select"><option>全部</option><option>未生成</option><option>草稿</option><option>已确认</option></select></label></div><div class="row-between" style="margin-top:16px"><label class="choice"><input type="checkbox" data-bulk-select>选择当前页</label><button class="btn btn-quiet" data-empty-state>查看空状态</button></div></section>
+      <section class="card" data-od-id="records-list" style="margin-top:16px" data-record-list>
+        <ul class="list">
+          <li class="list-item"><div class="row"><input type="checkbox" data-bulk-select><div><a href="detail.html"><strong>AI 会议助手产品评审</strong></a><div class="meta num">20260731-A7K2-03 · 今天 09:30 · 48 分钟</div></div></div><div class="row"><span class="status warn">待补转写</span><a class="btn" href="detail.html">打开</a></div></li>
+          <li class="list-item"><div class="row"><input type="checkbox" data-bulk-select><div><strong>客户端 Alpha 评审</strong><div class="meta num">20260730-A7K2-02 · 昨天 16:10 · 31 分钟</div></div></div><div class="row"><span class="status ok">纪要已确认</span><button class="btn">打开</button></div></li>
+          <li class="list-item"><div class="row"><input type="checkbox" data-bulk-select><div><strong>恢复策略讨论</strong><div class="meta num">20260729-A7K2-01 · 周三 14:00 · 26 分钟</div></div></div><div class="row"><span class="status bad">删除未完成</span><button class="btn btn-danger" data-open="delete-failed">处理</button></div></li>
+        </ul>
+      </section>
+    </div></main>
+  </div>
+  <div class="modal-backdrop" id="delete-failed"><div class="modal"><h2>部分文件未能删除</h2><p class="muted">数据库删除任务仍保留，会议不会被报告为已删除。可能是录音文件正被其他程序占用。</p><div class="notice bad"><span class="meta num">recording.wav</span><strong>文件被占用</strong></div><div class="modal-actions"><button class="btn" data-close>稍后处理</button><button class="btn btn-danger">重试删除</button></div></div></div>
+</body>
+</html>

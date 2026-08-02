@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>会议进行中 · MeetSieve</title><link rel="stylesheet" href="assets/meetsieve.css"><script src="assets/meetsieve.js" defer></script></head>
+<body class="page-live">
+  <div class="app">
+    <aside class="sidebar"><a class="brand" href="index.html"><span class="brand-mark">M</span><span>MeetSieve</span></a><nav class="nav" aria-label="主导航"><a class="active" href="live.html" aria-current="page">会议进行中</a><a href="records.html">会议记录</a><a href="people.html">常用小组</a><a href="settings.html">设置</a></nav><div class="sidebar-foot"><span class="status ok">正在本地保存</span><p class="meta num">20260731-A7K2-03</p></div></aside>
+    <main class="main"><header class="titlebar"><span class="meta">MeetSieve / 会议进行中</span><div class="row"><button class="btn btn-quiet" type="button">最小化到托盘</button><button class="btn btn-danger" type="button" data-open="end-meeting">结束会议</button></div></header>
+      <div class="content">
+        <section class="page-head live-stage" data-od-id="live-status"><div><div class="recording-line"><span class="recording-dot" aria-hidden="true"></span><span>录音中 · 本地保存正常</span></div><h1>AI 会议助手产品评审</h1><p>录音、转写、AI 与局域网状态独立运行，异常不会影响本地事实源。</p></div><div class="live-meter"><span class="live-clock" aria-label="会议已进行 24 分 18 秒">00:24:18</span><div class="audio-bar" aria-label="实时麦克风电平"><i style="--h:9px"></i><i style="--h:21px"></i><i style="--h:14px"></i><i style="--h:27px"></i><i style="--h:18px"></i><i style="--h:11px"></i></div><span class="meta">麦克风输入正常</span></div></section>
+        <section class="split" data-od-id="live-workspace">
+          <div class="card">
+            <div class="row-between" style="margin-bottom:24px"><div><p class="eyebrow">统一时间线</p><span class="muted">最近发言与 AI 参与记录</span></div><button class="btn btn-primary" type="button" data-open="ask-ai">请 AI 参与</button></div>
+            <div class="timeline">
+              <article class="event"><span class="meta num">00:22:41</span><p><span class="speaker">陈然</span>：工作目录迁移失败时必须继续使用旧目录，不能切到一半。</p></article>
+              <article class="event"><span class="meta num">00:23:08</span><p><span class="speaker">王珂</span>：同意，界面要显示复制、校验、切换索引三个阶段。</p></article>
+              <article class="event ai"><span class="meta num">00:23:34 · AI 问题</span><p><span class="speaker">刘毅</span>：AI 助手，比较一下两种迁移失败恢复策略的风险。</p></article>
+              <article class="event ai"><span class="meta num">00:23:52 · AI 回答</span><p><span class="speaker">AI 助手</span>：优先保持旧目录为唯一事实源。新目录只有在文件校验和数据库索引切换都成功后才生效；否则删除临时标记并继续使用旧目录。</p></article>
+              <article class="event" data-ai-output hidden><span class="meta num">刚刚 · AI 问题</span><p><span class="speaker">你</span>：<span data-question></span></p></article>
+            </div>
+          </div>
+          <aside class="stack">
+            <div class="card"><div class="card-head"><h3>系统状态</h3><button class="btn btn-square">···</button></div><ul class="list"><li class="list-item"><span>录音</span><span class="status ok">PCM 写入中</span></li><li class="list-item"><span>本地保存</span><span class="status ok">2 秒前</span></li><li class="list-item"><span>Codex</span><span class="status ok">可参与</span></li><li class="list-item"><span>访客页</span><span class="status ok">3 人在线</span></li></ul></div>
+            <div class="card"><div class="card-head"><h3>参会人</h3><button class="btn btn-quiet" data-open="guest-link">访客入口</button></div><div class="row"><span class="avatar">刘</span><span class="avatar">陈</span><span class="avatar">王</span><span class="avatar">访</span></div><p class="muted">访客仅能查看会议消息，不能查看实时转写。</p></div>
+          </aside>
+        </section>
+      </div>
+    </main>
+  </div>
+  <div class="modal-backdrop" id="ask-ai"><form class="modal" data-ai-form><h2>请 AI 参与</h2><p class="muted">AI 会读取本场已同步的讨论、消息和附件，并把回答写回统一时间线。</p><label class="label">问题<textarea class="textarea" placeholder="例如：比较刚才两个方案的风险"></textarea></label><div class="modal-actions"><button class="btn" type="button" data-close>取消</button><button class="btn btn-primary" type="submit">提交问题</button></div></form></div>
+  <div class="modal-backdrop" id="end-meeting"><div class="modal"><h2>结束并保存会议？</h2><p class="muted">将停止访客访问，完成尾部转写、合并录音并刷新会议原始记录。Codex 同步失败不会阻塞本地保存。</p><div class="notice warn"><strong>有 1 个附件仍在上传</strong><span class="muted">可等待完成，或结束后从详情页重试。</span></div><div class="modal-actions"><button class="btn" data-close>继续会议</button><a class="btn btn-primary" href="detail.html">结束并保存</a></div></div></div>
+  <div class="modal-backdrop" id="guest-link"><div class="modal"><h2>局域网访客入口</h2><p class="meta num">http://192.168.1.18:43120/meeting</p><p class="muted">会议结束后入口立即失效。访客需填写临时显示名称。</p><div class="modal-actions"><a class="btn btn-quiet" href="guest.html">预览访客页</a><button class="btn btn-primary" data-copy="http://192.168.1.18:43120/meeting">复制地址</button></div></div></div>
+</body>
+</html>

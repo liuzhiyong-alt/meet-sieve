@@ -1,0 +1,33 @@
+app:
+  name: MeetSieve
+log:
+  level: info
+  max_size_mb: 20
+  max_backups: 10
+  max_age_days: 14
+  compress: true
+database:
+  busy_timeout_ms: 5000
+  read_max_open_conns: 4
+  read_max_idle_conns: 2
+  write_queue_capacity: 256
+codex:
+  command: codex
+  initialize_timeout_seconds: 10
+recording:
+  max_segment_seconds: 60
+  checkpoint_seconds: 2
+  first_frame_timeout_seconds: 5
+  minimum_free_space_gib: 1
+asr:
+  endpoint: wss://openspeech.bytedance.com/api/v3/sauc/bigmodel
+  resource_id: volc.seedasr.sauc.duration
+  connect_timeout_seconds: 10
+  pcm_queue_samples: 32000
+  final_queue_capacity: 128
+  final_persist_timeout_seconds: 5
+  tail_timeout_seconds: 15
+  reconnect_backoff_seconds: [1, 2, 4, 8, 15]
+runtime:
+  onnx:
+    version: 1.26.0

@@ -1,0 +1,22 @@
+{
+  "$schema": "https://open-design.ai/schemas/plugin.v1.json",
+  "specVersion": "1.0.0",
+  "name": "meetsieve-prd-ms8a8npm",
+  "title": "会意 MeetSieve PRD 与产品设计",
+  "version": "0.1.0",
+  "description": "- 文档状态：需求基线已确认 - 中文名称：会意 - 英文名称：MeetSieve - 项目名称：`meet-sieve` - AI 助手昵称与默认唤醒词：会来事儿 - 产品性质：组内自用工具，不面向商业化 - 首发平台：macOS、Windows - 技术约束：客户端以 Go 为主，本地优先 - 参考项目：`/Users/liu/develop/code-space/ai-discussion` - 参考研究：`/Users/liu/",
+  "od": {
+    "kind": "skill",
+    "taskKind": "new-generation",
+    "context": {
+      "skills": [
+        {
+          "path": "./SKILL.md"
+        }
+      ]
+    },
+    "capabilities": [
+      "prompt:inject"
+    ]
+  }
+}

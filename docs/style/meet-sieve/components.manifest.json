@@ -1,0 +1,248 @@
+{
+  "schemaVersion": "meet-sieve-components/v1",
+  "version": "1.1.0",
+  "source": {
+    "css": "docs/UI/assets/meetsieve.css",
+    "html": "docs/UI/*.html",
+    "spec": "docs/spec/技术方案.md"
+  },
+  "components": [
+    {
+      "id": "app-shell",
+      "name": "AppShell",
+      "maturity": "existing",
+      "evidence": [".app", ".main"],
+      "parts": ["Sidebar", "Titlebar", "Content"]
+    },
+    {
+      "id": "sidebar",
+      "name": "Sidebar",
+      "maturity": "existing",
+      "evidence": [".sidebar", ".brand", ".nav", ".sidebar-foot"],
+      "variants": ["default", "compact", "meeting-active"]
+    },
+    {
+      "id": "titlebar",
+      "name": "Titlebar",
+      "maturity": "existing",
+      "evidence": [".titlebar"],
+      "variants": [
+        "default",
+        "meeting-active",
+        "platform-macos",
+        "platform-windows"
+      ]
+    },
+    {
+      "id": "page-header",
+      "name": "PageHeader",
+      "maturity": "existing",
+      "evidence": [".page-head", ".eyebrow"],
+      "parts": ["eyebrow", "heading", "description", "action-or-status"]
+    },
+    {
+      "id": "button",
+      "name": "Button",
+      "maturity": "existing",
+      "evidence": [
+        ".btn",
+        ".btn-primary",
+        ".btn-quiet",
+        ".btn-danger",
+        ".btn-square"
+      ],
+      "variants": ["default", "primary", "quiet", "danger", "icon"],
+      "states": ["default", "hover", "active", "focus", "disabled", "busy"]
+    },
+    {
+      "id": "status",
+      "name": "Status",
+      "maturity": "existing",
+      "evidence": [".status", ".status.ok", ".status.warn", ".status.bad"],
+      "variants": ["neutral", "success", "warning", "danger", "info"]
+    },
+    {
+      "id": "card",
+      "name": "Card",
+      "maturity": "existing",
+      "evidence": [".card", ".card-head"],
+      "variants": ["default", "emphasis", "settings-content"]
+    },
+    {
+      "id": "form-field",
+      "name": "FormField",
+      "maturity": "existing",
+      "evidence": [
+        ".field",
+        ".select",
+        ".textarea",
+        ".label",
+        ".help",
+        ".field-error"
+      ],
+      "variants": ["input", "select", "textarea", "readonly"],
+      "states": ["default", "hover", "focus", "invalid", "disabled", "readonly"]
+    },
+    {
+      "id": "choice",
+      "name": "Choice",
+      "maturity": "existing",
+      "evidence": [".choice"],
+      "variants": ["checkbox", "radio", "member"]
+    },
+    {
+      "id": "switch",
+      "name": "Switch",
+      "maturity": "existing",
+      "evidence": [".toggle", ".toggle.on"],
+      "states": ["off", "on", "disabled", "focus"]
+    },
+    {
+      "id": "tabs",
+      "name": "Tabs",
+      "maturity": "existing",
+      "evidence": [".tabs", ".tab", ".tab.active", ".tab-panel"],
+      "states": ["default", "active", "focus", "disabled"]
+    },
+    {
+      "id": "list",
+      "name": "List",
+      "maturity": "existing",
+      "evidence": [".list", ".list-item"],
+      "variants": ["default", "selectable", "meeting", "status"]
+    },
+    {
+      "id": "progress",
+      "name": "Progress",
+      "maturity": "existing",
+      "evidence": [".progress"],
+      "variants": ["determinate", "stage-based"]
+    },
+    {
+      "id": "timeline",
+      "name": "Timeline",
+      "maturity": "existing",
+      "evidence": [".timeline", ".event", ".event.ai", ".speaker"],
+      "variants": [
+        "human",
+        "guest",
+        "attachment",
+        "ai-question",
+        "ai-answer",
+        "gap",
+        "correction"
+      ]
+    },
+    {
+      "id": "audio-meter",
+      "name": "AudioMeter",
+      "maturity": "existing",
+      "evidence": [".audio-bar"],
+      "states": ["active", "silent", "unavailable"]
+    },
+    {
+      "id": "notice",
+      "name": "Notice",
+      "maturity": "existing",
+      "evidence": [".notice", ".notice.warn", ".notice.bad"],
+      "variants": ["neutral", "info", "warning", "danger"]
+    },
+    {
+      "id": "empty-state",
+      "name": "EmptyState",
+      "maturity": "existing",
+      "evidence": [".empty"],
+      "variants": ["initial", "filtered", "permission"]
+    },
+    {
+      "id": "modal",
+      "name": "Modal",
+      "maturity": "existing",
+      "evidence": [".modal-backdrop", ".modal", ".modal-actions"],
+      "variants": ["default", "confirm", "danger"]
+    },
+    {
+      "id": "toast",
+      "name": "Toast",
+      "maturity": "existing",
+      "evidence": [".toast", ".toast.show"],
+      "variants": ["status"]
+    },
+    {
+      "id": "avatar",
+      "name": "Avatar",
+      "maturity": "existing",
+      "evidence": [".avatar", ".avatar-group"],
+      "variants": ["member", "guest", "group-overflow"]
+    },
+    {
+      "id": "live-stage",
+      "name": "LiveStage",
+      "maturity": "existing",
+      "evidence": [
+        ".live-stage",
+        ".recording-line",
+        ".recording-dot",
+        ".live-clock",
+        ".live-meter"
+      ],
+      "parts": [
+        "recording-state",
+        "topic",
+        "description",
+        "clock",
+        "audio-meter"
+      ]
+    },
+    {
+      "id": "operation-steps",
+      "name": "OperationSteps",
+      "maturity": "derived",
+      "evidence": ["settings.html#migrate", ".progress"],
+      "variants": ["workspace-migration", "meeting-finalize", "recovery"]
+    },
+    {
+      "id": "upload-item",
+      "name": "UploadItem",
+      "maturity": "derived",
+      "evidence": [".list-item", ".progress", ".status", ".btn"],
+      "states": [
+        "ready",
+        "uploading",
+        "processing",
+        "completed",
+        "failed",
+        "cancelled"
+      ]
+    },
+    {
+      "id": "transcript-editor",
+      "name": "TranscriptEditor",
+      "maturity": "existing",
+      "evidence": ["transcript-editor.html", "detail.html#transcript"],
+      "parts": [
+        "transcript-list",
+        "selected-entry",
+        "single-correction",
+        "cluster-correction",
+        "audio-clip",
+        "voice-sample-confirm"
+      ],
+      "states": [
+        "loading",
+        "ready",
+        "speaker-processing",
+        "profile-unavailable",
+        "revision-conflict",
+        "projection-failed",
+        "audio-unavailable"
+      ]
+    },
+    {
+      "id": "minute-version",
+      "name": "MinuteVersion",
+      "maturity": "design-required",
+      "evidence": ["detail.html#minutes"]
+    }
+  ]
+}

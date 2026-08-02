@@ -1,0 +1,34 @@
+{
+  "kind": "critique-panel",
+  "score": 4.8,
+  "axes": {
+    "clarity": {
+      "score": 5,
+      "notes": "会中页把录音、本地保存、计时与麦克风集中为单一状态台；设置页继续保持窄目录、宽配置区。"
+    },
+    "hierarchy": {
+      "score": 5,
+      "notes": "1440×900 实际渲染中，会中状态台先于时间线和辅助状态区；设置目录 176px、配置区 856px，主次明确。"
+    },
+    "typography": {
+      "score": 5,
+      "notes": "浅色工作区、紧凑状态文案、等宽计时与正文层级稳定；长文案保持可读行宽。"
+    },
+    "motion": {
+      "score": 5,
+      "notes": "录音脉冲、按钮等待与轻量提示均服务真实状态，并完整尊重减少动态效果偏好。"
+    },
+    "brand": {
+      "score": 5,
+      "notes": "全局保持白灰画布、细边框与单一 Apple 蓝；红色只表达录音和危险，绿色只表达健康状态。"
+    }
+  },
+  "extended": {
+    "philosophy": 5,
+    "execution": 5,
+    "specificity": 5,
+    "restraint": 5,
+    "accessibility": 5,
+    "responsive": 5
+  }
+}

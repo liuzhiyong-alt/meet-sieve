@@ -1,0 +1,33 @@
+{
+  "name": "meetsieve-frontend",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "pnpm typecheck && vite build",
+    "preview": "vite preview",
+    "typecheck": "vue-tsc --noEmit",
+    "test": "vitest run",
+    "lint": "eslint src --max-warnings=0",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "dependencies": {
+    "pinia": "3.0.4",
+    "vue": "3.5.40",
+    "vue-router": "4.6.4"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "6.0.8",
+    "@vue/eslint-config-typescript": "14.9.0",
+    "eslint": "9.39.5",
+    "eslint-plugin-vue": "10.10.0",
+    "markdownlint-cli2": "0.23.2",
+    "prettier": "3.9.6",
+    "typescript": "5.9.3",
+    "vite": "7.3.6",
+    "vitest": "3.2.7",
+    "vue-tsc": "3.3.8"
+  }
+}

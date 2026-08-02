@@ -1,0 +1,14 @@
+{
+  "codex_version": "codex-cli 0.146.0",
+  "generated_at": "2026-07-30T20:32:25+08:00",
+  "command": "codex app-server generate-json-schema --out <dir>",
+  "methods": [
+    "initialize",
+    "initialized"
+  ],
+  "files": {
+    "schema/v1/InitializeParams.json": "4f576f99e285beb28f71f48a72b887c1f517dada86fee348fe2af0a35511de23",
+    "schema/v1/InitializeResponse.json": "86dcd236d0576a82c85b933586dc45731260eab1b6edb3447b03f790277322b1",
+    "schema/ClientNotification.json": "a30b3041578845b11add3d07d5a63cd3a12d5d126e87b8c591862b4aeb68d97c"
+  }
+}

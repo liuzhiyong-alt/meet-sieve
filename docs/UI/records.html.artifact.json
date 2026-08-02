@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "kind": "html",
+  "title": "records.html",
+  "entry": "records.html",
+  "renderer": "html",
+  "status": "complete",
+  "exports": [
+    "html",
+    "pdf",
+    "zip"
+  ],
+  "createdAt": "2026-07-31T02:00:16.706Z",
+  "updatedAt": "2026-07-31T02:00:16.706Z",
+  "metadata": {
+    "inferred": true,
+    "reconciled": true
+  }
+}

@@ -9,3 +9,12 @@ docs/plan/**
 docs/spec/**
 
 AGENTS.md
+
+# 本地工具、依赖缓存与构建产物
+.tools/
+.cache/
+frontend/node_modules/
+frontend/dist/
+.pnpm-store/
+build/bin/
+build/windows/installer/tmp/

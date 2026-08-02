@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>创建会议 · MeetSieve</title><link rel="stylesheet" href="assets/meetsieve.css"><script src="assets/meetsieve.js" defer></script></head>
+<body>
+  <div class="app">
+    <aside class="sidebar"><a class="brand" href="index.html"><span class="brand-mark">M</span><span>MeetSieve</span></a><nav class="nav"><a class="active" href="start.html">开始会议</a><a href="records.html">会议记录</a><a href="people.html">常用小组</a><a href="settings.html">设置</a></nav><div class="sidebar-foot"><span class="status ok">可以开始会议</span></div></aside>
+    <main class="main"><header class="titlebar"><span class="meta">创建会议</span><div class="window-controls"><i></i><i></i><i></i></div></header><div class="content">
+      <section class="page-head" data-od-id="start-head"><div><p class="eyebrow">快速开始</p><h1>谁会参加这场会议？</h1><p>先确定参会人，其他设置沿用上次选择。</p></div><a class="btn" href="index.html">取消</a></section>
+      <section class="split" data-od-id="start-form">
+        <div class="card">
+          <div class="card-head"><h2>参会人</h2><button class="btn btn-quiet">添加临时成员</button></div>
+          <label class="label">常用小组<select class="select"><option>产品周会 · 5 人</option><option>技术评审 · 7 人</option><option>不使用小组</option></select></label>
+          <div class="stack" style="margin-top:16px"><label class="choice"><input type="checkbox" checked><span class="avatar">刘</span><span><strong>刘毅</strong><small class="help" style="display:block">声纹可用</small></span></label><label class="choice"><input type="checkbox" checked><span class="avatar">陈</span><span><strong>陈然</strong><small class="help" style="display:block">声纹可用</small></span></label><label class="choice"><input type="checkbox" checked><span class="avatar">王</span><span><strong>王珂</strong><small class="help" style="display:block">未录入声纹，仍可参会</small></span></label></div>
+          <button class="btn" data-advanced-toggle style="margin-top:18px">展开高级设置</button>
+          <div data-advanced-panel hidden style="margin-top:18px"><div class="grid grid-2"><label class="label">会议主题（可选）<input class="field" value="AI 会议助手产品评审"></label><label class="label">会议号<input class="field num" value="20260731-A7K2-03"></label><label class="label">麦克风<select class="select"><option>阵列麦克风（Realtek Audio）</option></select></label><label class="label">局域网访客页<div class="row-between choice"><span>允许同一 Wi-Fi 发送资料</span><button class="toggle on" aria-pressed="true"></button></div></label></div></div>
+        </div>
+        <aside class="card"><p class="meta">开始前检查</p><ul class="list"><li class="list-item"><span>工作目录</span><span class="status ok">可写</span></li><li class="list-item"><span>麦克风</span><span class="status ok">正常</span></li><li class="list-item"><span>实时转写</span><span class="status ok">已连接</span></li><li class="list-item"><span>Codex</span><span class="status ok">可用</span></li><li class="list-item"><span>局域网</span><span class="status warn">等待启动</span></li></ul><a class="btn btn-primary" href="live.html" style="width:100%;margin-top:24px">开始会议</a><button class="btn btn-quiet" data-open="asr-fail" style="width:100%;margin-top:8px">模拟转写失败</button></aside>
+      </section>
+    </div></main>
+  </div>
+  <div class="modal-backdrop" id="asr-fail"><div class="modal"><h2>实时转写暂不可用</h2><p class="muted">录音设备正常。你可以仅录音继续，会后再对缺口执行补转写；也可以返回设置检查火山引擎凭证。</p><div class="modal-actions"><button class="btn" data-close>取消会议</button><a class="btn btn-quiet" href="settings.html">检查设置</a><a class="btn btn-primary" href="live.html">仅录音继续</a></div></div></div>
+</body>
+</html>

@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>校对原始记录 · MeetSieve</title><link rel="stylesheet" href="../assets/meetsieve.css"><script src="../assets/meetsieve.js" defer></script></head>
+<body>
+  <div class="app">
+    <aside class="sidebar"><a class="brand" href="../index.html"><span class="brand-mark">M</span><span>MeetSieve</span></a><nav class="nav"><a href="../start.html">开始会议</a><a class="active" href="../records.html">会议记录</a><a href="../people.html">常用小组</a><a href="../settings.html">设置</a></nav><div class="sidebar-foot"><span class="status warn">有 3 段待确认说话人</span><p class="meta num">20260731-A7K2-03</p></div></aside>
+    <main class="main"><header class="titlebar"><a href="../detail.html">← 返回会议详情</a><span class="status ok">原始记录文件已刷新</span></header><div class="content">
+      <section class="page-head"><div><p class="eyebrow num">20260731-A7K2-03</p><h1>校对原始记录</h1><p>修改文字或本场说话人。原始 ASR 与每次修改都会保留在本地数据库中。</p></div><span class="status">说话人处理完成</span></section>
+      <section class="split">
+        <article class="card">
+          <div class="card-head"><div><p class="eyebrow">原始记录</p><h2>AI 会议助手产品评审</h2></div><span class="meta">18 段 · 3 段待确认</span></div>
+          <div class="timeline" aria-label="可校对的原始记录">
+            <article class="event"><span class="meta num">00:02:14 · 已识别</span><p><span class="speaker">刘毅</span>：本期 Alpha 的技术方案功能全部进入 UI 范围。</p></article>
+            <article class="event"><span class="meta num">00:12:48 · 当前选择</span><p><span class="speaker">未知说话人 2</span>：会议结束后由用户主动生成纪要，计划在八月十二日复验。</p><span class="status warn">低置信度</span></article>
+            <article class="event"><span class="meta num">00:14:05 · 已人工校对</span><p><span class="speaker">陈然</span>：Windows 真机验证后置，不影响当前开发顺序。</p></article>
+            <article class="event"><span class="meta num">00:16:31 · 无法可靠识别</span><p><span class="speaker">未知说话人 3</span>：这段存在重叠语音，先保留未知。</p></article>
+          </div>
+        </article>
+        <aside class="stack">
+          <article class="card">
+            <div class="card-head"><div><p class="meta num">00:12:48–00:12:57</p><h3>校对选中片段</h3></div><button class="btn btn-quiet" type="button">播放片段</button></div>
+            <div class="tabs" data-tabs="correction"><button class="tab active" data-tab="single">单个片段</button><button class="tab" data-tab="cluster">本场同一说话人</button></div>
+            <section id="single" data-tab-panel="correction" style="margin-top:var(--space-5)">
+              <label class="label">原始 ASR<textarea class="textarea" readonly>会议结束后由用户主动生成纪要，计划在八月十二日复验。</textarea></label>
+              <label class="label" style="margin-top:var(--space-4)">当前文字<textarea class="textarea">会议结束后由用户主动生成纪要，计划在 8 月 12 日复验。</textarea></label>
+              <label class="label" style="margin-top:var(--space-4)">当前说话人<select class="select"><option>未知说话人 2</option><option selected>刘毅</option><option>陈然</option><option>王珂</option><option>临时参会者 · 林舟</option></select></label>
+              <div class="row-between" style="margin-top:var(--space-5)"><button class="btn btn-quiet" type="button" data-open="voice-sample">加入声纹样本</button><button class="btn btn-primary" type="button" data-action-feedback="选中片段的修改已保存。">保存片段修改</button></div>
+            </section>
+            <section id="cluster" data-tab-panel="correction" hidden style="margin-top:var(--space-5)">
+              <div class="notice warn"><strong>将修改“未知说话人 2”的 6 个片段</strong><span class="muted">包括此前单独修改过的说话人；后续归入该聚类的片段也会使用新身份。</span></div>
+              <label class="label" style="margin-top:var(--space-4)">修改为<select class="select"><option>请选择本场参会者</option><option>刘毅</option><option>陈然</option><option>王珂</option><option>临时参会者 · 林舟</option></select></label>
+              <div class="row" style="justify-content:flex-end;margin-top:var(--space-5)"><button class="btn btn-primary" type="button" data-open="batch-confirm">修改本场 6 个片段</button></div>
+            </section>
+          </article>
+          <div class="notice"><strong>声纹只用于辅助判断</strong><span class="muted">低置信度、证据过短或重叠语音会保留为未知。校对不会自动加入永久声纹资料。</span></div>
+        </aside>
+      </section>
+    </div></main>
+  </div>
+  <div class="modal-backdrop" id="batch-confirm"><div class="modal"><h2>修改本场同一未知说话人？</h2><p class="muted">将修改“未知说话人 2”的 6 个片段，并覆盖这些片段此前的说话人校对。原始判断与修改历史仍会保留。</p><div class="modal-actions"><button class="btn" type="button" data-close>返回检查</button><button class="btn btn-primary" type="button" data-action-feedback="本场 6 个片段已修改。">修改本场 6 个片段</button></div></div></div>
+  <div class="modal-backdrop" id="voice-sample"><div class="modal"><h2>加入刘毅的声纹样本？</h2><p class="muted">将从原始录音复制此片段，执行真实质量检查后保存到刘毅的永久本地声纹资料。删除本场会议不会删除已加入的样本。</p><div class="notice warn"><strong>这是独立操作</strong><span class="muted">保存说话人校对不会自动加入声纹样本。</span></div><div class="modal-actions"><button class="btn" type="button" data-close>暂不加入</button><button class="btn btn-primary" type="button" data-action-feedback="正在检查片段质量。">加入声纹样本</button></div></div></div>
+</body>
+</html>

@@ -1,0 +1,249 @@
+import { defineStore } from 'pinia'
+import { wails } from '../../wailsjs/go/models'
+
+import {
+  GetASRSettings,
+  GetASRTimeline,
+  GetRawRecordState,
+  RetryRealtimeASR,
+  SaveASRSettings,
+  TestASRConnection,
+} from '../../wailsjs/go/wails/ASRBinding'
+
+export interface ASRSettingsProjection {
+  mode: 'legacy' | 'api_key'
+  app_id_configured: boolean
+  app_id_mask: string
+  access_token_configured: boolean
+  access_token_mask: string
+  api_key_configured: boolean
+  api_key_mask: string
+  updated_at: number
+}
+
+export interface ASRTimelineEntry {
+  seq: number
+  kind: 'utterance.final' | 'asr.gap'
+  occurred_at: number
+  start_sample: number
+  end_sample: number
+  text?: string
+  speaker_label?: string
+  session_order?: number
+  gap_reason?: string
+}
+
+export interface ASRPartial {
+  meeting_id: string
+  result_id: string
+  revision: number
+  text: string
+  start_sample: number
+  end_sample: number
+}
+
+interface AppEvent<T> {
+  data: T
+}
+
+const emptySettings: ASRSettingsProjection = {
+  mode: 'legacy',
+  app_id_configured: false,
+  app_id_mask: '',
+  access_token_configured: false,
+  access_token_mask: '',
+  api_key_configured: false,
+  api_key_mask: '',
+  updated_at: 0,
+}
+
+/** useASRStore 保存可由 SQLite 快照恢复的设置、Timeline 与瞬时 partial。 */
+export const useASRStore = defineStore('asr', {
+  state: () => ({
+    settings: { ...emptySettings },
+    timeline: [] as ASRTimelineEntry[],
+    partials: {} as Record<string, ASRPartial>,
+    meetingID: '',
+    realtimeState: 'idle',
+    realtimeErrorCode: '',
+    loading: false,
+    saving: false,
+    probing: false,
+    retrying: false,
+    errorMessage: '',
+    notice: '',
+    probeLatencyMS: 0,
+    rawRecordState: 'idle',
+    rawRecordErrorCode: '',
+  }),
+  getters: {
+    /** legacyReady 表示已保存当前实时协议所需的两项凭据。 */
+    legacyReady: (state): boolean =>
+      state.settings.app_id_configured &&
+      state.settings.access_token_configured,
+    /** latestSeq 返回当前已恢复的持久事件游标。 */
+    latestSeq: (state): number =>
+      state.timeline.reduce((latest, entry) => Math.max(latest, entry.seq), 0),
+    /** orderedPartials 返回按样本位置排序的会中临时结果。 */
+    orderedPartials: (state): ASRPartial[] =>
+      Object.values(state.partials).sort(
+        (left, right) => left.start_sample - right.start_sample,
+      ),
+  },
+  actions: {
+    /** loadSettings 从后端读取掩码投影，绝不接收凭证明文。 */
+    async loadSettings(): Promise<void> {
+      this.loading = true
+      this.errorMessage = ''
+      const result = await GetASRSettings()
+      this.loading = false
+      if (result.code !== 200 || !result.data) {
+        this.errorMessage = result.message
+        return
+      }
+      this.settings = result.data as ASRSettingsProjection
+    },
+    /** saveLegacy 用非空草稿替换凭据，空草稿保留已保存值。 */
+    async saveLegacy(appID: string, accessToken: string): Promise<boolean> {
+      this.saving = true
+      this.errorMessage = ''
+      this.notice = ''
+      const result = await SaveASRSettings(
+        wails.SaveASRSettingsDTO.createFrom({
+          mode: 'legacy',
+          app_id: credentialChange(appID),
+          access_token: credentialChange(accessToken),
+          api_key: { action: 'keep', value: '' },
+        }),
+      )
+      this.saving = false
+      if (result.code !== 200 || !result.data) {
+        this.errorMessage = result.message
+        return false
+      }
+      this.settings = result.data as ASRSettingsProjection
+      this.notice = '实时转写凭证已保存'
+      return true
+    },
+    /** clearLegacy 明确删除实时协议使用的两项凭据。 */
+    async clearLegacy(): Promise<boolean> {
+      this.saving = true
+      this.errorMessage = ''
+      this.notice = ''
+      const result = await SaveASRSettings(
+        wails.SaveASRSettingsDTO.createFrom({
+          mode: 'legacy',
+          app_id: { action: 'clear', value: '' },
+          access_token: { action: 'clear', value: '' },
+          api_key: { action: 'keep', value: '' },
+        }),
+      )
+      this.saving = false
+      if (result.code !== 200 || !result.data) {
+        this.errorMessage = result.message
+        return false
+      }
+      this.settings = result.data as ASRSettingsProjection
+      this.notice = '已清除实时转写凭证'
+      return true
+    },
+    /** testLegacyConnection 使用未保存草稿探测连接，不发送真实音频。 */
+    async testLegacyConnection(
+      appID: string,
+      accessToken: string,
+    ): Promise<boolean> {
+      this.probing = true
+      this.errorMessage = ''
+      this.notice = ''
+      const result = await TestASRConnection({
+        mode: 'legacy',
+        app_id: appID.trim(),
+        access_token: accessToken.trim(),
+        api_key: '',
+      })
+      this.probing = false
+      if (result.code !== 200 || !result.data) {
+        this.errorMessage = result.message
+        return false
+      }
+      this.probeLatencyMS = result.data.latency_ms
+      this.notice = '连接已建立；本次未发送真实音频'
+      return true
+    },
+    /** restoreTimeline 按 seq 增量补拉 final/gap，页面刷新后不依赖 Pinia 旧内存。 */
+    async restoreTimeline(meetingID: string): Promise<void> {
+      if (!meetingID) return
+      if (this.meetingID !== meetingID) {
+        this.meetingID = meetingID
+        this.timeline = []
+        this.partials = {}
+      }
+      const result = await GetASRTimeline(meetingID, this.latestSeq, 200)
+      if (result.code !== 200 || !result.data) {
+        this.errorMessage = result.message
+        return
+      }
+      const known = new Set(this.timeline.map((entry) => entry.seq))
+      for (const entry of result.data as ASRTimelineEntry[]) {
+        if (!known.has(entry.seq)) this.timeline.push(entry)
+      }
+      this.timeline.sort((left, right) => left.seq - right.seq)
+      const lastFinalEnd = this.timeline
+        .filter((entry) => entry.kind === 'utterance.final')
+        .reduce((end, entry) => Math.max(end, entry.end_sample), 0)
+      for (const [resultID, partial] of Object.entries(this.partials)) {
+        if (partial.end_sample <= lastFinalEnd) delete this.partials[resultID]
+      }
+      await this.refreshRawRecordState()
+    },
+    /** refreshRawRecordState 读取文件投影状态，失败时持续显示而不伪装已刷新。 */
+    async refreshRawRecordState(): Promise<void> {
+      if (!this.meetingID) return
+      const result = await GetRawRecordState(this.meetingID)
+      if (result.code !== 200 || !result.data) return
+      this.rawRecordState = result.data.state
+      this.rawRecordErrorCode = result.data.error_code ?? ''
+    },
+    /** applyPartial 只接受当前会议更高 revision，不写入持久 Timeline。 */
+    applyPartial(event: AppEvent<ASRPartial>): void {
+      const partial = event.data
+      if (!partial || partial.meeting_id !== this.meetingID) return
+      const previous = this.partials[partial.result_id]
+      if (previous && previous.revision >= partial.revision) return
+      this.partials[partial.result_id] = partial
+    },
+    /** applyRealtimeState 更新独立实时转写状态，状态变化后由页面补拉持久事件。 */
+    applyRealtimeState(
+      event: AppEvent<{
+        meeting_id: string
+        state: string
+        error_code?: string
+      }>,
+    ): void {
+      if (!event.data || event.data.meeting_id !== this.meetingID) return
+      this.realtimeState = event.data.state
+      this.realtimeErrorCode = event.data.error_code ?? ''
+    },
+    /** retryRealtime 对不可用状态执行一次用户主动重试。 */
+    async retryRealtime(): Promise<boolean> {
+      if (!this.meetingID) return false
+      this.retrying = true
+      this.errorMessage = ''
+      const result = await RetryRealtimeASR(this.meetingID)
+      this.retrying = false
+      if (result.code !== 200 || result.data !== true) {
+        this.errorMessage = result.message
+        return false
+      }
+      return true
+    },
+  },
+})
+
+/** credentialChange 将空草稿解释为保留，避免掩码被误写回数据库。 */
+function credentialChange(value: string): { action: string; value: string } {
+  const trimmed = value.trim()
+  return trimmed
+    ? { action: 'replace', value: trimmed }
+    : { action: 'keep', value: '' }
+}

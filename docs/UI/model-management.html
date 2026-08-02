@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>声纹模型设置 · MeetSieve</title>
+  <link rel="stylesheet" href="assets/meetsieve.css">
+  <script src="assets/meetsieve.js" defer></script>
+</head>
+<body class="page-settings">
+  <div class="app">
+    <aside class="sidebar">
+      <a class="brand" href="index.html"><span class="brand-mark">M</span><span>MeetSieve</span></a>
+      <nav class="nav"><a href="start.html">开始会议</a><a href="records.html">会议记录</a><a href="people.html">常用小组</a><a class="active" href="settings.html">设置</a></nav>
+      <div class="sidebar-foot"><span class="status">模型未安装</span></div>
+    </aside>
+    <main class="main">
+      <header class="titlebar"><span class="meta">设置</span><div class="window-controls"><i></i><i></i><i></i></div></header>
+      <div class="content">
+        <section class="page-head"><div><p class="eyebrow">本机配置</p><h1>设置</h1><p>管理本机录音、实时转写、Codex、工作目录与声纹模型。</p></div></section>
+        <section class="settings-layout">
+          <nav class="settings-nav" aria-label="设置分类"><a class="tab" href="settings.html#general">通用</a><a class="tab" href="settings.html#audio">录音</a><a class="tab" href="settings.html#asr">实时转写</a><a class="tab" href="settings.html#codex">Codex</a><a class="tab active" href="settings.html#voice-model" aria-current="page">声纹模型</a></nav>
+          <div class="settings-content">
+            <section class="card" role="tabpanel" aria-labelledby="voice-model-title">
+              <div class="card-head"><h2 id="voice-model-title">声纹模型</h2><span class="status">未安装</span></div>
+              <div class="notice"><strong>安装模型后才能录入声纹</strong><p class="muted">成员和小组仍可正常管理。模型安装完成后只在本机离线运行，会议中不会下载模型。</p></div>
+              <ul class="list" style="margin-top:20px">
+                <li class="list-item"><span>模型</span><strong>CAM++ 中文通用</strong></li>
+                <li class="list-item"><span>模型来源</span><strong>MeetSieve GitHub Releases</strong></li>
+                <li class="list-item"><span>安装位置</span><strong class="num">本机应用数据目录</strong></li>
+                <li class="list-item"><span>完整性校验</span><strong>版本与 SHA-256</strong></li>
+              </ul>
+              <p class="help">下载和离线导入接受同一个官方模型包。校验失败的文件不会被安装。</p>
+              <div class="row" style="margin-top:20px"><button class="btn btn-primary" type="button">下载官方模型</button><button class="btn btn-quiet" type="button">导入离线模型包</button></div>
+            </section>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

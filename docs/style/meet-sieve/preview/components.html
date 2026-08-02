@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>MeetSieve Components</title>
+    <link rel="stylesheet" href="preview.css" />
+  </head>
+  <body>
+    <main class="preview">
+      <header class="preview-head">
+        <p class="meta">MEETSIEVE DESIGN SYSTEM · V1.1.0</p>
+        <h1>Components</h1>
+        <p>组件从当前 UI 反向提取。预览展示视觉契约，不替代 Vue 实现。</p>
+        <nav class="preview-nav" aria-label="设计系统预览">
+          <a class="btn btn-quiet" href="foundations.html">基础</a>
+          <a class="btn btn-primary" href="components.html">组件</a>
+          <a class="btn btn-quiet" href="product-patterns.html">产品模式</a>
+        </nav>
+      </header>
+
+      <section class="preview-section">
+        <h2>Buttons &amp; Status</h2>
+        <div class="card stack">
+          <div class="row">
+            <button class="btn btn-primary">开始会议</button>
+            <button class="btn btn-quiet">检查设置</button>
+            <button class="btn">稍后处理</button>
+            <button class="btn btn-danger">永久删除录音</button>
+            <button class="btn btn-primary" disabled>正在保存</button>
+          </div>
+          <div class="row">
+            <span class="status">尚未启动</span>
+            <span class="status success">本地已保存</span>
+            <span class="status warning">有转写缺口</span>
+            <span class="status danger">保存失败</span>
+            <span class="status info">AI 正在参与</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="preview-section">
+        <h2>Forms</h2>
+        <div class="grid grid-2">
+          <div class="card stack">
+            <label class="label"
+              >会议主题
+              <input class="field" value="AI 会议助手产品评审" />
+            </label>
+            <label class="label"
+              >默认麦克风
+              <select class="select">
+                <option>阵列麦克风（Realtek Audio）</option>
+              </select>
+            </label>
+            <label class="label"
+              >问题
+              <textarea class="textarea">比较刚才两个方案的风险。</textarea>
+            </label>
+          </div>
+          <div class="card stack">
+            <label class="label"
+              >会议号
+              <input class="field invalid" value="A7K2" />
+              <span class="field-error">会议号格式不正确。</span>
+            </label>
+            <label class="choice">
+              <input type="checkbox" checked />
+              <span
+                ><strong>刘毅</strong><br /><span class="muted"
+                  >声纹可用</span
+                ></span
+              >
+            </label>
+            <div class="row-between">
+              <span>允许局域网访客访问</span>
+              <button
+                class="toggle on"
+                role="switch"
+                aria-checked="true"
+                aria-label="允许局域网访客访问"
+              ></button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="preview-section">
+        <h2>Tabs, List &amp; Progress</h2>
+        <div class="card stack">
+          <div class="tabs" role="tablist" aria-label="会议详情">
+            <button class="tab active" role="tab" aria-selected="true">
+              会议纪要
+            </button>
+            <button class="tab" role="tab" aria-selected="false">
+              原始记录
+            </button>
+            <button class="tab" role="tab" aria-selected="false">
+              会议消息
+            </button>
+          </div>
+          <ul class="list">
+            <li class="list-item">
+              <span>录音合并</span><span class="status success">完成</span>
+            </li>
+            <li class="list-item">
+              <span>缺口补转写</span><span class="status info">处理中</span>
+            </li>
+            <li class="list-item">
+              <span>Codex 结束同步</span
+              ><button class="btn btn-quiet">重试同步</button>
+            </li>
+          </ul>
+          <div
+            class="progress"
+            role="progressbar"
+            aria-label="补转写进度"
+            aria-valuemin="0"
+            aria-valuemax="100"
+            aria-valuenow="62"
+          >
+            <span style="--progress: 62%"></span>
+          </div>
+        </div>
+      </section>
+
+      <section class="preview-section">
+        <h2>Notice &amp; Timeline</h2>
+        <div class="grid grid-2">
+          <div class="stack">
+            <div class="notice">
+              <strong>本地数据优先</strong
+              ><span>外部依赖失败不会删除已保存内容。</span>
+            </div>
+            <div class="notice warning">
+              <strong>实时转写中断</strong
+              ><span>录音仍在保存，恢复后将保留缺口。</span>
+            </div>
+            <div class="notice danger">
+              <strong>本地保存失败</strong><span>请释放磁盘空间后重试。</span>
+            </div>
+          </div>
+          <div class="card timeline">
+            <article class="event">
+              <span class="meta">00:22:41</span>
+              <p><strong>陈然：</strong>失败时继续使用旧目录。</p>
+            </article>
+            <article class="event ai">
+              <span class="meta">00:23:34 · AI 问题</span>
+              <p><strong>刘毅：</strong>比较两种恢复策略。</p>
+            </article>
+            <article class="event">
+              <span class="meta">00:37:14–00:39:02</span>
+              <div class="notice warning">实时转写缺口等待处理。</div>
+            </article>
+          </div>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

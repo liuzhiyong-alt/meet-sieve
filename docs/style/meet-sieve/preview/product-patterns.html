@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>MeetSieve Product Patterns</title>
+    <link rel="stylesheet" href="preview.css" />
+  </head>
+  <body>
+    <main class="preview">
+      <header class="preview-head">
+        <p class="meta">MEETSIEVE DESIGN SYSTEM · V1.1.0</p>
+        <h1>Product Patterns</h1>
+        <p>没有 UI 图时，先匹配成熟度，再使用现有组件表达业务状态。</p>
+        <nav class="preview-nav" aria-label="设计系统预览">
+          <a class="btn btn-quiet" href="foundations.html">基础</a>
+          <a class="btn btn-quiet" href="components.html">组件</a>
+          <a class="btn btn-primary" href="product-patterns.html">产品模式</a>
+        </nav>
+      </header>
+
+      <section class="preview-section">
+        <h2>原始记录校对</h2>
+        <div class="grid grid-2">
+          <div class="card timeline">
+            <article class="event">
+              <span class="meta">00:12:48 · 当前选择</span>
+              <p>
+                <strong>未知说话人 2：</strong>会议结束后由用户主动生成纪要。
+              </p>
+              <span class="status warning">低置信度</span>
+            </article>
+          </div>
+          <div class="card stack">
+            <div class="tabs" role="tablist" aria-label="校对范围">
+              <button class="tab active" role="tab" aria-selected="true">
+                单个片段
+              </button>
+              <button class="tab" role="tab" aria-selected="false">
+                本场同一说话人
+              </button>
+            </div>
+            <label class="label"
+              >当前说话人<select class="select">
+                <option>刘毅</option>
+              </select></label
+            >
+            <div class="notice warning">
+              <strong>批量修改前重新确认</strong>
+              <span>将覆盖当前 cluster 中 6 个片段已有的说话人校对。</span>
+            </div>
+          </div>
+        </div>
+        <p class="maturity">existing · transcript-editor.html</p>
+      </section>
+
+      <section class="preview-section">
+        <h2>会中健康状态</h2>
+        <div class="card">
+          <div class="card-head">
+            <div>
+              <div class="recording">
+                <span class="recording-dot"></span>录音中 · 本地保存正常
+              </div>
+              <h3>AI 会议助手产品评审</h3>
+            </div>
+            <div class="type-mono type-heading">00:24:18</div>
+          </div>
+          <div class="grid grid-3">
+            <span class="status success">实时转写正常</span>
+            <span class="status success">AI 可参与</span>
+            <span class="status success">访客页运行中</span>
+          </div>
+        </div>
+        <p class="maturity">existing + derived ASR status</p>
+      </section>
+
+      <section class="preview-section">
+        <h2>实时转写重连</h2>
+        <div class="card stack">
+          <div class="row-between">
+            <div class="recording">
+              <span class="recording-dot"></span>录音中 · 本地保存正常
+            </div>
+            <span class="status warning">实时转写重连中</span>
+          </div>
+          <div class="notice warning">
+            <strong>实时转写暂时中断</strong>
+            <span>录音仍在本地保存。恢复后将保留 00:37:14 起的转写缺口。</span>
+          </div>
+        </div>
+        <p class="maturity">derived</p>
+      </section>
+
+      <section class="preview-section">
+        <h2>保存会议</h2>
+        <div class="card stack">
+          <div class="row-between">
+            <h3>正在结束并保存会议</h3>
+            <span class="status info">处理中</span>
+          </div>
+          <ul class="list">
+            <li class="list-item">
+              <span>停止局域网访客访问</span
+              ><span class="status success">完成</span>
+            </li>
+            <li class="list-item">
+              <span>等待尾部转写</span><span class="status success">完成</span>
+            </li>
+            <li class="list-item">
+              <span>合并并校验录音</span><span class="status info">处理中</span>
+            </li>
+            <li class="list-item">
+              <span>刷新会议原始记录</span><span class="status">等待</span>
+            </li>
+          </ul>
+          <div class="progress" aria-label="保存会议当前阶段">
+            <span style="--progress: 62%"></span>
+          </div>
+          <p class="muted">本地保存完成前不能把会议报告为已保存。</p>
+        </div>
+        <p class="maturity">design-required</p>
+      </section>
+
+      <section class="preview-section">
+        <h2>AI 长时间处理</h2>
+        <div class="card timeline">
+          <article class="event ai">
+            <span class="meta">00:23:34 · AI 问题</span>
+            <p><strong>刘毅：</strong>比较两种恢复策略。</p>
+          </article>
+          <article class="event ai">
+            <span class="meta">AI 回答 · 正在生成</span>
+            <div class="notice info">
+              <strong>AI 处理时间较长</strong>
+              <span>录音和本地保存不受影响。</span>
+              <button class="btn btn-quiet">停止回答</button>
+            </div>
+          </article>
+        </div>
+        <p class="maturity">derived</p>
+      </section>
+
+      <section class="preview-section">
+        <h2>附件上传失败</h2>
+        <div class="card">
+          <div class="row-between">
+            <div>
+              <strong>Windows-Alpha-验收清单.docx</strong>
+              <div class="meta">2.8 MB</div>
+            </div>
+            <span class="status danger">上传中断</span>
+          </div>
+          <div class="notice danger" style="margin-top: var(--ms-space-4)">
+            <strong>附件未保存</strong>
+            <span>请检查网络后重新选择文件。</span>
+            <button class="btn btn-quiet">重新上传</button>
+          </div>
+        </div>
+        <p class="maturity">derived</p>
+      </section>
+
+      <section class="preview-section">
+        <h2>平台原生安装与卸载</h2>
+        <div class="card stack">
+          <div class="row-between">
+            <strong>Windows 使用 NSIS 标准界面</strong>
+            <span class="status info">平台原生</span>
+          </div>
+          <p class="muted">
+            支持安全的自定义安装目录、可选桌面快捷方式和专用网络访问；安装、升级和卸载不复用
+            MeetSieve App Shell。
+          </p>
+          <div class="notice warning">
+            <strong>MeetSieve 正在运行</strong>
+            <span>请先结束正在进行的会议并退出应用，然后重试。</span>
+          </div>
+        </div>
+        <p class="maturity">derived · platform-native boundary</p>
+      </section>
+    </main>
+  </body>
+</html>

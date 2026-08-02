@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>会议详情 · MeetSieve</title><link rel="stylesheet" href="assets/meetsieve.css"><script src="assets/meetsieve.js" defer></script></head>
+<body>
+  <div class="app">
+    <aside class="sidebar"><a class="brand" href="index.html"><span class="brand-mark">M</span><span>MeetSieve</span></a><nav class="nav"><a href="start.html">开始会议</a><a class="active" href="records.html">会议记录</a><a href="people.html">常用小组</a><a href="settings.html">设置</a></nav><div class="sidebar-foot"><span class="status ok">录音与原始记录已保存</span></div></aside>
+    <main class="main"><header class="titlebar"><a href="records.html">← 返回会议记录</a><div class="row"><button class="btn btn-quiet" data-copy='codex -C "D:\MeetSieve\meetings\20260731-A7K2-03" "请读取会议原始记录.md、resources/ 和已有会议纪要草稿，继续处理本场会议。"'>复制 Codex 恢复命令</button><button class="btn btn-danger" data-open="delete-meeting">删除</button></div></header><div class="content">
+      <section class="page-head" data-od-id="detail-head"><div><p class="eyebrow">20260731-A7K2-03</p><h1>AI 会议助手产品评审</h1><p class="num">2026 年 7 月 31 日 09:30–10:18 · 4 位参会人</p></div><span class="status warn">有 1 段转写缺口</span></section>
+      <section data-tabs="detail" class="tabs" data-od-id="detail-tabs"><button class="tab active" data-tab="minutes">会议纪要</button><button class="tab" data-tab="transcript">原始记录</button><button class="tab" data-tab="messages">会议消息</button></section>
+      <section id="minutes" data-tab-panel="detail" class="grid grid-2" data-od-id="minutes" style="margin-top:20px">
+        <article class="card"><div class="card-head"><div><p class="meta">当前版本</p><h2>尚未生成会议纪要</h2></div><button class="btn btn-primary" data-open="generate-minutes">生成纪要</button></div><p class="muted">生成前可先校对原始记录。AI 草稿不会覆盖人工修改的当前版本，只有确认后才成为当前纪要。</p><div class="notice warn"><strong>纪要将包含缺口提示</strong><span class="muted num">00:37:14–00:39:02</span></div></article>
+        <aside class="card"><h3>会后处理</h3><ul class="list"><li class="list-item"><span>录音合并</span><span class="status ok">完成</span></li><li class="list-item"><span>原始记录刷新</span><span class="status ok">完成</span></li><li class="list-item"><span>缺口补转写</span><button class="btn btn-quiet">立即处理</button></li><li class="list-item"><span>Codex 结束同步</span><span class="status bad">可重试</span></li></ul></aside>
+      </section>
+      <section id="transcript" data-tab-panel="detail" hidden class="split" data-od-id="transcript" style="margin-top:20px">
+        <article class="card"><div class="card-head"><h2>原始记录</h2><button class="btn btn-primary">进入校对</button></div><div class="timeline"><article class="event"><span class="meta num">00:02:14</span><p><span class="speaker">刘毅</span>：本期 Alpha 的技术方案功能全部进入 UI 范围。</p></article><article class="event"><span class="meta num">00:12:48</span><p><span class="speaker">陈然</span>：会议结束后由用户主动生成纪要。</p></article><article class="event"><span class="meta num">00:37:14–00:39:02</span><div class="notice warn">实时转写中断。可播放录音并执行补转写。</div></article></div></article>
+        <aside class="card"><h3>校对工具</h3><p class="muted">修改文字、说话人或时间边界；批量修正只影响本场会议，除非明确加入声纹样本。</p><button class="btn btn-quiet" style="width:100%">播放缺口录音</button><button class="btn btn-quiet" style="width:100%;margin-top:8px">批量修改说话人</button></aside>
+      </section>
+      <section id="messages" data-tab-panel="detail" hidden class="card" data-od-id="messages" style="margin-top:20px"><div class="card-head"><h2>会议消息</h2><span class="meta">文字、链接、附件与公开 AI 回答</span></div><ul class="list"><li class="list-item"><div><strong>访客 · 林舟</strong><div class="muted">补充了 Windows 防火墙验证清单</div></div><span class="meta num">09:54</span></li><li class="list-item"><div><strong>附件</strong><div class="muted">Windows-Alpha-验收清单.docx · 2.8 MB</div></div><button class="btn">打开</button></li></ul></section>
+    </div></main>
+  </div>
+  <div class="modal-backdrop" id="generate-minutes"><div class="modal"><h2>生成会议纪要草稿</h2><p class="muted">将基于原始记录、消息与附件生成新版本。AI 回答不会被当作已确认的会议事实。</p><label class="choice"><input type="checkbox" checked>在草稿中明确标注转写缺口</label><div class="modal-actions"><button class="btn" type="button" data-close>取消</button><button class="btn btn-primary" type="button" data-action-feedback="纪要草稿正在后台生成。">开始生成</button></div></div></div>
+  <div class="modal-backdrop" id="delete-meeting"><div class="modal"><h2>永久删除整场会议？</h2><p class="muted">将删除数据库记录、会议目录、录音、附件、原始记录与纪要，不进入回收站。</p><label class="label">输入会议号确认<input class="field num" placeholder="20260731-A7K2-03"></label><div class="modal-actions"><button class="btn" data-close>取消</button><button class="btn btn-danger">永久删除</button></div></div></div>
+</body>
+</html>

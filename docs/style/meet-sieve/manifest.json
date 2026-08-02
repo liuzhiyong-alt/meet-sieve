@@ -1,0 +1,53 @@
+{
+  "schemaVersion": "meet-sieve-design-system/v1",
+  "id": "meet-sieve",
+  "name": "MeetSieve",
+  "version": "1.1.0",
+  "theme": "light",
+  "description": "安静、可靠、克制、状态优先的跨平台会议桌面工具设计系统。",
+  "authority": [
+    "docs/spec/技术方案.md",
+    "docs/UI/*.html",
+    "docs/UI/assets/meetsieve.css",
+    "docs/UI/assets/meetsieve.js",
+    "docs/style/meet-sieve",
+    "docs/style/apple"
+  ],
+  "files": {
+    "readme": "README.md",
+    "design": "DESIGN.md",
+    "usage": "USAGE.md",
+    "foundations": "FOUNDATIONS.md",
+    "tokens": "tokens.css",
+    "designTokens": "design-tokens.json",
+    "layout": "LAYOUT.md",
+    "components": "COMPONENTS.md",
+    "componentManifest": "components.manifest.json",
+    "productPatterns": "PRODUCT-PATTERNS.md",
+    "content": "CONTENT.md",
+    "accessibility": "ACCESSIBILITY.md",
+    "visualBaselines": "VISUAL-BASELINES.md",
+    "qualityGates": "QUALITY-GATES.md",
+    "changelog": "CHANGELOG.md",
+    "evidence": "source/evidence.md"
+  },
+  "surfaces": {
+    "desktop": {
+      "platforms": ["macOS", "Windows"],
+      "defaultViewport": [1280, 800],
+      "minimumViewport": [1024, 720]
+    },
+    "lanWeb": {
+      "primary": "desktop-web",
+      "desktopViewport": [1366, 768],
+      "mobileCompatibilityViewport": [390, 844]
+    }
+  },
+  "constraints": {
+    "tailwind": false,
+    "generalUiLibrary": false,
+    "darkMode": false,
+    "singleIconFamily": true,
+    "wcagTarget": "2.2 AA"
+  }
+}

@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>MeetSieve Foundations</title>
+    <link rel="stylesheet" href="preview.css" />
+  </head>
+  <body>
+    <main class="preview">
+      <header class="preview-head">
+        <p class="meta">MEETSIEVE DESIGN SYSTEM · V1.1.0</p>
+        <h1>Foundations</h1>
+        <p>
+          当前 UI 提炼出的浅色基础。颜色、字体、间距、圆角和层次由同一份
+          <code>tokens.css</code> 驱动。
+        </p>
+        <nav class="preview-nav" aria-label="设计系统预览">
+          <a class="btn btn-primary" href="foundations.html">基础</a>
+          <a class="btn btn-quiet" href="components.html">组件</a>
+          <a class="btn btn-quiet" href="product-patterns.html">产品模式</a>
+        </nav>
+      </header>
+
+      <section class="preview-section">
+        <h2>Color</h2>
+        <div class="grid grid-3">
+          <div class="swatch" style="--swatch: var(--ms-bg-canvas)">
+            <strong>Canvas</strong><code>#ffffff</code>
+          </div>
+          <div class="swatch" style="--swatch: var(--ms-bg-sidebar)">
+            <strong>Sidebar</strong><code>#fbfbfd</code>
+          </div>
+          <div class="swatch" style="--swatch: var(--ms-bg-subtle)">
+            <strong>Subtle</strong><code>#f5f5f7</code>
+          </div>
+          <div
+            class="swatch"
+            style="
+              --swatch: var(--ms-bg-emphasis);
+              --swatch-text: var(--ms-text-on-emphasis);
+            "
+          >
+            <strong>Emphasis</strong><code>#1d1d1f</code>
+          </div>
+          <div
+            class="swatch"
+            style="
+              --swatch: var(--ms-action-primary);
+              --swatch-text: var(--ms-action-on-primary);
+            "
+          >
+            <strong>Primary Action</strong><code>#0071e3</code>
+          </div>
+          <div class="swatch" style="--swatch: var(--ms-status-danger-bg)">
+            <strong>Danger Surface</strong><code>restrained red</code>
+          </div>
+        </div>
+      </section>
+
+      <section class="preview-section">
+        <h2>Typography</h2>
+        <div class="card stack">
+          <div class="type-page">会议记录可靠落盘。</div>
+          <div class="type-heading">会议纪要与原始记录</div>
+          <div class="type-body">
+            正文使用舒适行高，说明事实、影响和下一步动作。
+          </div>
+          <div>按钮、导航与普通业务信息使用 14px。</div>
+          <div class="type-mono">
+            20260731-A7K2-03 · 00:24:18 · D:\MeetSieve
+          </div>
+          <div class="meta">辅助元数据必须注意对比度与信息重要性。</div>
+        </div>
+      </section>
+
+      <section class="preview-section">
+        <h2>Spacing</h2>
+        <div class="card stack">
+          <div class="spacing-row">
+            <span class="spacing-block" style="--size: var(--ms-space-1)"></span
+            ><code>4px</code>
+          </div>
+          <div class="spacing-row">
+            <span class="spacing-block" style="--size: var(--ms-space-2)"></span
+            ><code>8px</code>
+          </div>
+          <div class="spacing-row">
+            <span class="spacing-block" style="--size: var(--ms-space-4)"></span
+            ><code>16px</code>
+          </div>
+          <div class="spacing-row">
+            <span class="spacing-block" style="--size: var(--ms-space-6)"></span
+            ><code>24px</code>
+          </div>
+          <div class="spacing-row">
+            <span class="spacing-block" style="--size: var(--ms-space-8)"></span
+            ><code>32px</code>
+          </div>
+        </div>
+      </section>
+
+      <section class="preview-section">
+        <h2>Radius &amp; Elevation</h2>
+        <div class="grid grid-3">
+          <div class="card">
+            <div
+              class="radius-sample"
+              style="--sample-radius: var(--ms-radius-sm)"
+            ></div>
+            <p>8px Control</p>
+          </div>
+          <div class="card">
+            <div
+              class="radius-sample"
+              style="--sample-radius: var(--ms-radius-md)"
+            ></div>
+            <p>12px Field</p>
+          </div>
+          <div class="card elevation-raised">
+            <div
+              class="radius-sample"
+              style="--sample-radius: var(--ms-radius-lg)"
+            ></div>
+            <p>18px Raised</p>
+          </div>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

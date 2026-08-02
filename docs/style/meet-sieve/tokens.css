@@ -1,0 +1,161 @@
+/*
+ * MeetSieve Design System v1.1.0
+ * 当前权威 UI：docs/UI/*.html + docs/UI/assets/meetsieve.css
+ * 主题：仅浅色
+ *
+ * 业务代码应使用 --ms-* token，不直接写原始颜色、阴影和圆角。
+ */
+:root {
+  color-scheme: light;
+
+  /* 基础颜色：值来自当前 MeetSieve UI。 */
+  --ms-neutral-white: #ffffff;
+  --ms-neutral-25: #fbfbfd;
+  --ms-neutral-50: #f5f5f7;
+  --ms-neutral-100: #e8e8ed;
+  --ms-neutral-300: #d2d2d7;
+  --ms-neutral-500: #86868b;
+  --ms-neutral-600: #6e6e73;
+  --ms-neutral-750: #424245;
+  --ms-neutral-900: #1d1d1f;
+  --ms-blue-500: #0077ed;
+  --ms-blue-600: #0071e3;
+  --ms-blue-700: #0066cc;
+  --ms-green-600: #16a34a;
+  --ms-yellow-500: #eab308;
+  --ms-red-600: #dc2626;
+
+  /* 语义颜色：组件只能依赖语义，不依赖 neutral 序号猜用途。 */
+  --ms-bg-page: var(--ms-neutral-50);
+  --ms-bg-canvas: var(--ms-neutral-white);
+  --ms-bg-sidebar: var(--ms-neutral-25);
+  --ms-bg-subtle: var(--ms-neutral-50);
+  --ms-bg-emphasis: var(--ms-neutral-900);
+  --ms-text-primary: var(--ms-neutral-900);
+  --ms-text-secondary: var(--ms-neutral-750);
+  --ms-text-muted: var(--ms-neutral-600);
+  --ms-text-meta: var(--ms-neutral-500);
+  --ms-text-on-emphasis: var(--ms-neutral-white);
+  --ms-border-default: var(--ms-neutral-300);
+  --ms-border-soft: var(--ms-neutral-100);
+  --ms-action-primary: var(--ms-blue-600);
+  --ms-action-primary-hover: var(--ms-blue-500);
+  --ms-action-primary-active: var(--ms-blue-700);
+  --ms-action-on-primary: var(--ms-neutral-white);
+  --ms-status-success: var(--ms-green-600);
+  --ms-status-warning: var(--ms-yellow-500);
+  --ms-status-danger: var(--ms-red-600);
+  --ms-status-recording: var(--ms-red-600);
+  --ms-status-info: var(--ms-blue-600);
+
+  /* 状态浅背景：保持当前 UI 的小面积、低饱和表达。 */
+  --ms-status-success-bg: color-mix(
+    in oklab,
+    var(--ms-status-success),
+    transparent 92%
+  );
+  --ms-status-warning-bg: color-mix(
+    in oklab,
+    var(--ms-status-warning),
+    transparent 88%
+  );
+  --ms-status-danger-bg: color-mix(
+    in oklab,
+    var(--ms-status-danger),
+    transparent 92%
+  );
+  --ms-status-info-bg: color-mix(
+    in oklab,
+    var(--ms-status-info),
+    transparent 92%
+  );
+
+  /*
+   * 字体：macOS 优先 SF，Windows 回退 Segoe UI Variable/Segoe UI。
+   * 这属于已确认的平台适配，不要求两端字形完全相同。
+   */
+  --ms-font-display:
+    "SF Pro Display", "SF Pro Icons", "Segoe UI Variable Display", "Segoe UI",
+    "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --ms-font-body:
+    "SF Pro Text", "SF Pro Icons", "Segoe UI Variable Text", "Segoe UI",
+    "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --ms-font-mono:
+    "SF Mono", "Cascadia Mono", ui-monospace, "JetBrains Mono", Menlo, Monaco,
+    Consolas, monospace;
+
+  /* 当前产品实际使用的排版层级。 */
+  --ms-text-xs: 12px;
+  --ms-text-sm: 14px;
+  --ms-text-body: 17px;
+  --ms-text-title: 21px;
+  --ms-text-heading: 28px;
+  --ms-text-page-min: 32px;
+  --ms-text-page-max: 40px;
+  --ms-leading-body: 1.47;
+  --ms-leading-heading: 1.14;
+  --ms-leading-page: 1.08;
+  --ms-tracking-display: -0.015em;
+
+  /* 4px 基础节奏。 */
+  --ms-space-1: 4px;
+  --ms-space-2: 8px;
+  --ms-space-3: 12px;
+  --ms-space-4: 16px;
+  --ms-space-5: 20px;
+  --ms-space-6: 24px;
+  --ms-space-8: 32px;
+  --ms-space-12: 48px;
+
+  /* 组件几何。 */
+  --ms-radius-sm: 8px;
+  --ms-radius-md: 12px;
+  --ms-radius-lg: 18px;
+  --ms-radius-pill: 980px;
+  --ms-border-width: 1px;
+  --ms-control-height-sm: 36px;
+  --ms-control-height-md: 40px;
+  --ms-control-height-lg: 44px;
+  --ms-avatar-size: 36px;
+  --ms-toggle-width: 42px;
+  --ms-toggle-height: 24px;
+  --ms-status-dot-size: 7px;
+
+  /* 层次：页面依靠表面和边框，浮层才使用 raised。 */
+  --ms-elevation-flat: none;
+  --ms-elevation-ring: 0 0 0 1px var(--ms-border-default);
+  --ms-elevation-raised: 0 12px 32px
+    color-mix(in oklab, var(--ms-text-primary), transparent 92%);
+  --ms-focus-ring: 0 0 0 4px
+    color-mix(in oklab, var(--ms-action-primary), transparent 65%);
+
+  /* 动效：无弹跳，快速减速。 */
+  --ms-motion-fast: 150ms;
+  --ms-motion-base: 220ms;
+  --ms-ease-standard: cubic-bezier(0.28, 0, 0.22, 1);
+
+  /* 桌面客户端布局。 */
+  --ms-app-max-width: 1440px;
+  --ms-window-default-width: 1280px;
+  --ms-window-default-height: 800px;
+  --ms-window-min-width: 1024px;
+  --ms-window-min-height: 720px;
+  --ms-sidebar-width: 232px;
+  --ms-sidebar-width-compact: 196px;
+  --ms-titlebar-height: 52px;
+  --ms-content-max-width: 1120px;
+  --ms-settings-nav-width: 176px;
+  --ms-settings-nav-width-compact: 164px;
+  --ms-modal-max-width: 520px;
+
+  /* 层级。 */
+  --ms-z-modal: 40;
+  --ms-z-toast: 60;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --ms-motion-fast: 1ms;
+    --ms-motion-base: 1ms;
+  }
+}
