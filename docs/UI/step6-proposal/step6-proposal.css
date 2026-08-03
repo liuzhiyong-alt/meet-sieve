@@ -1,0 +1,211 @@
+/* Step 6 页面提案只补充 LAN 页面布局，颜色、间距与组件几何均来自 MeetSieve token。 */
+.lan-card-copy {
+  display: grid;
+  gap: var(--ms-space-1);
+  min-width: 0;
+}
+
+.lan-card-copy p,
+.upload-copy p {
+  margin: 0;
+}
+
+.lan-address {
+  overflow-wrap: anywhere;
+  color: var(--ms-text-secondary);
+  font-family: var(--ms-font-mono);
+  font-size: var(--ms-text-xs);
+}
+
+.qr-placeholder {
+  width: 136px;
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  padding: var(--ms-space-4);
+  border: var(--ms-border-width) solid var(--ms-border-default);
+  border-radius: var(--ms-radius-md);
+  background: var(--ms-bg-canvas);
+  color: var(--ms-text-muted);
+  text-align: center;
+  font-size: var(--ms-text-xs);
+}
+
+.guest-page {
+  min-height: 100vh;
+  background: var(--ms-bg-page);
+  color: var(--ms-text-primary);
+}
+
+.guest-header,
+.guest-main {
+  width: min(var(--ms-content-max-width), calc(100% - var(--ms-space-8) * 2));
+  margin-inline: auto;
+}
+
+.guest-header {
+  min-height: 76px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ms-space-4);
+  flex-wrap: wrap;
+  border-bottom: var(--ms-border-width) solid var(--ms-border-soft);
+}
+
+.guest-header .brand {
+  padding: 0;
+}
+
+.guest-identity {
+  display: flex;
+  align-items: center;
+  gap: var(--ms-space-3);
+}
+
+.guest-main {
+  padding-block: var(--ms-space-8) var(--ms-space-12);
+}
+
+.guest-main .page-head {
+  align-items: center;
+  margin-bottom: var(--ms-space-6);
+}
+
+.guest-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(280px, 0.75fr);
+  align-items: start;
+  gap: var(--ms-space-5);
+}
+
+.guest-message-list {
+  display: grid;
+  gap: var(--ms-space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.guest-message {
+  padding-bottom: var(--ms-space-4);
+  border-bottom: var(--ms-border-width) solid var(--ms-border-soft);
+}
+
+.guest-message:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.guest-message p {
+  margin: var(--ms-space-1) 0;
+  color: var(--ms-text-secondary);
+  font-size: var(--ms-text-body);
+  overflow-wrap: anywhere;
+}
+
+.guest-composer {
+  margin-top: var(--ms-space-6);
+  padding-top: var(--ms-space-5);
+  border-top: var(--ms-border-width) solid var(--ms-border-soft);
+}
+
+.upload-item {
+  display: grid;
+  gap: var(--ms-space-3);
+  padding: var(--ms-space-4);
+  border: var(--ms-border-width) solid var(--ms-border-soft);
+  border-radius: var(--ms-radius-md);
+  background: var(--ms-bg-sidebar);
+}
+
+.upload-copy {
+  min-width: 0;
+}
+
+.upload-copy strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.upload-item .btn {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.join-shell,
+.ended-shell {
+  width: min(560px, calc(100% - var(--ms-space-8) * 2));
+  margin-inline: auto;
+  padding-block: var(--ms-space-12);
+}
+
+.join-shell .brand,
+.ended-shell .brand {
+  padding-inline: 0;
+}
+
+.join-shell .card,
+.ended-shell .card {
+  margin-top: var(--ms-space-6);
+  padding: var(--ms-space-6);
+}
+
+.end-upload-actions {
+  display: grid;
+  gap: var(--ms-space-3);
+  margin-top: var(--ms-space-5);
+}
+
+@media (max-width: 900px) {
+  .guest-header,
+  .guest-main {
+    width: min(100% - var(--ms-space-8), var(--ms-content-max-width));
+  }
+
+  .guest-header {
+    min-height: 68px;
+    display: grid;
+    grid-template-columns: 1fr;
+    justify-items: start;
+    padding-block: var(--ms-space-3);
+  }
+
+  .guest-identity .meta {
+    display: none;
+  }
+
+  .guest-main {
+    padding-block: var(--ms-space-6) var(--ms-space-8);
+  }
+
+  .guest-main .page-head,
+  .guest-layout {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .guest-layout > .stack {
+    grid-row: 2;
+  }
+
+  .guest-composer .row-between {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .guest-composer .btn,
+  .join-shell .btn,
+  .ended-shell .btn {
+    min-height: var(--ms-control-height-lg);
+    width: 100%;
+  }
+
+  .join-shell,
+  .ended-shell {
+    width: min(100% - var(--ms-space-8), 560px);
+    padding-block: var(--ms-space-8);
+  }
+}

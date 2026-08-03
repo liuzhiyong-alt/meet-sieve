@@ -48,6 +48,34 @@ func TestInitialize_CreatesFinalizedDatabaseAtomically(t *testing.T) {
 	}
 }
 
+// TestInitialize_UsesSelectedDirectoryAndPreservesSystemMetadata 验证直接在所选目录初始化且不删除系统元数据。
+func TestInitialize_UsesSelectedDirectoryAndPreservesSystemMetadata(t *testing.T) {
+	base := t.TempDir()
+	workspacePath := filepath.Join(base, "selected")
+	if err := os.Mkdir(workspacePath, 0o700); err != nil {
+		t.Fatalf("创建所选目录失败：%v", err)
+	}
+	metadataPath := filepath.Join(workspacePath, ".DS_Store")
+	if err := os.WriteFile(metadataPath, []byte("finder-metadata"), 0o600); err != nil {
+		t.Fatalf("准备 Finder 元数据失败：%v", err)
+	}
+
+	if _, err := newInitializer(t, base).Initialize(workspacePath); err != nil {
+		t.Fatalf("在所选目录直接初始化失败：%v", err)
+	}
+	assertDirectoryExists(t, filepath.Join(workspacePath, "data"))
+	assertDirectoryExists(t, filepath.Join(workspacePath, "meetings"))
+	if _, err := os.Stat(filepath.Join(workspacePath, "data", "meetings.db")); err != nil {
+		t.Fatalf("数据库未直接创建在所选目录下：%v", err)
+	}
+	if content, err := os.ReadFile(metadataPath); err != nil || string(content) != "finder-metadata" {
+		t.Fatalf("初始化不得修改系统元数据：content=%q err=%v", content, err)
+	}
+	if _, err := os.Stat(filepath.Join(workspacePath, "workspace")); !os.IsNotExist(err) {
+		t.Fatalf("不得在所选目录下追加 workspace 子目录：err=%v", err)
+	}
+}
+
 // TestInitialize_RejectsInvalidNonEmptyDirectoryWithoutMutation 验证无效非空目录既不安装数据库也不删除未知文件。
 func TestInitialize_RejectsInvalidNonEmptyDirectoryWithoutMutation(t *testing.T) {
 	base := t.TempDir()

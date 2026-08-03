@@ -124,12 +124,15 @@ func TestSchema_ForeignKeysAreEnabledAndDeclared(t *testing.T) {
 	}
 }
 
-// TestSchema_DevelopmentDownRestoresStep1Foundation 验证回退 Step 5 至 000003 后恢复 Step 1 声纹表结构。
+// TestSchema_DevelopmentDownRestoresStep1Foundation 验证从最新版本回退至 Step 1 后恢复原始声纹表结构。
 func TestSchema_DevelopmentDownRestoresStep1Foundation(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "down.db")
 	if err := database.Migrate(path); err != nil {
 		t.Fatalf("执行正向 migration 失败：%v", err)
 	}
+	rollbackLatestMigration(t, path)
+	rollbackLatestMigration(t, path)
+	rollbackLatestMigration(t, path)
 	rollbackLatestMigration(t, path)
 	rollbackLatestMigration(t, path)
 	rollbackLatestMigration(t, path)
@@ -145,14 +148,14 @@ func TestSchema_DevelopmentDownRestoresStep1Foundation(t *testing.T) {
 		t.Fatalf("检查 meetings 表失败：%v", err)
 	}
 	if meetingTableCount != 1 {
-		t.Fatal("回退 000004 与 000003 后必须保留 Step 1 业务表")
+		t.Fatal("回退至 Step 1 后必须保留 Step 1 业务表")
 	}
 	var step2ColumnCount int
 	if err := db.QueryRow("SELECT count(*) FROM pragma_table_info('voice_samples') WHERE name = 'processing_state'").Scan(&step2ColumnCount); err != nil {
 		t.Fatalf("检查 Step 2 声纹字段失败：%v", err)
 	}
 	if step2ColumnCount != 0 {
-		t.Fatal("回退 000004 与 000003 后不得保留 Step 2 声纹字段")
+		t.Fatal("回退至 Step 1 后不得保留 Step 2 声纹字段")
 	}
 	var columns int
 	if err := db.QueryRow("SELECT count(*) FROM pragma_table_info('voice_samples')").Scan(&columns); err != nil {
@@ -167,29 +170,31 @@ func TestSchema_DevelopmentDownRestoresStep1Foundation(t *testing.T) {
 func TestSchema_IndexesEveryForeignKeyColumn(t *testing.T) {
 	db := openMigratedDatabase(t)
 	requirements := map[string][]string{
-		"group_members":          {"group_id", "member_id"},
-		"meeting_participants":   {"meeting_id", "member_id"},
-		"meeting_events":         {"meeting_id"},
-		"utterances":             {"meeting_id", "event_id", "asr_session_id", "current_participant_id", "speaker_track_id", "speaker_cluster_id"},
-		"guest_sessions":         {"meeting_id"},
-		"messages":               {"meeting_id", "event_id", "member_id", "guest_session_id"},
-		"resources":              {"meeting_id", "event_id", "guest_session_id"},
-		"corrections":            {"meeting_id", "event_id"},
-		"correction_items":       {"correction_id"},
-		"audio_assets":           {"meeting_id"},
-		"asr_sessions":           {"meeting_id"},
-		"asr_gaps":               {"meeting_id", "event_id", "asr_session_id", "audio_asset_id"},
-		"voice_samples":          {"member_id", "source_meeting_id", "source_utterance_id"},
-		"voice_embeddings":       {"voice_sample_id"},
-		"speaker_clusters":       {"meeting_id", "assigned_participant_id"},
-		"speaker_tracks":         {"meeting_id", "asr_session_id", "automatic_participant_id", "speaker_cluster_id"},
-		"speaker_track_evidence": {"speaker_track_id", "utterance_id"},
-		"agent_sessions":         {"meeting_id", "resumed_from_session_id"},
-		"agent_turns":            {"meeting_id", "agent_session_id", "question_event_id", "answer_event_id"},
-		"sync_batches":           {"meeting_id", "agent_session_id"},
-		"context_snapshots":      {"meeting_id", "agent_session_id", "agent_turn_id"},
-		"minute_versions":        {"meeting_id", "agent_turn_id", "parent_version_id"},
-		"deletion_jobs":          {"meeting_id"},
+		"group_members":                   {"group_id", "member_id"},
+		"meeting_participants":            {"meeting_id", "member_id"},
+		"meeting_events":                  {"meeting_id"},
+		"utterances":                      {"meeting_id", "event_id", "asr_session_id", "current_participant_id", "speaker_track_id", "speaker_cluster_id"},
+		"guest_sessions":                  {"meeting_id"},
+		"messages":                        {"meeting_id", "event_id", "member_id", "guest_session_id"},
+		"resources":                       {"meeting_id", "event_id", "guest_session_id"},
+		"corrections":                     {"meeting_id", "event_id"},
+		"correction_items":                {"correction_id"},
+		"audio_assets":                    {"meeting_id"},
+		"asr_sessions":                    {"meeting_id"},
+		"asr_gaps":                        {"meeting_id", "event_id", "asr_session_id", "audio_asset_id"},
+		"gap_transcription_attempts":      {"meeting_id", "audio_asset_id"},
+		"gap_transcription_attempt_items": {"attempt_id", "gap_id"},
+		"voice_samples":                   {"member_id", "source_meeting_id", "source_utterance_id"},
+		"voice_embeddings":                {"voice_sample_id"},
+		"speaker_clusters":                {"meeting_id", "assigned_participant_id"},
+		"speaker_tracks":                  {"meeting_id", "asr_session_id", "automatic_participant_id", "speaker_cluster_id"},
+		"speaker_track_evidence":          {"speaker_track_id", "utterance_id"},
+		"agent_sessions":                  {"meeting_id", "resumed_from_session_id"},
+		"agent_turns":                     {"meeting_id", "agent_session_id", "question_event_id", "answer_event_id"},
+		"sync_batches":                    {"meeting_id", "agent_session_id"},
+		"context_snapshots":               {"meeting_id", "agent_session_id", "agent_turn_id"},
+		"minute_versions":                 {"meeting_id", "agent_turn_id", "parent_version_id"},
+		"deletion_jobs":                   {"meeting_id"},
 	}
 	for table, columns := range requirements {
 		for _, column := range columns {
@@ -207,7 +212,8 @@ func TestSchema_ModelColumnsMatchMigration(t *testing.T) {
 		models.AppMetadata{}, models.Settings{}, models.Member{}, models.Group{}, models.GroupMember{},
 		models.MeetingNumberSequence{}, models.Meeting{}, models.MeetingParticipant{},
 		models.MeetingEvent{}, models.Utterance{}, models.GuestSession{}, models.Message{}, models.Resource{}, models.Correction{}, models.CorrectionItem{},
-		models.AudioAsset{}, models.ASRSession{}, models.ASRGap{}, models.VoiceSample{}, models.VoiceEmbedding{}, models.SpeakerCluster{},
+		models.AudioAsset{}, models.ASRSession{}, models.ASRGap{}, models.GapTranscriptionAttempt{}, models.GapTranscriptionAttemptItem{},
+		models.VoiceSample{}, models.VoiceEmbedding{}, models.SpeakerCluster{},
 		models.SpeakerTrack{}, models.SpeakerTrackEvidence{},
 		models.AgentSession{}, models.AgentTurn{}, models.SyncBatch{}, models.ContextSnapshot{}, models.MinuteVersion{}, models.DeletionJob{},
 	} {

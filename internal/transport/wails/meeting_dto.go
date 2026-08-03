@@ -18,6 +18,8 @@ type StartMeetingDTO struct {
 	MicrophoneID              string   `json:"microphone_id"`
 	LocalTimezone             string   `json:"local_timezone"`
 	ASRMode                   string   `json:"asr_mode"`
+	LANEnabled                bool     `json:"lan_enabled"`
+	LANInterfaceID            string   `json:"lan_interface_id"`
 }
 
 // MeetingProjectionDTO 是不泄漏工作目录绝对路径的会议运行状态。
@@ -28,6 +30,7 @@ type MeetingProjectionDTO struct {
 	LifecycleState   string `json:"lifecycle_state"`
 	LocalSaveState   string `json:"local_save_state"`
 	RealtimeASRState string `json:"realtime_asr_state"`
+	AgentState       string `json:"agent_state"`
 	StartedAt        *int64 `json:"started_at,omitempty"`
 	EndedAt          *int64 `json:"ended_at,omitempty"`
 	UpdatedAt        int64  `json:"updated_at"`
@@ -51,6 +54,7 @@ func mapMeetingProjectionDTO(meeting models.Meeting) MeetingProjectionDTO {
 		ID: meeting.ID, MeetingNo: meeting.MeetingNo, Subject: meeting.Subject,
 		LifecycleState: meeting.LifecycleState, LocalSaveState: meeting.LocalSaveState,
 		RealtimeASRState: meeting.RealtimeASRState,
+		AgentState:       meeting.AgentState,
 		StartedAt:        meeting.StartedAt, EndedAt: meeting.EndedAt, UpdatedAt: meeting.UpdatedAt,
 	}
 }

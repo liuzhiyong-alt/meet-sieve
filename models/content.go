@@ -68,6 +68,7 @@ type Message struct {
 	AuthorKind          string  `gorm:"column:author_kind"`
 	MemberID            *string `gorm:"column:member_id"`
 	GuestSessionID      *string `gorm:"column:guest_session_id"`
+	RequestID           *string `gorm:"column:request_id"`
 	DisplayNameSnapshot string  `gorm:"column:display_name_snapshot"`
 	Content             string  `gorm:"column:content"`
 	CreatedAt           int64   `gorm:"column:created_at"`
@@ -83,6 +84,7 @@ type Resource struct {
 	MeetingID           string  `gorm:"column:meeting_id"`
 	EventID             string  `gorm:"column:event_id"`
 	GuestSessionID      *string `gorm:"column:guest_session_id"`
+	RequestID           *string `gorm:"column:request_id"`
 	Kind                string  `gorm:"column:kind"`
 	OriginalName        *string `gorm:"column:original_name"`
 	SafeName            *string `gorm:"column:safe_name"`

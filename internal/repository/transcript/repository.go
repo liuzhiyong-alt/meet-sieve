@@ -19,12 +19,21 @@ type Repository struct {
 type RawRecordRow struct {
 	Seq                    int64
 	Kind                   string
+	OccurredAt             int64
 	StartSample            int64
 	EndSample              int64
 	CurrentText            string
 	ASRSessionID           string
 	ParticipantDisplayName string
 	ClusterDisplayNo       int
+	GuestDisplayName       string
+	SourceURL              string
+	OriginalName           string
+	MediaType              string
+	SizeBytes              int64
+	SHA256                 string
+	Description            string
+	AgentText              string
 }
 
 // TimelineRow 是 Wails Timeline 服务所需的 final/gap 联合读取行。
@@ -231,25 +240,39 @@ ORDER BY event.seq ASC LIMIT ?`
 	return rows, nil
 }
 
-// LoadRawRecordRows 按持久事件 seq 读取原始记录投影所需的 final/gap 事实。
+// LoadRawRecordRows 按持久事件 seq 读取原始记录所需的转写、消息和已完成资源事实。
 func (repository *Repository) LoadRawRecordRows(ctx context.Context, meetingID string) ([]RawRecordRow, error) {
 	if repository == nil || repository.reader == nil || meetingID == "" {
 		return nil, fmt.Errorf("读取原始记录事件：参数无效")
 	}
 	const statement = `
-SELECT event.seq, event.kind,
-       COALESCE(utterance.start_sample, gap.start_sample) AS start_sample,
-       COALESCE(utterance.end_sample, gap.end_sample) AS end_sample,
-       COALESCE(utterance.current_text, '') AS current_text,
+SELECT event.seq, event.kind, event.occurred_at,
+       COALESCE(utterance.start_sample, gap.start_sample, 0) AS start_sample,
+       COALESCE(utterance.end_sample, gap.end_sample, 0) AS end_sample,
+       COALESCE(utterance.current_text, message.content, '') AS current_text,
        COALESCE(utterance.asr_session_id, '') AS asr_session_id,
        COALESCE(participant.display_name_snapshot, '') AS participant_display_name,
-       COALESCE(cluster.display_no, 0) AS cluster_display_no
+       COALESCE(cluster.display_no, 0) AS cluster_display_no,
+       COALESCE(message.display_name_snapshot, guest.display_name, '') AS guest_display_name,
+       COALESCE(resource.source_url, '') AS source_url,
+       COALESCE(resource.original_name, '') AS original_name,
+       COALESCE(resource.media_type, '') AS media_type,
+       COALESCE(resource.size_bytes, 0) AS size_bytes,
+       COALESCE(resource.sha256, '') AS sha256,
+       COALESCE(resource.current_description, '') AS description,
+       CASE WHEN event.kind IN ('ai.question', 'ai.answer')
+            THEN COALESCE(json_extract(event.payload_json, '$.text'), '') ELSE '' END AS agent_text
 FROM meeting_events AS event
-LEFT JOIN utterances AS utterance ON utterance.event_id = event.id
-LEFT JOIN asr_gaps AS gap ON gap.event_id = event.id
+LEFT JOIN utterances AS utterance ON utterance.event_id = event.id AND utterance.meeting_id = event.meeting_id
+LEFT JOIN asr_gaps AS gap ON gap.event_id = event.id AND gap.meeting_id = event.meeting_id
 LEFT JOIN meeting_participants AS participant ON participant.id = utterance.current_participant_id
 LEFT JOIN speaker_clusters AS cluster ON cluster.id = utterance.speaker_cluster_id
-WHERE event.meeting_id = ? AND event.kind IN ('utterance.final', 'asr.gap')
+LEFT JOIN messages AS message ON message.event_id = event.id AND message.meeting_id = event.meeting_id
+LEFT JOIN resources AS resource ON resource.event_id = event.id AND resource.meeting_id = event.meeting_id AND resource.state = 'completed'
+LEFT JOIN guest_sessions AS guest ON guest.id = resource.guest_session_id AND guest.meeting_id = event.meeting_id
+WHERE event.meeting_id = ?
+  AND event.kind IN ('utterance.final', 'asr.gap', 'message.created', 'resource.created', 'ai.question', 'ai.answer', 'ai.cancelled', 'ai.failed')
+  AND (event.kind <> 'resource.created' OR resource.id IS NOT NULL)
 ORDER BY event.seq ASC`
 	var rows []RawRecordRow
 	if err := repository.reader.WithContext(ctx).Raw(statement, meetingID).Scan(&rows).Error; err != nil {

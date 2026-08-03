@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "format": "meet-sieve-design-tokens/v1",
-  "version": "1.1.0",
+  "version": "1.4.0",
   "source": "tokens.css",
   "theme": "light",
   "tokens": {

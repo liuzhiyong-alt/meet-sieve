@@ -144,6 +144,7 @@ export namespace wails {
 	    lifecycle_state: string;
 	    local_save_state: string;
 	    realtime_asr_state: string;
+	    agent_state: string;
 	    started_at?: number;
 	    ended_at?: number;
 	    updated_at: number;
@@ -160,6 +161,7 @@ export namespace wails {
 	        this.lifecycle_state = source["lifecycle_state"];
 	        this.local_save_state = source["local_save_state"];
 	        this.realtime_asr_state = source["realtime_asr_state"];
+	        this.agent_state = source["agent_state"];
 	        this.started_at = source["started_at"];
 	        this.ended_at = source["ended_at"];
 	        this.updated_at = source["updated_at"];
@@ -196,6 +198,178 @@ export namespace wails {
 		    }
 		    return a;
 		}
+	}
+	export class AgentApprovalDTO {
+	    id: string;
+	    tool: string;
+	    target: string;
+	    parameter_summary: string;
+	    risk: string;
+
+	    static createFrom(source: any = {}) {
+	        return new AgentApprovalDTO(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.tool = source["tool"];
+	        this.target = source["target"];
+	        this.parameter_summary = source["parameter_summary"];
+	        this.risk = source["risk"];
+	    }
+	}
+	export class AgentAskDTO {
+	    turn_id: string;
+	    question_seq: number;
+	    answer?: string;
+	    answer_seq?: number;
+
+	    static createFrom(source: any = {}) {
+	        return new AgentAskDTO(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.turn_id = source["turn_id"];
+	        this.question_seq = source["question_seq"];
+	        this.answer = source["answer"];
+	        this.answer_seq = source["answer_seq"];
+	    }
+	}
+	export class AgentAvailabilityDTO {
+	    state: string;
+	    version?: string;
+	    account_state: string;
+	    protocol_state: string;
+	    message: string;
+
+	    static createFrom(source: any = {}) {
+	        return new AgentAvailabilityDTO(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.state = source["state"];
+	        this.version = source["version"];
+	        this.account_state = source["account_state"];
+	        this.protocol_state = source["protocol_state"];
+	        this.message = source["message"];
+	    }
+	}
+	export class AgentRecoveryCommandsDTO {
+	    thread_command: string;
+	    directory_command: string;
+
+	    static createFrom(source: any = {}) {
+	        return new AgentRecoveryCommandsDTO(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.thread_command = source["thread_command"];
+	        this.directory_command = source["directory_command"];
+	    }
+	}
+	export class AgentSettingsDTO {
+	    wake_word: string;
+	    codex_executable_path: string;
+	    availability: AgentAvailabilityDTO;
+	    updated_at: number;
+
+	    static createFrom(source: any = {}) {
+	        return new AgentSettingsDTO(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.wake_word = source["wake_word"];
+	        this.codex_executable_path = source["codex_executable_path"];
+	        this.availability = this.convertValues(source["availability"], AgentAvailabilityDTO);
+	        this.updated_at = source["updated_at"];
+	    }
+
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class AgentStateDTO {
+	    state: string;
+	    meeting_id: string;
+	    turn_id?: string;
+	    partial?: string;
+	    approval?: AgentApprovalDTO;
+	    error_code?: string;
+	    revision: number;
+
+	    static createFrom(source: any = {}) {
+	        return new AgentStateDTO(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.state = source["state"];
+	        this.meeting_id = source["meeting_id"];
+	        this.turn_id = source["turn_id"];
+	        this.partial = source["partial"];
+	        this.approval = this.convertValues(source["approval"], AgentApprovalDTO);
+	        this.error_code = source["error_code"];
+	        this.revision = source["revision"];
+	    }
+
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class AgentTimelineEntryDTO {
+	    seq: number;
+	    kind: string;
+	    occurred_at: number;
+	    turn_id: string;
+	    text?: string;
+	    reason?: string;
+
+	    static createFrom(source: any = {}) {
+	        return new AgentTimelineEntryDTO(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.seq = source["seq"];
+	        this.kind = source["kind"];
+	        this.occurred_at = source["occurred_at"];
+	        this.turn_id = source["turn_id"];
+	        this.text = source["text"];
+	        this.reason = source["reason"];
+	    }
 	}
 	export class AppEvent_string_ {
 	    name: string;
@@ -253,6 +427,18 @@ export namespace wails {
 	        this.message = source["message"];
 	        this.retryable = source["retryable"];
 	        this.available_actions = source["available_actions"];
+	    }
+	}
+	export class CancelUploadDTO {
+	    cancelled: boolean;
+
+	    static createFrom(source: any = {}) {
+	        return new CancelUploadDTO(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.cancelled = source["cancelled"];
 	    }
 	}
 	export class ClusterCorrectionDTO {
@@ -470,6 +656,207 @@ export namespace wails {
 	        this.value = source["value"];
 	    }
 	}
+	export class FinalizationStateDTO {
+	    meeting_id: string;
+	    state: string;
+	    stage: string;
+	    error_code?: string;
+	    revision: number;
+
+	    static createFrom(source: any = {}) {
+	        return new FinalizationStateDTO(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.meeting_id = source["meeting_id"];
+	        this.state = source["state"];
+	        this.stage = source["stage"];
+	        this.error_code = source["error_code"];
+	        this.revision = source["revision"];
+	    }
+	}
+	export class GapCandidateDTO {
+	    text: string;
+	    speaker_id?: string;
+	    start_sample: number;
+	    end_sample: number;
+
+	    static createFrom(source: any = {}) {
+	        return new GapCandidateDTO(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.text = source["text"];
+	        this.speaker_id = source["speaker_id"];
+	        this.start_sample = source["start_sample"];
+	        this.end_sample = source["end_sample"];
+	    }
+	}
+	export class GapCommandDTO {
+	    accepted: boolean;
+
+	    static createFrom(source: any = {}) {
+	        return new GapCommandDTO(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.accepted = source["accepted"];
+	    }
+	}
+	export class GapConflictUtteranceDTO {
+	    id: string;
+	    seq: number;
+	    original_text: string;
+	    current_text: string;
+	    start_sample: number;
+	    end_sample: number;
+	    text_revision: number;
+
+	    static createFrom(source: any = {}) {
+	        return new GapConflictUtteranceDTO(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.seq = source["seq"];
+	        this.original_text = source["original_text"];
+	        this.current_text = source["current_text"];
+	        this.start_sample = source["start_sample"];
+	        this.end_sample = source["end_sample"];
+	        this.text_revision = source["text_revision"];
+	    }
+	}
+	export class GapConflictDTO {
+	    gap_id: string;
+	    revision: number;
+	    core_start_sample: number;
+	    core_end_sample: number;
+	    audio_start_sample: number;
+	    audio_end_sample: number;
+	    audio_clip_url: string;
+	    audio_clip_expires_at: number;
+	    candidates: GapCandidateDTO[];
+	    existing: GapConflictUtteranceDTO[];
+	    context: GapConflictUtteranceDTO[];
+
+	    static createFrom(source: any = {}) {
+	        return new GapConflictDTO(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.gap_id = source["gap_id"];
+	        this.revision = source["revision"];
+	        this.core_start_sample = source["core_start_sample"];
+	        this.core_end_sample = source["core_end_sample"];
+	        this.audio_start_sample = source["audio_start_sample"];
+	        this.audio_end_sample = source["audio_end_sample"];
+	        this.audio_clip_url = source["audio_clip_url"];
+	        this.audio_clip_expires_at = source["audio_clip_expires_at"];
+	        this.candidates = this.convertValues(source["candidates"], GapCandidateDTO);
+	        this.existing = this.convertValues(source["existing"], GapConflictUtteranceDTO);
+	        this.context = this.convertValues(source["context"], GapConflictUtteranceDTO);
+	    }
+
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+
+	export class GapItemDTO {
+	    id: string;
+	    start_sample: number;
+	    end_sample: number;
+	    state: string;
+	    attempt_count: number;
+	    error_code?: string;
+
+	    static createFrom(source: any = {}) {
+	        return new GapItemDTO(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.start_sample = source["start_sample"];
+	        this.end_sample = source["end_sample"];
+	        this.state = source["state"];
+	        this.attempt_count = source["attempt_count"];
+	        this.error_code = source["error_code"];
+	    }
+	}
+	export class GapResolutionEditDTO {
+	    target_id: string;
+	    expected_revision: number;
+	    text: string;
+
+	    static createFrom(source: any = {}) {
+	        return new GapResolutionEditDTO(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.target_id = source["target_id"];
+	        this.expected_revision = source["expected_revision"];
+	        this.text = source["text"];
+	    }
+	}
+	export class GapStateDTO {
+	    meeting_id: string;
+	    state: string;
+	    gaps: GapItemDTO[];
+	    active_attempt_id?: string;
+	    revision: number;
+
+	    static createFrom(source: any = {}) {
+	        return new GapStateDTO(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.meeting_id = source["meeting_id"];
+	        this.state = source["state"];
+	        this.gaps = this.convertValues(source["gaps"], GapItemDTO);
+	        this.active_attempt_id = source["active_attempt_id"];
+	        this.revision = source["revision"];
+	    }
+
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class GroupMemberDTO {
 	    member_id: string;
 	    sort_order: number;
@@ -543,6 +930,123 @@ export namespace wails {
 	        this.channel_count = source["channel_count"];
 	    }
 	}
+	export class LANInterfaceDTO {
+	    id: string;
+	    name: string;
+	    address: string;
+	    default_route: boolean;
+
+	    static createFrom(source: any = {}) {
+	        return new LANInterfaceDTO(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.address = source["address"];
+	        this.default_route = source["default_route"];
+	    }
+	}
+	export class LANInterfaceListDTO {
+	    interfaces: LANInterfaceDTO[];
+	    recommended_id?: string;
+	    reason: string;
+	    warning?: string;
+
+	    static createFrom(source: any = {}) {
+	        return new LANInterfaceListDTO(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.interfaces = this.convertValues(source["interfaces"], LANInterfaceDTO);
+	        this.recommended_id = source["recommended_id"];
+	        this.reason = source["reason"];
+	        this.warning = source["warning"];
+	    }
+
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class LANUploadDTO {
+	    request_id: string;
+	    name: string;
+	    written: number;
+	    total: number;
+
+	    static createFrom(source: any = {}) {
+	        return new LANUploadDTO(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.request_id = source["request_id"];
+	        this.name = source["name"];
+	        this.written = source["written"];
+	        this.total = source["total"];
+	    }
+	}
+	export class LANStatusDTO {
+	    state: string;
+	    meeting_id?: string;
+	    interface_id?: string;
+	    address?: string;
+	    join_url?: string;
+	    error_code?: string;
+	    online_count: number;
+	    active_uploads: LANUploadDTO[];
+
+	    static createFrom(source: any = {}) {
+	        return new LANStatusDTO(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.state = source["state"];
+	        this.meeting_id = source["meeting_id"];
+	        this.interface_id = source["interface_id"];
+	        this.address = source["address"];
+	        this.join_url = source["join_url"];
+	        this.error_code = source["error_code"];
+	        this.online_count = source["online_count"];
+	        this.active_uploads = this.convertValues(source["active_uploads"], LANUploadDTO);
+	    }
+
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+
 	export class MeetingClipDTO {
 	    request_id: string;
 	    meeting_id: string;
@@ -665,6 +1169,20 @@ export namespace wails {
 		}
 	}
 
+	export class MeetingStateEventDTO {
+	    meeting_id: string;
+	    state: string;
+
+	    static createFrom(source: any = {}) {
+	        return new MeetingStateEventDTO(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.meeting_id = source["meeting_id"];
+	        this.state = source["state"];
+	    }
+	}
 	export class MemberDTO {
 	    id: string;
 	    name: string;
@@ -690,6 +1208,145 @@ export namespace wails {
 	        this.created_at = source["created_at"];
 	        this.updated_at = source["updated_at"];
 	    }
+	}
+	export class MinuteVersionDTO {
+	    id: string;
+	    version_no: number;
+	    source: string;
+	    content_markdown: string;
+	    state: string;
+	    is_current: boolean;
+	    confirmed_at?: number;
+	    created_at: number;
+
+	    static createFrom(source: any = {}) {
+	        return new MinuteVersionDTO(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.version_no = source["version_no"];
+	        this.source = source["source"];
+	        this.content_markdown = source["content_markdown"];
+	        this.state = source["state"];
+	        this.is_current = source["is_current"];
+	        this.confirmed_at = source["confirmed_at"];
+	        this.created_at = source["created_at"];
+	    }
+	}
+	export class MinuteMutationDTO {
+	    version: MinuteVersionDTO;
+	    projection_state: string;
+	    projection_error?: string;
+
+	    static createFrom(source: any = {}) {
+	        return new MinuteMutationDTO(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.version = this.convertValues(source["version"], MinuteVersionDTO);
+	        this.projection_state = source["projection_state"];
+	        this.projection_error = source["projection_error"];
+	    }
+
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+
+	export class MinuteVersionPageDTO {
+	    items: MinuteVersionDTO[];
+	    next_cursor?: number;
+
+	    static createFrom(source: any = {}) {
+	        return new MinuteVersionPageDTO(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.items = this.convertValues(source["items"], MinuteVersionDTO);
+	        this.next_cursor = source["next_cursor"];
+	    }
+
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class MinutesStateDTO {
+	    meeting_id: string;
+	    state: string;
+	    current?: MinuteVersionDTO;
+	    latest_candidate?: MinuteVersionDTO;
+	    recent_error_code?: string;
+	    turn_id?: string;
+	    runtime_state: string;
+	    projection_state: string;
+	    revision: number;
+
+	    static createFrom(source: any = {}) {
+	        return new MinutesStateDTO(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.meeting_id = source["meeting_id"];
+	        this.state = source["state"];
+	        this.current = this.convertValues(source["current"], MinuteVersionDTO);
+	        this.latest_candidate = this.convertValues(source["latest_candidate"], MinuteVersionDTO);
+	        this.recent_error_code = source["recent_error_code"];
+	        this.turn_id = source["turn_id"];
+	        this.runtime_state = source["runtime_state"];
+	        this.projection_state = source["projection_state"];
+	        this.revision = source["revision"];
+	    }
+
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 	export class RawRecordStateDTO {
 	    state: string;
@@ -744,6 +1401,44 @@ export namespace wails {
 	        this.errorCode = source["errorCode"];
 	        this.message = source["message"];
 	        this.data = this.convertValues(source["data"], ASRTimelineEntryDTO);
+	        this.requestId = source["requestId"];
+	    }
+
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class Result___meet_sieve_internal_transport_wails_AgentTimelineEntryDTO_ {
+	    code: number;
+	    errorCode?: string;
+	    message: string;
+	    data?: AgentTimelineEntryDTO[];
+	    requestId: string;
+
+	    static createFrom(source: any = {}) {
+	        return new Result___meet_sieve_internal_transport_wails_AgentTimelineEntryDTO_(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.code = source["code"];
+	        this.errorCode = source["errorCode"];
+	        this.message = source["message"];
+	        this.data = this.convertValues(source["data"], AgentTimelineEntryDTO);
 	        this.requestId = source["requestId"];
 	    }
 
@@ -1195,6 +1890,196 @@ export namespace wails {
 		    return a;
 		}
 	}
+	export class Result_meet_sieve_internal_transport_wails_AgentAskDTO_ {
+	    code: number;
+	    errorCode?: string;
+	    message: string;
+	    data?: AgentAskDTO;
+	    requestId: string;
+
+	    static createFrom(source: any = {}) {
+	        return new Result_meet_sieve_internal_transport_wails_AgentAskDTO_(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.code = source["code"];
+	        this.errorCode = source["errorCode"];
+	        this.message = source["message"];
+	        this.data = this.convertValues(source["data"], AgentAskDTO);
+	        this.requestId = source["requestId"];
+	    }
+
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class Result_meet_sieve_internal_transport_wails_AgentAvailabilityDTO_ {
+	    code: number;
+	    errorCode?: string;
+	    message: string;
+	    data?: AgentAvailabilityDTO;
+	    requestId: string;
+
+	    static createFrom(source: any = {}) {
+	        return new Result_meet_sieve_internal_transport_wails_AgentAvailabilityDTO_(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.code = source["code"];
+	        this.errorCode = source["errorCode"];
+	        this.message = source["message"];
+	        this.data = this.convertValues(source["data"], AgentAvailabilityDTO);
+	        this.requestId = source["requestId"];
+	    }
+
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class Result_meet_sieve_internal_transport_wails_AgentRecoveryCommandsDTO_ {
+	    code: number;
+	    errorCode?: string;
+	    message: string;
+	    data?: AgentRecoveryCommandsDTO;
+	    requestId: string;
+
+	    static createFrom(source: any = {}) {
+	        return new Result_meet_sieve_internal_transport_wails_AgentRecoveryCommandsDTO_(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.code = source["code"];
+	        this.errorCode = source["errorCode"];
+	        this.message = source["message"];
+	        this.data = this.convertValues(source["data"], AgentRecoveryCommandsDTO);
+	        this.requestId = source["requestId"];
+	    }
+
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class Result_meet_sieve_internal_transport_wails_AgentSettingsDTO_ {
+	    code: number;
+	    errorCode?: string;
+	    message: string;
+	    data?: AgentSettingsDTO;
+	    requestId: string;
+
+	    static createFrom(source: any = {}) {
+	        return new Result_meet_sieve_internal_transport_wails_AgentSettingsDTO_(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.code = source["code"];
+	        this.errorCode = source["errorCode"];
+	        this.message = source["message"];
+	        this.data = this.convertValues(source["data"], AgentSettingsDTO);
+	        this.requestId = source["requestId"];
+	    }
+
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class Result_meet_sieve_internal_transport_wails_AgentStateDTO_ {
+	    code: number;
+	    errorCode?: string;
+	    message: string;
+	    data?: AgentStateDTO;
+	    requestId: string;
+
+	    static createFrom(source: any = {}) {
+	        return new Result_meet_sieve_internal_transport_wails_AgentStateDTO_(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.code = source["code"];
+	        this.errorCode = source["errorCode"];
+	        this.message = source["message"];
+	        this.data = this.convertValues(source["data"], AgentStateDTO);
+	        this.requestId = source["requestId"];
+	    }
+
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class Result_meet_sieve_internal_transport_wails_AppEvent_string__ {
 	    code: number;
 	    errorCode?: string;
@@ -1288,6 +2173,44 @@ export namespace wails {
 	        this.errorCode = source["errorCode"];
 	        this.message = source["message"];
 	        this.data = this.convertValues(source["data"], BootstrapStateDTO);
+	        this.requestId = source["requestId"];
+	    }
+
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class Result_meet_sieve_internal_transport_wails_CancelUploadDTO_ {
+	    code: number;
+	    errorCode?: string;
+	    message: string;
+	    data?: CancelUploadDTO;
+	    requestId: string;
+
+	    static createFrom(source: any = {}) {
+	        return new Result_meet_sieve_internal_transport_wails_CancelUploadDTO_(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.code = source["code"];
+	        this.errorCode = source["errorCode"];
+	        this.message = source["message"];
+	        this.data = this.convertValues(source["data"], CancelUploadDTO);
 	        this.requestId = source["requestId"];
 	    }
 
@@ -1423,6 +2346,158 @@ export namespace wails {
 		    return a;
 		}
 	}
+	export class Result_meet_sieve_internal_transport_wails_FinalizationStateDTO_ {
+	    code: number;
+	    errorCode?: string;
+	    message: string;
+	    data?: FinalizationStateDTO;
+	    requestId: string;
+
+	    static createFrom(source: any = {}) {
+	        return new Result_meet_sieve_internal_transport_wails_FinalizationStateDTO_(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.code = source["code"];
+	        this.errorCode = source["errorCode"];
+	        this.message = source["message"];
+	        this.data = this.convertValues(source["data"], FinalizationStateDTO);
+	        this.requestId = source["requestId"];
+	    }
+
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class Result_meet_sieve_internal_transport_wails_GapCommandDTO_ {
+	    code: number;
+	    errorCode?: string;
+	    message: string;
+	    data?: GapCommandDTO;
+	    requestId: string;
+
+	    static createFrom(source: any = {}) {
+	        return new Result_meet_sieve_internal_transport_wails_GapCommandDTO_(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.code = source["code"];
+	        this.errorCode = source["errorCode"];
+	        this.message = source["message"];
+	        this.data = this.convertValues(source["data"], GapCommandDTO);
+	        this.requestId = source["requestId"];
+	    }
+
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class Result_meet_sieve_internal_transport_wails_GapConflictDTO_ {
+	    code: number;
+	    errorCode?: string;
+	    message: string;
+	    data?: GapConflictDTO;
+	    requestId: string;
+
+	    static createFrom(source: any = {}) {
+	        return new Result_meet_sieve_internal_transport_wails_GapConflictDTO_(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.code = source["code"];
+	        this.errorCode = source["errorCode"];
+	        this.message = source["message"];
+	        this.data = this.convertValues(source["data"], GapConflictDTO);
+	        this.requestId = source["requestId"];
+	    }
+
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class Result_meet_sieve_internal_transport_wails_GapStateDTO_ {
+	    code: number;
+	    errorCode?: string;
+	    message: string;
+	    data?: GapStateDTO;
+	    requestId: string;
+
+	    static createFrom(source: any = {}) {
+	        return new Result_meet_sieve_internal_transport_wails_GapStateDTO_(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.code = source["code"];
+	        this.errorCode = source["errorCode"];
+	        this.message = source["message"];
+	        this.data = this.convertValues(source["data"], GapStateDTO);
+	        this.requestId = source["requestId"];
+	    }
+
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class Result_meet_sieve_internal_transport_wails_GroupDTO_ {
 	    code: number;
 	    errorCode?: string;
@@ -1440,6 +2515,82 @@ export namespace wails {
 	        this.errorCode = source["errorCode"];
 	        this.message = source["message"];
 	        this.data = this.convertValues(source["data"], GroupDTO);
+	        this.requestId = source["requestId"];
+	    }
+
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class Result_meet_sieve_internal_transport_wails_LANInterfaceListDTO_ {
+	    code: number;
+	    errorCode?: string;
+	    message: string;
+	    data?: LANInterfaceListDTO;
+	    requestId: string;
+
+	    static createFrom(source: any = {}) {
+	        return new Result_meet_sieve_internal_transport_wails_LANInterfaceListDTO_(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.code = source["code"];
+	        this.errorCode = source["errorCode"];
+	        this.message = source["message"];
+	        this.data = this.convertValues(source["data"], LANInterfaceListDTO);
+	        this.requestId = source["requestId"];
+	    }
+
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class Result_meet_sieve_internal_transport_wails_LANStatusDTO_ {
+	    code: number;
+	    errorCode?: string;
+	    message: string;
+	    data?: LANStatusDTO;
+	    requestId: string;
+
+	    static createFrom(source: any = {}) {
+	        return new Result_meet_sieve_internal_transport_wails_LANStatusDTO_(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.code = source["code"];
+	        this.errorCode = source["errorCode"];
+	        this.message = source["message"];
+	        this.data = this.convertValues(source["data"], LANStatusDTO);
 	        this.requestId = source["requestId"];
 	    }
 
@@ -1575,6 +2726,44 @@ export namespace wails {
 		    return a;
 		}
 	}
+	export class Result_meet_sieve_internal_transport_wails_MeetingStateEventDTO_ {
+	    code: number;
+	    errorCode?: string;
+	    message: string;
+	    data?: MeetingStateEventDTO;
+	    requestId: string;
+
+	    static createFrom(source: any = {}) {
+	        return new Result_meet_sieve_internal_transport_wails_MeetingStateEventDTO_(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.code = source["code"];
+	        this.errorCode = source["errorCode"];
+	        this.message = source["message"];
+	        this.data = this.convertValues(source["data"], MeetingStateEventDTO);
+	        this.requestId = source["requestId"];
+	    }
+
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class Result_meet_sieve_internal_transport_wails_MemberDTO_ {
 	    code: number;
 	    errorCode?: string;
@@ -1592,6 +2781,120 @@ export namespace wails {
 	        this.errorCode = source["errorCode"];
 	        this.message = source["message"];
 	        this.data = this.convertValues(source["data"], MemberDTO);
+	        this.requestId = source["requestId"];
+	    }
+
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class Result_meet_sieve_internal_transport_wails_MinuteMutationDTO_ {
+	    code: number;
+	    errorCode?: string;
+	    message: string;
+	    data?: MinuteMutationDTO;
+	    requestId: string;
+
+	    static createFrom(source: any = {}) {
+	        return new Result_meet_sieve_internal_transport_wails_MinuteMutationDTO_(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.code = source["code"];
+	        this.errorCode = source["errorCode"];
+	        this.message = source["message"];
+	        this.data = this.convertValues(source["data"], MinuteMutationDTO);
+	        this.requestId = source["requestId"];
+	    }
+
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class Result_meet_sieve_internal_transport_wails_MinuteVersionPageDTO_ {
+	    code: number;
+	    errorCode?: string;
+	    message: string;
+	    data?: MinuteVersionPageDTO;
+	    requestId: string;
+
+	    static createFrom(source: any = {}) {
+	        return new Result_meet_sieve_internal_transport_wails_MinuteVersionPageDTO_(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.code = source["code"];
+	        this.errorCode = source["errorCode"];
+	        this.message = source["message"];
+	        this.data = this.convertValues(source["data"], MinuteVersionPageDTO);
+	        this.requestId = source["requestId"];
+	    }
+
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class Result_meet_sieve_internal_transport_wails_MinutesStateDTO_ {
+	    code: number;
+	    errorCode?: string;
+	    message: string;
+	    data?: MinutesStateDTO;
+	    requestId: string;
+
+	    static createFrom(source: any = {}) {
+	        return new Result_meet_sieve_internal_transport_wails_MinutesStateDTO_(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.code = source["code"];
+	        this.errorCode = source["errorCode"];
+	        this.message = source["message"];
+	        this.data = this.convertValues(source["data"], MinutesStateDTO);
 	        this.requestId = source["requestId"];
 	    }
 
@@ -1969,6 +3272,64 @@ export namespace wails {
 		    return a;
 		}
 	}
+	export class WakeWordTestStateDTO {
+	    state: string;
+	    matched: number;
+	    required: number;
+	    asr_state: string;
+	    error_code?: string;
+
+	    static createFrom(source: any = {}) {
+	        return new WakeWordTestStateDTO(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.state = source["state"];
+	        this.matched = source["matched"];
+	        this.required = source["required"];
+	        this.asr_state = source["asr_state"];
+	        this.error_code = source["error_code"];
+	    }
+	}
+	export class Result_meet_sieve_internal_transport_wails_WakeWordTestStateDTO_ {
+	    code: number;
+	    errorCode?: string;
+	    message: string;
+	    data?: WakeWordTestStateDTO;
+	    requestId: string;
+
+	    static createFrom(source: any = {}) {
+	        return new Result_meet_sieve_internal_transport_wails_WakeWordTestStateDTO_(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.code = source["code"];
+	        this.errorCode = source["errorCode"];
+	        this.message = source["message"];
+	        this.data = this.convertValues(source["data"], WakeWordTestStateDTO);
+	        this.requestId = source["requestId"];
+	    }
+
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class WorkspaceCandidateDTO {
 	    canonical_path: string;
 	    kind: string;
@@ -2147,6 +3508,20 @@ export namespace wails {
 		    return a;
 		}
 	}
+	export class SaveAgentSettingsDTO {
+	    wake_word: string;
+	    codex_executable_path: string;
+
+	    static createFrom(source: any = {}) {
+	        return new SaveAgentSettingsDTO(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.wake_word = source["wake_word"];
+	        this.codex_executable_path = source["codex_executable_path"];
+	    }
+	}
 
 	export class StartMeetingDTO {
 	    meeting_no: string;
@@ -2157,6 +3532,8 @@ export namespace wails {
 	    microphone_id: string;
 	    local_timezone: string;
 	    asr_mode: string;
+	    lan_enabled: boolean;
+	    lan_interface_id: string;
 
 	    static createFrom(source: any = {}) {
 	        return new StartMeetingDTO(source);
@@ -2172,6 +3549,8 @@ export namespace wails {
 	        this.microphone_id = source["microphone_id"];
 	        this.local_timezone = source["local_timezone"];
 	        this.asr_mode = source["asr_mode"];
+	        this.lan_enabled = source["lan_enabled"];
+	        this.lan_interface_id = source["lan_interface_id"];
 	    }
 	}
 	export class TestASRConnectionDTO {
@@ -2206,6 +3585,7 @@ export namespace wails {
 	        this.notes = source["notes"];
 	    }
 	}
+
 
 
 

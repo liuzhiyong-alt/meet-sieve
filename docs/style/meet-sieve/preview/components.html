@@ -9,7 +9,7 @@
   <body>
     <main class="preview">
       <header class="preview-head">
-        <p class="meta">MEETSIEVE DESIGN SYSTEM · V1.1.0</p>
+        <p class="meta">MEETSIEVE DESIGN SYSTEM · V1.4.0</p>
         <h1>Components</h1>
         <p>组件从当前 UI 反向提取。预览展示视觉契约，不替代 Vue 实现。</p>
         <nav class="preview-nav" aria-label="设计系统预览">
@@ -153,6 +153,89 @@
               <span class="meta">00:37:14–00:39:02</span>
               <div class="notice warning">实时转写缺口等待处理。</div>
             </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="preview-section">
+        <h2>MinuteVersion</h2>
+        <div class="grid grid-2">
+          <div class="card stack">
+            <div class="row-between">
+              <div>
+                <strong>当前版本 v3</strong>
+                <div class="meta">人工草稿 · 10:42 保存</div>
+              </div>
+              <span class="status warning">草稿</span>
+            </div>
+            <label class="label"
+              >纪要内容
+              <textarea class="textarea">
+# 会议结论
+
+1. Alpha 功能范围保持不变。（原始记录 00:12:48）</textarea>
+            </label>
+            <div class="row">
+              <button class="btn btn-primary">保存修改</button>
+              <button class="btn">查看历史</button>
+            </div>
+          </div>
+          <div class="card stack">
+            <div class="row-between">
+              <strong>历史版本 v1</strong>
+              <span class="status success">已确认</span>
+            </div>
+            <p class="muted">历史内容保持只读，恢复不会覆盖当前版本。</p>
+            <ul class="list">
+              <li class="list-item">
+                <span>来源</span><strong>AI 草稿</strong>
+              </li>
+              <li class="list-item">
+                <span>恢复结果</span><strong>创建 v4</strong>
+              </li>
+            </ul>
+            <button class="btn btn-primary">恢复为新版本</button>
+          </div>
+        </div>
+        <p class="maturity">
+          existing · step8-proposal/minutes-workspace.html ·
+          step8-proposal/minutes-history.html
+        </p>
+      </section>
+
+      <section class="preview-section">
+        <h2>Codex Native Approval Modal</h2>
+        <div
+          class="card stack"
+          role="dialog"
+          aria-labelledby="approval-preview-title"
+        >
+          <h3 id="approval-preview-title">Codex 请求控制浏览器</h3>
+          <p class="muted">这是 Codex 原生审批请求，只有主持人可以处理。</p>
+          <dl class="approval-summary">
+            <div>
+              <dt>工具</dt>
+              <dd>Chrome 浏览器控制</dd>
+            </div>
+            <div>
+              <dt>目标</dt>
+              <dd>Google Chrome 当前窗口</dd>
+            </div>
+            <div>
+              <dt>操作摘要</dt>
+              <dd>打开内部验收页面并读取当前可见内容。</dd>
+            </div>
+            <div>
+              <dt>需要审批</dt>
+              <dd>此操作将控制你本机的浏览器，仅对本次请求有效。</dd>
+            </div>
+          </dl>
+          <div class="notice warning">
+            <span>等待审批计入当前 AI 处理的 10 分钟上限。</span>
+          </div>
+          <div class="row modal-actions-preview">
+            <button class="btn">拒绝</button>
+            <button class="btn btn-primary">允许本次操作</button>
           </div>
         </div>
       </section>

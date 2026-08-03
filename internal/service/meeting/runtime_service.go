@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	domainfinalization "meet-sieve/internal/domain/finalization"
 	"meet-sieve/internal/infra/apperr"
 	"meet-sieve/internal/infra/clock"
 	"meet-sieve/internal/infra/filesystem"
@@ -35,8 +36,20 @@ type RuntimeDependencies struct {
 	MinimumFreeBytes  uint64
 	DeviceTestTimeout time.Duration
 	Transcript        MeetingTranscriptRuntime
+	// RawRecord 在本地保存提交前从 SQLite 强制刷新原始记录投影。
+	RawRecord RawRecordFlusher
 	// PersistedPCMObserver 只观察已成功写入本地录音的 PCM，不得阻塞采集链路。
 	PersistedPCMObserver PersistedPCMFrameHandler
+	// LAN 在首帧安全提交后启动，并在录音收尾前停止访客写入。
+	LAN LANMeetingLifecycle
+	// Agent 在录音安全提交后异步初始化，并在会议收尾时关闭本场 session。
+	Agent MeetingAgentLifecycle
+	// AgentTurns 在核心收尾开始时中断会中任务，但不关闭 provider。
+	AgentTurns MeetingAgentTurnLifecycle
+	// PostMeeting 仅在 ended/saved 提交后异步接收处理信号。
+	PostMeeting PostMeetingTrigger
+	// FinalizationEvents 发布不含路径与底层错误的收尾状态。
+	FinalizationEvents FinalizationEventSink
 }
 
 // MeetingTranscriptRuntime 是录音运行时使用的会议级实时转写边界。
@@ -46,30 +59,91 @@ type MeetingTranscriptRuntime interface {
 	Stop(ctx context.Context, meetingID string, recordingEndSample int64) error
 }
 
+// RawRecordFlusher 是核心收尾消费的原始记录强制刷新边界。
+type RawRecordFlusher interface {
+	Flush(context.Context, string) error
+}
+
+// LANMeetingLifecycle 是会议录音主流程消费的窄 LAN 生命周期边界。
+type LANMeetingLifecycle interface {
+	StartMeeting(context.Context, string, string) error
+	StopMeeting(context.Context, string) error
+}
+
+// MeetingAgentLifecycle 是录音主流程使用的窄智能体生命周期边界。
+type MeetingAgentLifecycle interface {
+	Initialize(context.Context, string) error
+	Shutdown(context.Context) error
+}
+
+// MeetingAgentTurnLifecycle 是核心收尾用于中断会中任务的窄边界。
+type MeetingAgentTurnLifecycle interface {
+	InterruptMeeting(context.Context, string) error
+}
+
+// PostMeetingTrigger 接收本地保存成功后的后台处理信号。
+type PostMeetingTrigger interface {
+	Trigger(string) bool
+}
+
+// FinalizationEventSink 发布可恢复的核心收尾状态。
+type FinalizationEventSink interface {
+	PublishFinalizationChanged(FinalizationSnapshot)
+}
+
+// FinalizationEventSinkFunc 让装配层以函数发布核心收尾状态。
+type FinalizationEventSinkFunc func(FinalizationSnapshot)
+
+// PublishFinalizationChanged 发布一条不含路径与底层错误的状态。
+func (publisher FinalizationEventSinkFunc) PublishFinalizationChanged(snapshot FinalizationSnapshot) {
+	if publisher != nil {
+		publisher(snapshot)
+	}
+}
+
 // StartMeetingInput 包含会议快照输入和本次选择的稳定设备 ID。
 type StartMeetingInput struct {
 	CreatePreparingInput
-	DeviceID string
-	ASRMode  string
+	DeviceID       string
+	ASRMode        string
+	LANEnabled     bool
+	LANInterfaceID string
 }
 
 // RuntimeService 编排工作目录、设备、文件和短事务，不把音频 I/O 放进数据库事务。
 type RuntimeService struct {
-	meetings          *Service
-	repository        *meetingrepository.Repository
-	coordinator       *RecordingCoordinator
-	capture           port.AudioCapture
-	clock             clock.Clock
-	ids               identity.Generator
-	workspaceRoot     string
-	availableBytes    DiskSpaceReader
-	minimumFreeBytes  uint64
-	deviceTestTimeout time.Duration
-	transcript        MeetingTranscriptRuntime
-	persistedPCM      PersistedPCMFrameHandler
-	endMu             sync.Mutex
-	ending            *endMeetingCall
-	lastEnded         *models.Meeting
+	meetings           *Service
+	repository         *meetingrepository.Repository
+	coordinator        *RecordingCoordinator
+	capture            port.AudioCapture
+	clock              clock.Clock
+	ids                identity.Generator
+	workspaceRoot      string
+	availableBytes     DiskSpaceReader
+	minimumFreeBytes   uint64
+	deviceTestTimeout  time.Duration
+	transcript         MeetingTranscriptRuntime
+	rawRecord          RawRecordFlusher
+	lan                LANMeetingLifecycle
+	agent              MeetingAgentLifecycle
+	agentTurns         MeetingAgentTurnLifecycle
+	postMeeting        PostMeetingTrigger
+	finalizationEvents FinalizationEventSink
+	persistedPCM       PersistedPCMFrameHandler
+	endMu              sync.Mutex
+	ending             *endMeetingCall
+	lastEnded          *models.Meeting
+	finalizationMu     sync.Mutex
+	finalization       map[string]FinalizationSnapshot
+}
+
+// FinalizationSnapshot 是详情页可重建的安全核心收尾投影。
+type FinalizationSnapshot struct {
+	MeetingID string
+	State     string
+	Stage     domainfinalization.Stage
+	ErrorCode string
+	Revision  uint64
 }
 
 // endMeetingCall 让同一进程内的并发结束请求等待唯一收尾结果。
@@ -90,10 +164,17 @@ func NewRuntimeService(dependencies RuntimeDependencies) *RuntimeService {
 		meetings: dependencies.Meetings, repository: dependencies.Repository,
 		coordinator: dependencies.Coordinator, capture: dependencies.Capture, clock: dependencies.Clock, ids: dependencies.IDs,
 		workspaceRoot: dependencies.WorkspaceRoot, availableBytes: dependencies.AvailableBytes,
-		minimumFreeBytes:  dependencies.MinimumFreeBytes,
-		persistedPCM:      dependencies.PersistedPCMObserver,
-		deviceTestTimeout: deviceTestTimeout,
-		transcript:        dependencies.Transcript,
+		minimumFreeBytes:   dependencies.MinimumFreeBytes,
+		persistedPCM:       dependencies.PersistedPCMObserver,
+		deviceTestTimeout:  deviceTestTimeout,
+		transcript:         dependencies.Transcript,
+		rawRecord:          dependencies.RawRecord,
+		lan:                dependencies.LAN,
+		agent:              dependencies.Agent,
+		agentTurns:         dependencies.AgentTurns,
+		postMeeting:        dependencies.PostMeeting,
+		finalizationEvents: dependencies.FinalizationEvents,
+		finalization:       make(map[string]FinalizationSnapshot),
 	}
 }
 
@@ -151,6 +232,11 @@ func (service *RuntimeService) finishMeeting(ctx context.Context, meetingID stri
 	if service == nil || service.repository == nil || service.coordinator == nil || service.clock == nil || service.ids == nil {
 		return models.Meeting{}, fmt.Errorf("会议结束运行时依赖无效")
 	}
+	service.setFinalizationState(meetingID, "running", domainfinalization.StageStopLAN, "")
+	if service.lan != nil {
+		// LAN 停止失败不阻断录音安全收尾；Runtime 已先清除内存令牌和 Listener。
+		_ = service.lan.StopMeeting(ctx, meetingID)
+	}
 	current, err := service.repository.GetMeeting(ctx, meetingID)
 	if err != nil {
 		return models.Meeting{}, err
@@ -172,27 +258,45 @@ func (service *RuntimeService) finishMeeting(ctx context.Context, meetingID stri
 	} else if current.LifecycleState != "finalizing" {
 		return models.Meeting{}, meetingrepository.ErrMeetingStateConflict
 	}
-	segments, err := service.coordinator.Stop(ctx)
+	result, err := (&CoreFinalizer{service: service, meeting: current}).Run(ctx)
+	if err == nil && service.postMeeting != nil {
+		service.postMeeting.Trigger(meetingID)
+	}
+	return result, err
+}
+
+// GetFinalizationState 返回内存阶段；不存在时根据会议持久状态重建稳定投影。
+func (service *RuntimeService) GetFinalizationState(ctx context.Context, meetingID string) (FinalizationSnapshot, error) {
+	service.finalizationMu.Lock()
+	state, exists := service.finalization[meetingID]
+	service.finalizationMu.Unlock()
+	if exists {
+		return state, nil
+	}
+	meeting, err := service.repository.GetMeeting(ctx, meetingID)
 	if err != nil {
-		return models.Meeting{}, service.failFinalizing(meetingID, err, apperr.CodeMeetingRecordingWriteFailed, "meeting.end.stop")
+		return FinalizationSnapshot{}, err
 	}
-	if service.transcript != nil {
-		endSample := recordingEndSample(segments)
-		if err = service.transcript.Stop(ctx, meetingID, endSample); err != nil {
-			return models.Meeting{}, service.failFinalizing(meetingID, err, apperr.CodeASREventPersistFailed, "meeting.end.transcript")
-		}
+	value := "idle"
+	if meeting.LifecycleState == "finalizing" {
+		value = "failed"
 	}
-	if err := service.persistSegments(ctx, meetingID, segments); err != nil {
-		return models.Meeting{}, service.failFinalizing(meetingID, err, apperr.CodeMeetingRecordingWriteFailed, "meeting.end.segment_asset")
+	if (meeting.LifecycleState == "ended" || meeting.LifecycleState == "interrupted") && meeting.LocalSaveState == "saved" {
+		value = "completed"
 	}
-	if err := service.mergeAndPersistFinal(ctx, current, segments); err != nil {
-		return models.Meeting{}, service.failFinalizing(meetingID, err, apperr.CodeMeetingRecordingMergeFailed, "meeting.end.merge")
+	return FinalizationSnapshot{MeetingID: meetingID, State: value}, nil
+}
+
+// setFinalizationState 更新阶段后在锁外发布有限状态。
+func (service *RuntimeService) setFinalizationState(meetingID string, state string, stage domainfinalization.Stage, errorCode string) {
+	service.finalizationMu.Lock()
+	previous := service.finalization[meetingID]
+	snapshot := FinalizationSnapshot{MeetingID: meetingID, State: state, Stage: stage, ErrorCode: errorCode, Revision: previous.Revision + 1}
+	service.finalization[meetingID] = snapshot
+	service.finalizationMu.Unlock()
+	if service.finalizationEvents != nil {
+		service.finalizationEvents.PublishFinalizationChanged(snapshot)
 	}
-	endedAt := service.clock.Now().UnixMilli()
-	if err := service.repository.CompleteMeeting(ctx, meetingID, endedAt); err != nil {
-		return models.Meeting{}, service.failFinalizing(meetingID, err, apperr.CodeMeetingRecordingWriteFailed, "meeting.end.state_commit")
-	}
-	return service.repository.GetMeeting(ctx, meetingID)
 }
 
 // persistSegments 把每个已完成 WAV 的真实元数据登记为 ready microphone 资产。
@@ -283,7 +387,15 @@ func (service *RuntimeService) relativeWorkspacePath(path string) (string, error
 // failFinalizing 标记准确失败状态并返回保留底层 cause 的安全错误。
 func (service *RuntimeService) failFinalizing(meetingID string, cause error, code apperr.Code, operation string) error {
 	_ = service.repository.MarkFinalizingFailed(context.Background(), meetingID, service.clock.Now().UnixMilli())
+	service.setFinalizationState(meetingID, "failed", service.currentFinalizationStage(meetingID), code.ErrorCode)
 	return apperr.Dependency(code, cause, apperr.WithOp(operation))
+}
+
+// currentFinalizationStage 返回失败发生时最后发布的阶段。
+func (service *RuntimeService) currentFinalizationStage(meetingID string) domainfinalization.Stage {
+	service.finalizationMu.Lock()
+	defer service.finalizationMu.Unlock()
+	return service.finalization[meetingID].Stage
 }
 
 // StartMeeting 只有首帧文件与 recording/saving 状态均提交后才返回成功。
@@ -307,6 +419,9 @@ func (service *RuntimeService) StartMeeting(ctx context.Context, input StartMeet
 		return models.Meeting{}, err
 	}
 	if err := service.coordinator.SetFailureHandler(func(handlerContext context.Context, _ error) {
+		if service.lan != nil {
+			_ = service.lan.StopMeeting(handlerContext, created.ID)
+		}
 		_ = service.repository.InterruptMeeting(handlerContext, created.ID, service.clock.Now().UnixMilli())
 	}); err != nil {
 		service.compensateEmptyPreparing(ctx, created.ID, segmentsDirectory)
@@ -353,6 +468,14 @@ func (service *RuntimeService) StartMeeting(ctx context.Context, input StartMeet
 	if err := service.coordinator.Activate(); err != nil {
 		_ = service.repository.InterruptMeeting(context.Background(), created.ID, service.clock.Now().UnixMilli())
 		return models.Meeting{}, apperr.Dependency(apperr.CodeMeetingRecordingWriteFailed, err, apperr.WithOp("meeting.start.runner_activate"))
+	}
+	if input.LANEnabled && service.lan != nil {
+		// LAN 是独立能力；启动失败只记录在 LAN 状态轴，会议录音仍成功。
+		_ = service.lan.StartMeeting(ctx, created.ID, input.LANInterfaceID)
+	}
+	if service.agent != nil {
+		// AI 是独立状态轴；初始化失败由其自身事务收敛，绝不回滚已开始的录音。
+		go func(meetingID string) { _ = service.agent.Initialize(context.Background(), meetingID) }(created.ID)
 	}
 	created.LifecycleState = "recording"
 	created.LocalSaveState = "saving"

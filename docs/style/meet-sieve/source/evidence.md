@@ -18,6 +18,9 @@
 - `docs/UI/settings.html`
 - `docs/UI/onboarding.html`
 - `docs/UI/guest.html`
+- `docs/UI/step6-proposal/`
+- `docs/UI/step7-proposal/`
+- `docs/UI/step8-proposal/`
 - `docs/UI/assets/meetsieve.css`
 - `docs/UI/assets/meetsieve.js`
 
@@ -70,7 +73,10 @@ MeetSieve 页面或组件权威。
 - Meeting/ASR/Codex/LAN 状态标签；
 - 工作目录迁移三阶段；
 - 会议详情的纪要、原始记录、会议消息三视图；
-- 永久删除整场会议的会议号确认。
+- 永久删除整场会议的会议号确认；
+- 会议收尾 OperationSteps 与独立系统状态；
+- 补转写冲突双证据工作台；
+- 不可变纪要版本工作区与历史恢复。
 
 ## 5. 已确认推导边界
 
@@ -91,7 +97,7 @@ MeetSieve 页面或组件权威。
 - `live.html` 中的“最小化到托盘”与技术方案非目标冲突，不实现；
 - `guest.html` 的 430px 单栏不符合已确认的电脑 Web 主要场景，需要先补桌面设计；
 - 会中系统状态缺少独立实时转写项，按产品模式补为 `derived`；
-- 会议收尾、崩溃恢复、校对工作台和纪要版本属于技术方案范围，不能因现有页面缺失
-  而省略；
+- 崩溃恢复属于技术方案范围，不能因现有页面缺失而省略；会议收尾、补转写冲突和纪要
+  版本使用 Step 8 已确认页面级金标；
 - 当前 `--meta` 在 12px 普通文字上的对比度不足，新设计不继续扩散，既有调整需确认。
 - 旧 `installer.html`、`uninstall.html` 已退出权威视觉范围；Windows 安装和卸载使用 NSIS 平台原生页面。

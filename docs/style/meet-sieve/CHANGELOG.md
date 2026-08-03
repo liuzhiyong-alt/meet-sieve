@@ -2,6 +2,47 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## 1.4.0 - 2026-08-03
+
+### Added
+
+- 登记会议收尾处理中与收尾失败页面级金标；
+- 登记补转写冲突独立校对工作台及三种人工决策；
+- 登记纪要当前版本、只读历史版本和恢复为新版本页面级金标。
+
+### Changed
+
+- `OperationSteps`、补转写 `conflict` 和 `MinuteVersion` 成熟度调整为 `existing`；
+- 明确本地核心保存不被补转写或 Codex 同步阻塞，也不得被外部成功状态替代；
+- 明确纪要人工保存、确认、重新生成和历史恢复均遵守不可变版本规则。
+
+## 1.3.0 - 2026-08-02
+
+### Added
+
+- 登记会中 AI busy、busy long、failed 和主持人原生审批页面级金标；
+- 登记 Codex Native Approval Modal，固定展示工具、目标、操作摘要和风险；
+- 登记 Codex 设置中的原生权限继承、协议检测与三次唤醒测试状态。
+
+### Changed
+
+- Codex `busy`、`busy_long`、`unavailable` 和 `approval_pending` 调整为 `existing`；
+- 明确成功最终回答自动公开到 LAN，问题、partial、失败和取消不公开；
+- 删除“MeetSieve 只读会议目录”旧口径，改为沿用 Codex 原生配置且审批仅由主持人处理。
+
+## 1.2.0 - 2026-08-02
+
+### Added
+
+- 登记 LAN Desktop、手机兼容访客页、宿主网卡选择、会中入口与入口停止页面级金标；
+- 登记上传中结束会议的“等待上传完成 / 结束并取消上传”明确后果。
+
+### Changed
+
+- LAN Desktop 与 UploadItem 成熟度调整为 `existing`；
+- 删除无法兑现的会后恢复访客上传语义；会议结束立即撤销入口并取消未完成上传；
+- LAN 页面以 1366 × 768 为主要验收，390 × 844 为手机兼容验收。
+
 ## 1.1.0 - 2026-08-02
 
 ### Added

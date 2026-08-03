@@ -18,6 +18,7 @@ export interface MeetingProjection {
   lifecycle_state: string
   local_save_state: string
   realtime_asr_state: string
+  agent_state: string
   started_at?: number
   ended_at?: number
   updated_at: number
@@ -51,6 +52,8 @@ export interface StartMeetingRequest {
   temporaryNames: string[]
   microphoneId: string
   asrMode: 'realtime' | 'record_only'
+  lanEnabled: boolean
+  lanInterfaceId: string
 }
 
 /** useMeetingStore 只保存可由 Binding 查询重建的会议 UI 投影。 */
@@ -133,6 +136,8 @@ export const useMeetingStore = defineStore('meeting', {
         local_timezone:
           Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Shanghai',
         asr_mode: request.asrMode,
+        lan_enabled: request.lanEnabled,
+        lan_interface_id: request.lanInterfaceId,
       })
       this.saving = false
       if (result.code !== 200 || !result.data) {

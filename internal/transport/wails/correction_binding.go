@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	correctionservice "meet-sieve/internal/service/correction"
+	gapservice "meet-sieve/internal/service/gap"
 	speakerservice "meet-sieve/internal/service/speaker"
 	voiceservice "meet-sieve/internal/service/voice"
 )
@@ -36,16 +37,43 @@ type SpeakerChangedEventDTO struct {
 }
 
 // AudioClipAssetHandler 把 Wails AssetServer 的 clip 路径延迟路由到当前工作目录 token store。
-type AudioClipAssetHandler struct{ services CorrectionServiceProvider }
+type AudioClipAssetHandler struct {
+	services CorrectionServiceProvider
+	gap      GapClipServiceProvider
+}
+
+// GapClipServiceProvider 延迟返回当前工作目录的 gap 回放服务。
+type GapClipServiceProvider func() (*gapservice.AudioClipService, error)
 
 // NewAudioClipAssetHandler 创建动态 AssetServer handler。
-func NewAudioClipAssetHandler(services CorrectionServiceProvider) *AudioClipAssetHandler {
-	return &AudioClipAssetHandler{services: services}
+func NewAudioClipAssetHandler(services CorrectionServiceProvider, gap ...GapClipServiceProvider) *AudioClipAssetHandler {
+	var gapProvider GapClipServiceProvider
+	if len(gap) > 0 {
+		gapProvider = gap[0]
+	}
+	return &AudioClipAssetHandler{services: services, gap: gapProvider}
 }
 
 // ServeHTTP 只允许 clip 前缀；工作目录不可用时返回 404，不暴露底层原因。
 func (handler *AudioClipAssetHandler) ServeHTTP(response http.ResponseWriter, request *http.Request) {
-	if handler == nil || handler.services == nil || !strings.HasPrefix(request.URL.Path, "/media/audio-clips/") {
+	if handler == nil {
+		http.NotFound(response, request)
+		return
+	}
+	if strings.HasPrefix(request.URL.Path, "/media/gap-clips/") {
+		if handler.gap == nil {
+			http.NotFound(response, request)
+			return
+		}
+		service, err := handler.gap()
+		if err != nil || service == nil {
+			http.NotFound(response, request)
+			return
+		}
+		service.ServeHTTP(response, request)
+		return
+	}
+	if handler.services == nil || !strings.HasPrefix(request.URL.Path, "/media/audio-clips/") {
 		http.NotFound(response, request)
 		return
 	}

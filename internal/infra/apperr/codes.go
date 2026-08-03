@@ -156,6 +156,34 @@ var (
 	CodeASREventBackpressure = Code{Value: 409, ErrorCode: "ASR_EVENT_BACKPRESSURE", Message: "实时转写处理繁忙，已保留录音", Kind: KindBusiness, Retryable: true}
 	// CodeASRStreamInterrupted 表示实时转写流中断，调用方应按既定退避策略重连。
 	CodeASRStreamInterrupted = Code{Value: 502, ErrorCode: "ASR_STREAM_INTERRUPTED", Message: "实时转写连接中断，正在重试", Kind: KindDependency, Retryable: true}
+	// CodeAgentExecutableInvalid 表示 Codex 可执行文件不可用。
+	CodeAgentExecutableInvalid = Code{Value: 409, ErrorCode: "AGENT_EXECUTABLE_INVALID", Message: "Codex 可执行文件不可用，请检查设置", Kind: KindBusiness, Retryable: true}
+	// CodeAgentNotLoggedIn 表示用户尚未在 Codex 中登录。
+	CodeAgentNotLoggedIn = Code{Value: 502, ErrorCode: "AGENT_NOT_LOGGED_IN", Message: "Codex 尚未登录，请先在外部完成登录", Kind: KindDependency, Retryable: true}
+	// CodeAgentProtocolIncompatible 表示必要 app-server 协议契约不兼容。
+	CodeAgentProtocolIncompatible = Code{Value: 502, ErrorCode: "AGENT_PROTOCOL_INCOMPATIBLE", Message: "当前 Codex 版本暂不兼容", Kind: KindDependency}
+	// CodeAgentApprovalUnsupported 表示原生审批请求无法安全呈现。
+	CodeAgentApprovalUnsupported = Code{Value: 502, ErrorCode: "AGENT_APPROVAL_UNSUPPORTED", Message: "Codex 审批请求无法安全处理，当前操作已拒绝", Kind: KindDependency}
+	// CodeAgentApprovalExpired 表示原生审批已随 turn 终结或超时失效。
+	CodeAgentApprovalExpired = Code{Value: 409, ErrorCode: "AGENT_APPROVAL_EXPIRED", Message: "这项 Codex 审批已经失效", Kind: KindBusiness}
+	// CodeAgentInitializeFailed 表示当前会议的智能体初始化失败。
+	CodeAgentInitializeFailed = Code{Value: 502, ErrorCode: "AGENT_INITIALIZE_FAILED", Message: "AI 暂不可用，录音和实时转写不受影响", Kind: KindDependency, Retryable: true}
+	// CodeAgentBusy 表示当前会议已有正在处理的智能体任务。
+	CodeAgentBusy = Code{Value: 409, ErrorCode: "AGENT_BUSY", Message: "AI 正在参与，请等待当前回答结束", Kind: KindBusiness, Retryable: true}
+	// CodeAgentQuestionInvalid 表示主持人问题为空或超过上限。
+	CodeAgentQuestionInvalid = Code{Value: 400, ErrorCode: "AGENT_QUESTION_INVALID", Message: "问题为空或超过大小限制", Kind: KindValidation}
+	// CodeAgentWakeWordInvalid 表示唤醒词为空、包含空白或超过长度上限。
+	CodeAgentWakeWordInvalid = Code{Value: 400, ErrorCode: "AGENT_WAKE_WORD_INVALID", Message: "唤醒词格式不正确", Kind: KindValidation}
+	// CodeAgentTurnTimeout 表示智能体任务超过总时限。
+	CodeAgentTurnTimeout = Code{Value: 504, ErrorCode: "AGENT_TURN_TIMEOUT", Message: "AI 回答超时，未保存当前结果", Kind: KindDependency, Retryable: true}
+	// CodeAgentTurnCancelled 表示主持人停止了当前智能体任务。
+	CodeAgentTurnCancelled = Code{Value: 499, ErrorCode: "AGENT_TURN_CANCELLED", Message: "AI 回答已停止", Kind: KindCanceled, Retryable: true}
+	// CodeAgentOutputInvalid 表示 provider 最终输出未通过本地校验。
+	CodeAgentOutputInvalid = Code{Value: 502, ErrorCode: "AGENT_OUTPUT_INVALID", Message: "AI 返回内容无效，未保存当前结果", Kind: KindDependency, Retryable: true}
+	// CodeAgentContextFlushFailed 表示原始记录未能在调用 provider 前安全刷新。
+	CodeAgentContextFlushFailed = Code{Value: 500, ErrorCode: "AGENT_CONTEXT_FLUSH_FAILED", Message: "会议原始记录尚未刷新，已暂停 AI 请求", Kind: KindSystem, Retryable: true}
+	// CodeAgentThreadNotFound 表示 provider 中的既有 thread 已不存在。
+	CodeAgentThreadNotFound = Code{Value: 502, ErrorCode: "AGENT_THREAD_NOT_FOUND", Message: "原 Codex 会话不存在，可以从本地会议事实恢复", Kind: KindDependency, Retryable: true}
 	// CodeSpeakerModelUnavailable 表示当前声纹模型不能执行说话人自动识别。
 	CodeSpeakerModelUnavailable = Code{Value: 503, ErrorCode: "SPEAKER_MODEL_UNAVAILABLE", Message: "说话人自动识别暂不可用", Kind: KindDependency, Retryable: true}
 	// CodeSpeakerProfileMissing 表示当前模型尚无经过真实验证的匹配档案。
@@ -188,4 +216,34 @@ var (
 	CodeVoiceMeetingClipRejected = Code{Value: 409, ErrorCode: "VOICE_MEETING_CLIP_REJECTED", Message: "会议片段不满足声纹样本质量要求", Kind: KindBusiness, Retryable: true}
 	// CodeRawRecordRefreshFailed 表示 SQLite 事实已保存但 Markdown 投影未能安全刷新。
 	CodeRawRecordRefreshFailed = Code{Value: 500, ErrorCode: "RAW_RECORD_REFRESH_FAILED", Message: "原始记录文件尚未刷新", Kind: KindSystem, Retryable: true}
+	// CodeLANInterfaceUnavailable 表示没有可安全绑定的私有网络接口。
+	CodeLANInterfaceUnavailable = Code{Value: 503, ErrorCode: "LAN_INTERFACE_UNAVAILABLE", Message: "没有可用的私有网络，请选择其他网络", Kind: KindBusiness, Retryable: true}
+	// CodeLANStartFailed 表示局域网访客页未能启动，但不影响会议录音。
+	CodeLANStartFailed = Code{Value: 503, ErrorCode: "LAN_START_FAILED", Message: "访客页启动失败，录音和实时转写不受影响", Kind: KindSystem, Retryable: true}
+	// CodeLANGenerationChanged 表示请求属于已经停止的访客页实例。
+	CodeLANGenerationChanged = Code{Value: 409, ErrorCode: "LAN_GENERATION_CHANGED", Message: "访客入口已更新，请重新扫码进入", Kind: KindBusiness, Retryable: true}
+	// CodeLANSessionInvalid 表示访客会话凭据无效。
+	CodeLANSessionInvalid = Code{Value: 401, ErrorCode: "LAN_SESSION_INVALID", Message: "访客会话无效，请重新扫码进入", Kind: KindBusiness}
+	// CodeLANSessionExpired 表示访客会话已超过有效期。
+	CodeLANSessionExpired = Code{Value: 401, ErrorCode: "LAN_SESSION_EXPIRED", Message: "访客会话已过期，请重新扫码进入", Kind: KindBusiness, Retryable: true}
+	// CodeLANMeetingEnded 表示会议已经停止局域网访问。
+	CodeLANMeetingEnded = Code{Value: 409, ErrorCode: "LAN_MEETING_ENDED", Message: "本场会议已结束，访客入口已停止", Kind: KindBusiness}
+	// CodeLANRateLimited 表示访客请求超过安全频率或并发限制。
+	CodeLANRateLimited = Code{Value: 429, ErrorCode: "LAN_RATE_LIMITED", Message: "请求过于频繁，请稍后重试", Kind: KindBusiness, Retryable: true}
+	// CodeMessageInvalid 表示会议消息为空、过长或包含非法字符。
+	CodeMessageInvalid = Code{Value: 400, ErrorCode: "MESSAGE_INVALID", Message: "会议消息为空、过长或格式无效", Kind: KindValidation}
+	// CodeLinkInvalid 表示访客链接不是安全的绝对 HTTP 地址。
+	CodeLinkInvalid = Code{Value: 400, ErrorCode: "LINK_INVALID", Message: "请输入有效的 HTTP 或 HTTPS 链接", Kind: KindValidation}
+	// CodeAttachmentTooLarge 表示附件超过单文件上限。
+	CodeAttachmentTooLarge = Code{Value: 413, ErrorCode: "ATTACHMENT_TOO_LARGE", Message: "单个附件不能超过 500 MB", Kind: KindValidation}
+	// CodeAttachmentTypeBlocked 表示附件属于禁止保存的可执行类型。
+	CodeAttachmentTypeBlocked = Code{Value: 400, ErrorCode: "ATTACHMENT_TYPE_BLOCKED", Message: "该文件类型不能上传", Kind: KindValidation}
+	// CodeAttachmentDiskLow 表示附件会侵占录音所需的安全磁盘余量。
+	CodeAttachmentDiskLow = Code{Value: 503, ErrorCode: "ATTACHMENT_DISK_LOW", Message: "主机可用空间不足，附件未上传", Kind: KindBusiness, Retryable: true}
+	// CodeAttachmentUploadCancelled 表示附件上传被访客或主持人取消。
+	CodeAttachmentUploadCancelled = Code{Value: 409, ErrorCode: "ATTACHMENT_UPLOAD_CANCELLED", Message: "附件上传已取消，没有保留临时文件", Kind: KindBusiness, Retryable: true}
+	// CodeAttachmentUploadFailed 表示附件文件或索引提交未完成。
+	CodeAttachmentUploadFailed = Code{Value: 500, ErrorCode: "ATTACHMENT_UPLOAD_FAILED", Message: "附件未上传，请重新选择文件", Kind: KindSystem, Retryable: true}
+	// CodeAttachmentNotFound 表示附件不存在或不属于当前会议。
+	CodeAttachmentNotFound = Code{Value: 404, ErrorCode: "ATTACHMENT_NOT_FOUND", Message: "附件不存在", Kind: KindBusiness}
 )

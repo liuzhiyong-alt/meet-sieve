@@ -1,6 +1,6 @@
 {
   "schemaVersion": "meet-sieve-components/v1",
-  "version": "1.1.0",
+  "version": "1.4.0",
   "source": {
     "css": "docs/UI/assets/meetsieve.css",
     "html": "docs/UI/*.html",
@@ -129,6 +129,8 @@
         "attachment",
         "ai-question",
         "ai-answer",
+        "ai-busy",
+        "ai-failed",
         "gap",
         "correction"
       ]
@@ -159,7 +161,7 @@
       "name": "Modal",
       "maturity": "existing",
       "evidence": [".modal-backdrop", ".modal", ".modal-actions"],
-      "variants": ["default", "confirm", "danger"]
+      "variants": ["default", "confirm", "danger", "native-approval"]
     },
     {
       "id": "toast",
@@ -197,15 +199,27 @@
     {
       "id": "operation-steps",
       "name": "OperationSteps",
-      "maturity": "derived",
-      "evidence": ["settings.html#migrate", ".progress"],
+      "maturity": "existing",
+      "evidence": [
+        "settings.html#migrate",
+        ".progress",
+        "step8-proposal/finalizing.html",
+        "step8-proposal/finalizing-failed.html"
+      ],
       "variants": ["workspace-migration", "meeting-finalize", "recovery"]
     },
     {
       "id": "upload-item",
       "name": "UploadItem",
-      "maturity": "derived",
-      "evidence": [".list-item", ".progress", ".status", ".btn"],
+      "maturity": "existing",
+      "evidence": [
+        ".list-item",
+        ".progress",
+        ".status",
+        ".btn",
+        "step6-proposal/guest-active.html",
+        "step6-proposal/live-upload-ending.html"
+      ],
       "states": [
         "ready",
         "uploading",
@@ -241,8 +255,27 @@
     {
       "id": "minute-version",
       "name": "MinuteVersion",
-      "maturity": "design-required",
-      "evidence": ["detail.html#minutes"]
+      "maturity": "existing",
+      "evidence": [
+        "detail.html#minutes",
+        "step8-proposal/minutes-workspace.html",
+        "step8-proposal/minutes-history.html"
+      ],
+      "parts": [
+        "version-summary",
+        "editor-or-preview",
+        "current-version-state",
+        "version-history",
+        "source-anchors"
+      ],
+      "states": [
+        "ai-draft",
+        "human-draft",
+        "confirmed",
+        "historical-readonly",
+        "unsaved",
+        "generation-failed"
+      ]
     }
   ]
 }

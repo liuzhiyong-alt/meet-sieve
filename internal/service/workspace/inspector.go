@@ -81,12 +81,12 @@ func (inspector *Inspector) inspectMissing(path string) domainworkspace.Workspac
 	})
 }
 
-// inspectExistingDirectory 区分真正空目录与只接受固定 data/meetings.db 的非空目录。
+// inspectExistingDirectory 区分可初始化目录与只接受固定 data/meetings.db 的业务非空目录。
 func (inspector *Inspector) inspectExistingDirectory(path string) domainworkspace.WorkspaceCandidate {
 	if err := filesystem.ProbeWritable(path); err != nil {
 		return invalidCandidate(path, domainworkspace.CandidateReasonNotWritable)
 	}
-	empty, err := isDirectoryEmpty(path)
+	empty, err := isDirectoryEmptyForInitialization(path)
 	if err != nil {
 		return invalidCandidate(path, domainworkspace.CandidateReasonNotWritable)
 	}
@@ -182,21 +182,35 @@ func nearestExistingDirectory(path string) (string, error) {
 	}
 }
 
-// isDirectoryEmpty 只读取一个目录项，任何文件（含 .DS_Store）都会使目录非空。
-func isDirectoryEmpty(path string) (bool, error) {
+// isDirectoryEmptyForInitialization 忽略精确登记的系统元数据，其他任意目录项仍视为非空。
+func isDirectoryEmptyForInitialization(path string) (bool, error) {
 	directory, err := os.Open(path)
 	if err != nil {
 		return false, err
 	}
 	defer directory.Close()
-	_, err = directory.Readdirnames(1)
-	if errors.Is(err, io.EOF) {
-		return true, nil
+	for {
+		names, readErr := directory.Readdirnames(1)
+		if errors.Is(readErr, io.EOF) {
+			return true, nil
+		}
+		if readErr != nil {
+			return false, readErr
+		}
+		if len(names) != 1 || !isRegisteredSystemMetadata(names[0]) {
+			return false, nil
+		}
 	}
-	if err == nil {
-		return false, nil
+}
+
+// isRegisteredSystemMetadata 只登记操作系统可能自动创建且无需由 MeetSieve 管理的精确文件名。
+func isRegisteredSystemMetadata(name string) bool {
+	switch name {
+	case ".DS_Store", "Thumbs.db":
+		return true
+	default:
+		return false
 	}
-	return false, err
 }
 
 // candidateReasonFromError 将路径策略的稳定 AppError 转换为对应领域原因。

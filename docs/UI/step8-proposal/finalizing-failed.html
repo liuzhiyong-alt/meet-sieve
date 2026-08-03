@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>会议收尾未完成 · Step 8 提案 · MeetSieve</title>
+    <link rel="stylesheet" href="../../style/meet-sieve/tokens.css" />
+    <link rel="stylesheet" href="../assets/meetsieve.css" />
+    <link rel="stylesheet" href="step8-proposal.css" />
+  </head>
+  <body>
+    <div class="app">
+      <aside class="sidebar">
+        <a class="brand" href="../index.html"
+          ><span class="brand-mark">M</span><span>MeetSieve</span></a
+        >
+        <nav class="nav" aria-label="主导航">
+          <a class="active" aria-current="page" href="finalizing-failed.html"
+            >会议收尾中</a
+          ><a href="../records.html">会议记录</a
+          ><a href="../people.html">常用小组</a
+          ><a href="../settings.html">设置</a>
+        </nav>
+        <div class="sidebar-foot">
+          <span class="status bad">本地保存未完成</span>
+          <p class="meta num">20260803-A7K2-06</p>
+        </div>
+      </aside>
+      <main class="main">
+        <header class="titlebar">
+          <span class="meta">MeetSieve / 会议收尾</span
+          ><span class="status bad">需要处理</span>
+        </header>
+        <div class="content">
+          <section class="page-head">
+            <div>
+              <p class="eyebrow">20260803-A7K2-06</p>
+              <h1>会议收尾未完成</h1>
+              <p>
+                录音分片和会议事件仍在本地。完整录音尚未通过校验，因此不能标记为本地已保存。
+              </p>
+            </div>
+            <span class="status bad">录音合并失败</span>
+          </section>
+          <section class="operation-layout">
+            <article class="card">
+              <div class="finalization-failure">
+                <div class="notice bad" role="alert">
+                  <div>
+                    <strong>无法完成录音合并</strong>
+                    <p class="muted">
+                      已关闭的 WAV 分片仍然保留，可以安全重试。补转写、Codex
+                      结束同步和纪要生成尚未开始。
+                    </p>
+                  </div>
+                </div>
+                <div class="operation-list">
+                  <div class="operation-step is-complete">
+                    <div class="operation-step-main">
+                      <span class="operation-step-index">1</span>
+                      <div class="operation-step-copy">
+                        <strong>停止访客访问</strong><span>入口已经失效</span>
+                      </div>
+                    </div>
+                    <span class="status ok">已完成</span>
+                  </div>
+                  <div class="operation-step is-complete">
+                    <div class="operation-step-main">
+                      <span class="operation-step-index">2</span>
+                      <div class="operation-step-copy">
+                        <strong>停止录音和尾部转写</strong
+                        ><span>录音分片与已有 final 已保存</span>
+                      </div>
+                    </div>
+                    <span class="status ok">已完成</span>
+                  </div>
+                  <div class="operation-step">
+                    <div class="operation-step-main">
+                      <span class="operation-step-index">3</span>
+                      <div class="operation-step-copy">
+                        <strong>合并并校验录音</strong
+                        ><span>未生成通过校验的 recording.wav</span>
+                      </div>
+                    </div>
+                    <span class="status bad">失败</span>
+                  </div>
+                  <div class="operation-step">
+                    <div class="operation-step-main">
+                      <span class="operation-step-index">4</span>
+                      <div class="operation-step-copy">
+                        <strong>刷新原始记录并确认保存</strong
+                        ><span>等待录音合并完成</span>
+                      </div>
+                    </div>
+                    <span class="status">等待</span>
+                  </div>
+                </div>
+                <div class="failure-actions">
+                  <button class="btn btn-primary" type="button">
+                    重试本地保存</button
+                  ><button class="btn btn-quiet" type="button">
+                    复制诊断编号
+                  </button>
+                </div>
+                <p class="help num">诊断编号：MS-FIN-20260803-0042</p>
+              </div>
+            </article>
+            <aside class="card">
+              <div class="card-head">
+                <h3>哪些内容仍然安全</h3>
+                <span class="status warn">部分完成</span>
+              </div>
+              <ul class="list system-state-list">
+                <li class="list-item">
+                  <span>录音分片</span><span class="status ok">已保留</span>
+                </li>
+                <li class="list-item">
+                  <span>会议事件</span><span class="status ok">已保存</span>
+                </li>
+                <li class="list-item">
+                  <span>完整录音</span><span class="status bad">未完成</span>
+                </li>
+                <li class="list-item">
+                  <span>会议原始记录</span><span class="status">等待刷新</span>
+                </li>
+              </ul>
+              <div class="notice warn">
+                <span
+                  >关闭应用后，下次启动会进入中断恢复，不会继续原会议录音。</span
+                >
+              </div>
+            </aside>
+          </section>
+        </div>
+      </main>
+    </div>
+  </body>
+</html>

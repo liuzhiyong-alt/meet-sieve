@@ -93,6 +93,7 @@ func (binding *MeetingBinding) StartMeeting(input StartMeetingDTO) Result[Meetin
 				TemporaryParticipantNames: input.TemporaryParticipantNames, LocalTimezone: input.LocalTimezone,
 			},
 			DeviceID: input.MicrophoneID, ASRMode: asrMode,
+			LANEnabled: input.LANEnabled, LANInterfaceID: input.LANInterfaceID,
 		})
 		if err != nil {
 			return MeetingProjectionDTO{}, err

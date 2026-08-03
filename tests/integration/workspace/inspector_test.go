@@ -37,8 +37,8 @@ func TestInspect_MissingWritablePathDoesNotCreate(t *testing.T) {
 	}
 }
 
-// TestInspect_OnlyTrulyEmptyDirectoryCanInitialize 验证 .DS_Store、其他位置数据库等任意目录项都不是空目录。
-func TestInspect_OnlyTrulyEmptyDirectoryCanInitialize(t *testing.T) {
+// TestInspect_IgnoresRegisteredSystemMetadata 验证登记的系统元数据不阻断初始化，其他未知文件仍阻断。
+func TestInspect_IgnoresRegisteredSystemMetadata(t *testing.T) {
 	base := t.TempDir()
 	inspector := newInspector(t, base, 11*gibibyte)
 	emptyPath := filepath.Join(base, "empty")
@@ -48,15 +48,23 @@ func TestInspect_OnlyTrulyEmptyDirectoryCanInitialize(t *testing.T) {
 	if candidate := inspector.Inspect(emptyPath); candidate.Kind != domainworkspace.CandidateKindEmpty {
 		t.Fatalf("真正空目录必须可初始化：%+v", candidate)
 	}
-	nonEmptyPath := filepath.Join(base, "non-empty")
-	if err := os.Mkdir(nonEmptyPath, 0o700); err != nil {
-		t.Fatalf("创建非空目录失败：%v", err)
+	metadataOnlyPath := filepath.Join(base, "metadata-only")
+	if err := os.Mkdir(metadataOnlyPath, 0o700); err != nil {
+		t.Fatalf("创建系统元数据目录失败：%v", err)
 	}
-	if err := os.WriteFile(filepath.Join(nonEmptyPath, ".DS_Store"), []byte("metadata"), 0o600); err != nil {
-		t.Fatalf("准备隐藏文件失败：%v", err)
+	for _, name := range []string{".DS_Store", "Thumbs.db"} {
+		if err := os.WriteFile(filepath.Join(metadataOnlyPath, name), []byte("metadata"), 0o600); err != nil {
+			t.Fatalf("准备系统元数据失败：name=%s err=%v", name, err)
+		}
 	}
-	if candidate := inspector.Inspect(nonEmptyPath); candidate.Kind != domainworkspace.CandidateKindInvalid || candidate.Reason != domainworkspace.CandidateReasonDatabaseMissing {
-		t.Fatalf("含 .DS_Store 的目录必须按固定数据库缺失拒绝：%+v", candidate)
+	if candidate := inspector.Inspect(metadataOnlyPath); candidate.Kind != domainworkspace.CandidateKindEmpty {
+		t.Fatalf("仅包含登记系统元数据的目录必须可初始化：%+v", candidate)
+	}
+	if err := os.WriteFile(filepath.Join(metadataOnlyPath, "preserve.txt"), []byte("preserve"), 0o600); err != nil {
+		t.Fatalf("准备未知文件失败：%v", err)
+	}
+	if candidate := inspector.Inspect(metadataOnlyPath); candidate.Kind != domainworkspace.CandidateKindInvalid || candidate.Reason != domainworkspace.CandidateReasonDatabaseMissing {
+		t.Fatalf("登记范围外的未知文件仍必须阻断初始化：%+v", candidate)
 	}
 }
 

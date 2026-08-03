@@ -36,10 +36,10 @@
 | Toast            | `.toast`                                   | existing               |
 | Avatar           | `.avatar`、`.avatar-group`                 | existing               |
 | LiveStage        | `.live-stage`、`.recording-line`           | existing               |
-| OperationSteps   | 迁移目录 Modal                             | derived                |
-| UploadItem       | List + Progress + Status + Button          | derived                |
+| OperationSteps   | Step 8 会议收尾与失败页面                  | existing               |
+| UploadItem       | Step 6 访客附件与结束会议提案              | existing               |
 | TranscriptEditor | `transcript-editor.html`                   | existing               |
-| MinuteVersion    | 纪要页入口                                 | design-required        |
+| MinuteVersion    | Step 8 纪要当前与历史版本页                | existing               |
 
 ## 3. AppShell
 
@@ -210,6 +210,8 @@ Error（按需）
 - 失败发生在哪一步必须明确；
 - 切换事实源前说明旧目录仍然有效；
 - 多阶段长流程优先页面或大面板，简单三步可使用 Modal。
+- 收尾流程不提供取消或跳过本地保存；失败后只允许安全重试或复制诊断编号；
+- 会议核心保存与补转写、Codex 同步分别表达，不能合并为一个总进度。
 
 ## 14. Timeline
 
@@ -289,6 +291,15 @@ Error（按需）
 - Actions 右对齐，主操作在末端；
 - 实现完整焦点锁定、背景 inert 和焦点恢复。
 
+### Native Approval 变体
+
+- 只用于 Codex 原生审批请求，不承担 MeetSieve 自定义权限判断；
+- 标题直接说明请求能力，例如“Codex 请求控制浏览器”；
+- 依次显示工具、目标、操作摘要和原生风险说明，长内容允许换行但不展示原始参数；
+- 操作固定为“拒绝”和“允许本次操作”，不提供永久允许或本轮缓存；
+- Modal 打开时会议录音、实时转写和本地保存继续，正文明确等待计入任务超时；
+- 过期、取消或 turn 终结时自动关闭，并将焦点恢复到原触发上下文。
+
 ## 19. Toast
 
 - 用于复制、保存设置等短暂且无需后续处理的反馈；
@@ -347,3 +358,32 @@ TranscriptEditor
 - 加入声纹是独立 Modal，不能成为保存说话人的 checkbox；
 - `1024×720` 收为单列，记录列表在前、编辑面板在后，不产生横向滚动；
 - 页面切换片段或离开时撤销短期音频片段。
+
+## 23. MinuteVersion
+
+MinuteVersion 是会议纪要当前版本、只读历史版本和版本动作的组合组件，不负责生成任务
+本身的进度展示。
+
+### MinuteVersion Anatomy
+
+```text
+MinuteVersion
+├── VersionSummary：版本号、来源、状态和保存时间
+├── EditorOrPreview：当前草稿编辑或历史只读正文
+├── CurrentVersionState：当前、未保存、候选或已确认
+├── VersionActions：保存、确认、重新生成或恢复
+├── VersionHistory：版本列表与当前标记
+└── SourceAnchors：原始记录时间引用与缺口提示
+```
+
+- AI 草稿、人工草稿、已确认和历史只读必须使用文字明确区分；
+- 有未保存修改时禁用确认，并通过相邻帮助文案解释原因；
+- 保存人工修改创建新版本，不在原版本上覆盖正文；
+- 新 AI 草稿只作为候选，不能切走人工或已确认的当前版本；
+- 历史恢复必须提前说明将创建的新版本号，旧版本继续只读保留；
+- 有补转写失败或冲突时持续显示范围，并明确该范围未作为会议事实生成结论；
+- 来源锚点使用等宽时间，不依赖颜色表达可追溯关系；
+- 默认与最小桌面尺寸都保留当前版本状态和关键版本动作。
+
+页面级金标为 `docs/UI/step8-proposal/minutes-workspace.html` 与
+`docs/UI/step8-proposal/minutes-history.html`，已于 2026-08-03 经用户确认。

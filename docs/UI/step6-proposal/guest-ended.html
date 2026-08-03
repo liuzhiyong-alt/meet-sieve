@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>会议已结束 · Step 6 提案 · MeetSieve</title>
+    <link rel="stylesheet" href="../../style/meet-sieve/tokens.css" />
+    <link rel="stylesheet" href="../assets/meetsieve.css" />
+    <link rel="stylesheet" href="step6-proposal.css" />
+  </head>
+  <body class="guest-page">
+    <main class="ended-shell">
+      <div class="brand">
+        <span class="brand-mark">M</span><span>会议消息</span>
+      </div>
+      <section class="card">
+        <span class="status">访客入口已停止</span>
+        <h1 style="margin-top: var(--ms-space-5)">本场会议已结束</h1>
+        <p class="muted">
+          MeetSieve
+          已停止局域网访问。此页面不能继续查看消息、下载资料或上传附件。
+        </p>
+        <div class="notice" style="margin-top: var(--ms-space-5)">
+          <div>
+            <strong>已完成的内容保存在主持人的会议工作目录中</strong>
+            <p class="muted">未完成的上传已取消，不会留下正式附件。</p>
+          </div>
+        </div>
+        <button
+          class="btn"
+          type="button"
+          style="margin-top: var(--ms-space-5)"
+          onclick="location.reload()"
+        >
+          检查会议状态
+        </button>
+      </section>
+    </main>
+  </body>
+</html>

@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>补转写冲突校对 · Step 8 提案 · MeetSieve</title>
+    <link rel="stylesheet" href="../../style/meet-sieve/tokens.css" />
+    <link rel="stylesheet" href="../assets/meetsieve.css" />
+    <link rel="stylesheet" href="step8-proposal.css" />
+  </head>
+  <body>
+    <div class="app">
+      <aside class="sidebar">
+        <a class="brand" href="../index.html"
+          ><span class="brand-mark">M</span><span>MeetSieve</span></a
+        >
+        <nav class="nav" aria-label="主导航">
+          <a href="../start.html">开始会议</a
+          ><a class="active" aria-current="page" href="../records.html"
+            >会议记录</a
+          ><a href="../people.html">常用小组</a
+          ><a href="../settings.html">设置</a>
+        </nav>
+        <div class="sidebar-foot">
+          <span class="status warn">有 1 段补转写冲突</span>
+          <p class="meta num">20260731-A7K2-03</p>
+        </div>
+      </aside>
+      <main class="main">
+        <header class="titlebar">
+          <a href="../detail.html">返回会议详情</a
+          ><span class="meta">原始记录 / 补转写冲突</span>
+        </header>
+        <div class="content">
+          <section class="page-head">
+            <div>
+              <p class="eyebrow">20260731-A7K2-03</p>
+              <h1>补转写冲突校对</h1>
+              <p>
+                实时转写与文件补转写在同一时间范围内重叠。确认前，两份结果都不会覆盖对方。
+              </p>
+            </div>
+            <span class="status warn">1 段待确认</span>
+          </section>
+
+          <section class="conflict-layout">
+            <article class="card">
+              <div class="audio-strip">
+                <div class="audio-strip-copy">
+                  <strong>冲突录音</strong
+                  ><span class="meta num">00:37:14–00:39:02 · 1 分 48 秒</span>
+                </div>
+                <button class="btn btn-quiet" type="button">
+                  播放冲突录音
+                </button>
+              </div>
+              <div class="notice warn">
+                <span
+                  >整段文件结果尚未写入正式原始记录。完成本次校对后，未重叠分句会一并补入。</span
+                >
+              </div>
+              <div class="comparison-grid" aria-label="转写结果对比">
+                <section class="evidence-pane" aria-labelledby="realtime-title">
+                  <div class="evidence-pane-head">
+                    <div>
+                      <p class="meta">实时转写 · 当前记录</p>
+                      <h3 id="realtime-title">00:37:12–00:37:28</h3>
+                    </div>
+                    <span class="status ok">已保存</span>
+                  </div>
+                  <blockquote>
+                    我们计划在八月十二日复验 Windows 真机，并保留当前开发顺序。
+                  </blockquote>
+                  <p class="help">来源：实时转写 final，文字尚未人工修改。</p>
+                </section>
+                <section
+                  class="evidence-pane is-file"
+                  aria-labelledby="file-title"
+                >
+                  <div class="evidence-pane-head">
+                    <div>
+                      <p class="meta">文件补转写 · 候选结果</p>
+                      <h3 id="file-title">00:37:14–00:37:31</h3>
+                    </div>
+                    <span class="status warn">有重叠</span>
+                  </div>
+                  <blockquote>
+                    我们计划在 8 月 12 日复验 Windows
+                    真机，同时保留当前开发顺序。
+                  </blockquote>
+                  <p class="help">
+                    来源：火山录音文件极速版，尚未进入正式记录。
+                  </p>
+                </section>
+              </div>
+              <div class="conflict-context">
+                <strong>相邻会议内容</strong>
+                <p class="muted">
+                  <span class="meta num">00:36:58</span>
+                  王珂：交叉编译成功不能替代 Windows 真机验收。
+                </p>
+                <p class="muted">
+                  <span class="meta num">00:37:42</span>
+                  陈然：这项后置不影响当前 Step 的实现范围。
+                </p>
+              </div>
+            </article>
+
+            <aside class="card conflict-panel">
+              <div class="card-head">
+                <div>
+                  <p class="meta">重叠分句 1 / 1</p>
+                  <h2>选择保留方式</h2>
+                </div>
+              </div>
+              <form class="stack">
+                <div class="conflict-options">
+                  <label class="choice conflict-option"
+                    ><input type="radio" name="resolution" /><span
+                      class="conflict-option-copy"
+                      ><strong>保留当前记录</strong
+                      ><span>忽略重叠的文件文字</span></span
+                    ></label
+                  >
+                  <label class="choice conflict-option"
+                    ><input type="radio" name="resolution" checked /><span
+                      class="conflict-option-copy"
+                      ><strong>使用文件补转写</strong
+                      ><span>原始实时文字仍保留在修改历史中</span></span
+                    ></label
+                  >
+                  <label class="choice conflict-option"
+                    ><input type="radio" name="resolution" /><span
+                      class="conflict-option-copy"
+                      ><strong>手动修改</strong
+                      ><span>根据录音输入最终文字</span></span
+                    ></label
+                  >
+                </div>
+                <label class="label"
+                  >最终文字<textarea class="textarea">
+我们计划在 8 月 12 日复验 Windows 真机，同时保留当前开发顺序。</textarea>
+                </label>
+                <div class="notice">
+                  <span>保存会创建一条人工校对记录，不会修改原始 ASR。</span>
+                </div>
+                <div class="conflict-actions">
+                  <button class="btn btn-primary" type="button">
+                    保存并完成本段</button
+                  ><button class="btn" type="button">稍后处理</button>
+                </div>
+              </form>
+            </aside>
+          </section>
+        </div>
+      </main>
+    </div>
+  </body>
+</html>

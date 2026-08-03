@@ -36,6 +36,7 @@ func TestRuntimeServiceStartsOnlyAfterFirstFrameAndStateCommit(t *testing.T) {
 	capture := &fakeAudioCapture{stream: newFakeAudioStream(port.AudioFrame{StartSample: 0, PCM: []byte{1, 0, 2, 0}})}
 	coordinator := NewRecordingCoordinator(capture, 960000, 32000, time.Second)
 	persistedFrames := make(chan port.AudioFrame, 1)
+	lanLifecycle := &observingLANLifecycle{repository: repository}
 	runtimeService := NewRuntimeService(RuntimeDependencies{
 		Meetings: meetingService, Repository: repository, Coordinator: coordinator,
 		Capture: capture, Clock: currentClock, IDs: identity.NewFixedGenerator(
@@ -44,19 +45,23 @@ func TestRuntimeServiceStartsOnlyAfterFirstFrameAndStateCommit(t *testing.T) {
 		), WorkspaceRoot: root,
 		AvailableBytes: func(string) (uint64, error) { return 2 << 30, nil }, MinimumFreeBytes: 1 << 30,
 		PersistedPCMObserver: func(frame port.AudioFrame) { persistedFrames <- frame },
+		LAN:                  lanLifecycle,
 	})
 
 	started, err := runtimeService.StartMeeting(context.Background(), StartMeetingInput{
 		CreatePreparingInput: CreatePreparingInput{
 			MeetingNo: "20260801-ABCD-01", TemporaryParticipantNames: []string{"访客"}, LocalTimezone: "Asia/Shanghai",
 		},
-		DeviceID: "device-1",
+		DeviceID: "device-1", LANEnabled: true, LANInterfaceID: "private-interface",
 	})
 	if err != nil {
 		t.Fatalf("开始会议失败：%v", err)
 	}
 	if started.LifecycleState != "recording" || started.LocalSaveState != "saving" {
 		t.Fatalf("开始会议投影不正确：%+v", started)
+	}
+	if lanLifecycle.startCalls != 1 || lanLifecycle.startedState != "recording" || lanLifecycle.interfaceID != "private-interface" {
+		t.Fatalf("LAN 未在录音提交后启动：%+v", lanLifecycle)
 	}
 	select {
 	case frame := <-persistedFrames:
@@ -89,6 +94,8 @@ func TestRuntimeServiceEndsWithSegmentsAndVerifiedMergedAsset(t *testing.T) {
 		), Clock: currentClock, DeviceCode: "ABCD",
 	})
 	capture := &fakeAudioCapture{stream: newFakeAudioStream(port.AudioFrame{StartSample: 0, PCM: []byte{1, 0, 2, 0}})}
+	lanLifecycle := &observingLANLifecycle{repository: repository}
+	rawRecord := &observingRawRecordFlusher{repository: repository}
 	runtimeService := NewRuntimeService(RuntimeDependencies{
 		Meetings: meetingService, Repository: repository,
 		Coordinator: NewRecordingCoordinator(capture, 960000, 32000, time.Second),
@@ -97,6 +104,7 @@ func TestRuntimeServiceEndsWithSegmentsAndVerifiedMergedAsset(t *testing.T) {
 			"55555555-5555-4555-8555-555555555555",
 		), WorkspaceRoot: root,
 		AvailableBytes: func(string) (uint64, error) { return 2 << 30, nil }, MinimumFreeBytes: 1 << 30,
+		LAN: lanLifecycle, RawRecord: rawRecord,
 	})
 	started, err := runtimeService.StartMeeting(context.Background(), StartMeetingInput{
 		CreatePreparingInput: CreatePreparingInput{
@@ -130,6 +138,12 @@ func TestRuntimeServiceEndsWithSegmentsAndVerifiedMergedAsset(t *testing.T) {
 	if second.meeting.ID != ended.ID || capture.stream.stopCount != 1 {
 		t.Fatalf("并发结束必须复用唯一结果：first=%+v second=%+v stop=%d", ended, second.meeting, capture.stream.stopCount)
 	}
+	if lanLifecycle.stopCalls != 1 {
+		t.Fatalf("并发结束未只停止一次 LAN：stop=%d", lanLifecycle.stopCalls)
+	}
+	if rawRecord.flushCalls != 1 || rawRecord.lifecycleState != "finalizing" || rawRecord.localSaveState != "saving" {
+		t.Fatalf("原始记录未在本地 saved 提交前强制刷新：%+v", rawRecord)
+	}
 	if ended.LifecycleState != "ended" || ended.LocalSaveState != "saved" {
 		t.Fatalf("会议终态不正确：%+v", ended)
 	}
@@ -146,6 +160,50 @@ func TestRuntimeServiceEndsWithSegmentsAndVerifiedMergedAsset(t *testing.T) {
 	if len(assets) != 2 || assets[0].State != "ready" || assets[1].State != "ready" {
 		t.Fatalf("音频资产不完整：%+v", assets)
 	}
+}
+
+type observingLANLifecycle struct {
+	repository   *meetingrepository.Repository
+	startCalls   int
+	stopCalls    int
+	startedState string
+	interfaceID  string
+}
+
+type observingRawRecordFlusher struct {
+	repository     *meetingrepository.Repository
+	flushCalls     int
+	lifecycleState string
+	localSaveState string
+}
+
+// Flush 记录强制刷新发生时数据库仍处于核心收尾提交前状态。
+func (flusher *observingRawRecordFlusher) Flush(ctx context.Context, meetingID string) error {
+	flusher.flushCalls++
+	meeting, err := flusher.repository.GetMeeting(ctx, meetingID)
+	if err != nil {
+		return err
+	}
+	flusher.lifecycleState = meeting.LifecycleState
+	flusher.localSaveState = meeting.LocalSaveState
+	return nil
+}
+
+// StartMeeting 记录 LAN 启动时 SQLite 已提交的会议状态。
+func (lifecycle *observingLANLifecycle) StartMeeting(ctx context.Context, meetingID string, interfaceID string) error {
+	lifecycle.startCalls++
+	lifecycle.interfaceID = interfaceID
+	meeting, err := lifecycle.repository.GetMeeting(ctx, meetingID)
+	if err == nil {
+		lifecycle.startedState = meeting.LifecycleState
+	}
+	return err
+}
+
+// StopMeeting 记录录音收尾前的 LAN 停止请求。
+func (lifecycle *observingLANLifecycle) StopMeeting(_ context.Context, _ string) error {
+	lifecycle.stopCalls++
+	return nil
 }
 
 // TestRuntimeServiceRejectsLowDiskBeforeAudioAndDatabase 验证磁盘不足不会打开设备或创建活动会议。

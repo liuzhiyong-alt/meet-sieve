@@ -25,6 +25,23 @@ func (repository *Repository) MarkRecordingStarted(ctx context.Context, meetingI
 		})
 }
 
+// UpdateLANState 只更新独立 LAN 状态轴，不改变录音、保存或 ASR 状态。
+func (repository *Repository) UpdateLANState(ctx context.Context, meetingID string, state string, updatedAt int64) error {
+	allowed := state == "disabled" || state == "starting" || state == "serving" || state == "failed" || state == "stopped"
+	if repository == nil || repository.reader == nil || meetingID == "" || !allowed {
+		return fmt.Errorf("更新 LAN 状态：参数无效")
+	}
+	result := repository.reader.WithContext(ctx).Model(&models.Meeting{}).Where("id = ?", meetingID).
+		Updates(map[string]any{"lan_state": state, "updated_at": updatedAt})
+	if result.Error != nil {
+		return fmt.Errorf("更新 LAN 状态失败：%w", result.Error)
+	}
+	if result.RowsAffected != 1 {
+		return ErrMeetingStateConflict
+	}
+	return nil
+}
+
 // BeginFinalizing 原子取得正常结束的唯一收尾权。
 func (repository *Repository) BeginFinalizing(ctx context.Context, meetingID string, updatedAt int64) error {
 	return repository.updateState(ctx, meetingID,

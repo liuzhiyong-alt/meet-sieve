@@ -1,0 +1,336 @@
+/* Step 8 提案补充会议收尾、补转写冲突和纪要版本，不改变 MeetSieve 基础组件。 */
+.finalization-stage {
+  display: grid;
+  gap: var(--space-4);
+  margin-bottom: var(--space-5);
+  padding: var(--space-6);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-lg);
+  background: var(--surface-warm);
+}
+
+.finalization-stage-head,
+.operation-step,
+.audio-strip,
+.version-item,
+.minute-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.finalization-stage h1,
+.finalization-stage p,
+.operation-step p,
+.evidence-pane p,
+.version-item p,
+.minute-summary p {
+  margin: 0;
+}
+
+.finalization-stage-copy {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.finalization-stage .progress > span {
+  background: var(--accent);
+}
+
+.operation-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(300px, 0.6fr);
+  gap: var(--space-5);
+  align-items: start;
+}
+
+.operation-list {
+  display: grid;
+}
+
+.operation-step {
+  min-height: 72px;
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--border-soft);
+}
+
+.operation-step:first-child {
+  border-top: 0;
+}
+
+.operation-step-main {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.operation-step-index {
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 700;
+}
+
+.operation-step.is-complete .operation-step-index {
+  border-color: color-mix(in oklab, var(--success), transparent 65%);
+  color: var(--success);
+}
+
+.operation-step.is-current .operation-step-index {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-on);
+}
+
+.operation-step-copy {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.operation-step-copy span {
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.system-state-list .list-item {
+  min-height: 58px;
+}
+
+.finalization-failure {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.failure-actions,
+.conflict-actions,
+.minute-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.minute-gap-notice {
+  margin-bottom: var(--space-5);
+}
+
+.minute-actions-spaced {
+  margin-top: var(--space-4);
+}
+
+.conflict-layout,
+.minute-layout,
+.history-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: var(--space-5);
+  align-items: start;
+}
+
+.audio-strip {
+  margin-bottom: var(--space-5);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  background: var(--surface-warm);
+}
+
+.audio-strip-copy,
+.conflict-context,
+.minute-summary {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.comparison-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+
+.evidence-pane {
+  min-height: 188px;
+  padding: var(--space-4);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  background: var(--bg);
+}
+
+.evidence-pane.is-file {
+  background: var(--surface-warm);
+}
+
+.evidence-pane-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.evidence-pane blockquote {
+  margin: 0;
+  color: var(--fg-2);
+  font-size: var(--text-base);
+}
+
+.conflict-context {
+  margin-top: var(--space-5);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border-soft);
+}
+
+.conflict-options {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.conflict-option {
+  align-items: flex-start;
+}
+
+.conflict-option-copy {
+  display: grid;
+  gap: 2px;
+}
+
+.conflict-option-copy span {
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.conflict-panel .textarea {
+  min-height: 132px;
+}
+
+.minute-toolbar {
+  margin-bottom: var(--space-4);
+}
+
+.minute-editor {
+  min-height: 430px;
+  line-height: 1.65;
+  resize: vertical;
+}
+
+.minute-sidebar {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.minute-sidebar .card + .card {
+  margin-top: 0;
+}
+
+.version-list {
+  display: grid;
+}
+
+.version-item {
+  min-height: 72px;
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--border-soft);
+}
+
+.version-item:first-child {
+  border-top: 0;
+}
+
+.version-copy {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.version-item.is-current .version-copy strong {
+  color: var(--accent-active);
+}
+
+.history-preview {
+  min-height: 520px;
+}
+
+.history-preview article {
+  max-width: 74ch;
+  color: var(--fg-2);
+}
+
+.history-preview h2 {
+  margin-top: var(--space-6);
+  font-size: var(--text-lg);
+}
+
+.history-preview h2:first-child {
+  margin-top: 0;
+}
+
+.history-preview li + li {
+  margin-top: var(--space-2);
+}
+
+.source-anchor {
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+@media (max-width: 1024px) {
+  .operation-layout,
+  .conflict-layout,
+  .minute-layout,
+  .history-layout {
+    grid-template-columns: minmax(0, 1fr) 280px;
+    gap: var(--space-4);
+  }
+
+  .comparison-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .operation-layout,
+  .conflict-layout,
+  .minute-layout,
+  .history-layout,
+  .comparison-grid,
+  .minute-sidebar {
+    grid-template-columns: 1fr;
+  }
+
+  .finalization-stage-head,
+  .audio-strip,
+  .minute-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 520px) {
+  .operation-step,
+  .version-item {
+    align-items: flex-start;
+  }
+
+  .failure-actions,
+  .conflict-actions,
+  .minute-actions {
+    display: grid;
+  }
+
+  .failure-actions > *,
+  .conflict-actions > *,
+  .minute-actions > * {
+    width: 100%;
+  }
+}

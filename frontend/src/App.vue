@@ -10,6 +10,9 @@ import PeopleView from './features/people/PeopleView.vue'
 import LiveMeetingView from './features/meeting/LiveMeetingView.vue'
 import TranscriptEditorView from './features/correction/TranscriptEditorView.vue'
 import StartMeetingView from './features/meeting/StartMeetingView.vue'
+import GapConflictView from './features/gap/GapConflictView.vue'
+import MinutesHistoryView from './features/minutes/MinutesHistoryView.vue'
+import MinutesWorkspaceView from './features/minutes/MinutesWorkspaceView.vue'
 import OnboardingView from './features/workspace/OnboardingView.vue'
 import { useBootstrapStore } from './stores/bootstrap'
 import { useSystemStore } from './stores/system'
@@ -19,22 +22,30 @@ const bootstrap = useBootstrapStore()
 const system = useSystemStore()
 const meeting = useMeetingStore()
 const selectingWorkspace = ref(false)
-const currentPage = ref<'meeting' | 'correction' | 'people' | 'settings'>(
-  'meeting',
-)
+const currentPage = ref<
+  | 'meeting'
+  | 'correction'
+  | 'gap-conflict'
+  | 'minutes'
+  | 'minutes-history'
+  | 'people'
+  | 'settings'
+>('meeting')
+const selectedGapID = ref('')
 const closeRequested = ref(false)
 
 const activeView = computed(() =>
   selectingWorkspace.value ? 'onboarding' : bootstrap.view,
 )
 
-const shellCurrent = computed(() =>
-  currentPage.value === 'meeting'
-    ? meeting.screen
-    : currentPage.value === 'correction'
-      ? 'records'
-      : currentPage.value,
-)
+const shellCurrent = computed<
+  'start' | 'live' | 'interrupted' | 'records' | 'people' | 'settings'
+>(() => {
+  if (currentPage.value === 'meeting') return meeting.screen
+  if (currentPage.value === 'people' || currentPage.value === 'settings')
+    return currentPage.value
+  return 'records'
+})
 const localSaveLabel = computed(() => {
   if (!meeting.current) return '可以开始会议'
   if (meeting.current.local_save_state === 'saved') return '本地录音已保存'
@@ -68,6 +79,12 @@ function navigate(
   currentPage.value = 'meeting'
   if (destination === 'start' && !meeting.current) meeting.screen = 'start'
 }
+
+/** openGapConflict 只进入主持人本机冲突工作台。 */
+function openGapConflict(gapID: string): void {
+  selectedGapID.value = gapID
+  currentPage.value = 'gap-conflict'
+}
 </script>
 
 <template>
@@ -99,8 +116,35 @@ function navigate(
       :subject="meeting.current.subject"
       @back="currentPage = 'meeting'"
     />
+    <GapConflictView
+      v-else-if="
+        currentPage === 'gap-conflict' && meeting.current && selectedGapID
+      "
+      :meeting-id="meeting.current.id"
+      :meeting-no="meeting.current.meeting_no"
+      :gap-id="selectedGapID"
+      @back="currentPage = 'meeting'"
+    />
+    <MinutesWorkspaceView
+      v-else-if="currentPage === 'minutes' && meeting.current"
+      :meeting-id="meeting.current.id"
+      :meeting-no="meeting.current.meeting_no"
+      @back="currentPage = 'meeting'"
+      @history="currentPage = 'minutes-history'"
+    />
+    <MinutesHistoryView
+      v-else-if="currentPage === 'minutes-history' && meeting.current"
+      :meeting-id="meeting.current.id"
+      :meeting-no="meeting.current.meeting_no"
+      @back="currentPage = 'minutes'"
+    />
     <StartMeetingView v-else-if="meeting.screen === 'start'" />
-    <LiveMeetingView v-else @open-correction="currentPage = 'correction'" />
+    <LiveMeetingView
+      v-else
+      @open-correction="currentPage = 'correction'"
+      @open-gap="openGapConflict"
+      @open-minutes="currentPage = 'minutes'"
+    />
   </AppShell>
   <main v-else class="ms-blocking-view">
     <section class="ms-blocking-view__panel">

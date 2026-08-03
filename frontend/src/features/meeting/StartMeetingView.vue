@@ -3,9 +3,11 @@ import { computed, onMounted, ref, watch } from 'vue'
 
 import { useMeetingStore } from '../../stores/meeting'
 import { useASRStore } from '../../stores/asr'
+import { useLANStore } from '../../stores/lan'
 
 const meeting = useMeetingStore()
 const asr = useASRStore()
+const lan = useLANStore()
 const selectedGroupID = ref('')
 const selectedMemberIDs = ref<string[]>([])
 const temporaryNames = ref<string[]>([])
@@ -21,11 +23,16 @@ const canStart = computed(
     !meeting.loading &&
     !meeting.saving &&
     Boolean(microphoneID.value) &&
+    (!lan.enabled || Boolean(lan.selectedInterfaceID)) &&
     selectedMemberIDs.value.length + temporaryNames.value.length > 0,
 )
 
 onMounted(async () => {
-  await Promise.all([meeting.loadCreateScreen(), asr.loadSettings()])
+  await Promise.all([
+    meeting.loadCreateScreen(),
+    asr.loadSettings(),
+    lan.loadInterfaces(),
+  ])
   subject.value = meeting.draft.subject
   meetingNo.value = meeting.draft.meetingNo
   microphoneID.value =
@@ -40,6 +47,7 @@ watch(selectedGroupID, (groupID) => {
   selectedMemberIDs.value = group
     ? group.members.map((member) => member.id)
     : []
+  if (group) lan.enabled = group.default_lan_enabled
 })
 
 /** addTemporaryParticipant 把已去除首尾空白的临时姓名加入当前 UI 顺序。 */
@@ -61,6 +69,8 @@ async function submit(): Promise<void> {
     temporaryNames: temporaryNames.value,
     microphoneId: microphoneID.value,
     asrMode: asrMode.value,
+    lanEnabled: lan.enabled,
+    lanInterfaceId: lan.enabled ? lan.selectedInterfaceID : '',
   })
 }
 </script>
@@ -191,6 +201,49 @@ async function submit(): Promise<void> {
             </option>
           </select>
         </label>
+        <section class="ms-lan-config" aria-labelledby="lan-create-title">
+          <div class="ms-card-head">
+            <div>
+              <h3 id="lan-create-title">局域网访客页</h3>
+              <p class="ms-help">允许同一私有网络中的访客发送消息和资料。</p>
+            </div>
+            <label class="ms-switch-label">
+              <input v-model="lan.enabled" type="checkbox" role="switch" />
+              <span>{{ lan.enabled ? '已允许' : '未允许' }}</span>
+            </label>
+          </div>
+          <template v-if="lan.enabled">
+            <label class="ms-field ms-field--compact">
+              <span>使用的网络</span>
+              <select
+                v-model="lan.selectedInterfaceID"
+                class="ms-input"
+                :disabled="lan.loading || !lan.interfaces.length"
+              >
+                <option value="">请选择私有网络</option>
+                <option
+                  v-for="item in lan.interfaces"
+                  :key="item.id"
+                  :value="item.id"
+                >
+                  {{ item.name }} · {{ item.address
+                  }}{{ item.id === lan.recommendedID ? '（推荐）' : '' }}
+                </option>
+              </select>
+            </label>
+            <div class="ms-notice ms-notice--warning">
+              <div>
+                <strong>只在可信的私有网络使用</strong>
+                <p>
+                  局域网页面使用 HTTP。公共 Wi-Fi 中的其他设备可能观察网络流量。
+                </p>
+              </div>
+            </div>
+            <p v-if="lan.warning || lan.errorMessage" class="ms-help">
+              {{ lan.errorMessage || lan.warning }}
+            </p>
+          </template>
+        </section>
       </div>
 
       <fieldset class="ms-asr-mode-options">
@@ -244,7 +297,19 @@ async function submit(): Promise<void> {
           }}</strong>
         </li>
         <li><span>Codex</span><strong>本步骤未启用</strong></li>
-        <li><span>局域网</span><strong>本步骤未启用</strong></li>
+        <li>
+          <span>局域网</span
+          ><strong
+            :class="{ 'is-ok': lan.enabled && lan.selectedInterfaceID }"
+            >{{
+              !lan.enabled
+                ? '未允许'
+                : lan.selectedInterfaceID
+                  ? '开始后启动'
+                  : '需要选择网络'
+            }}</strong
+          >
+        </li>
       </ul>
       <button
         class="ms-button ms-button--primary ms-start-button"

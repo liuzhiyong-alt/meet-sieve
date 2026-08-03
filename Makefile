@@ -49,13 +49,12 @@ test:
 
 # test-race 只覆盖不依赖 GUI、音频设备或动态库的纯 Go 并发基础组件。
 test-race:
-	mise exec -- go test -race ./internal/domain/meeting ./internal/domain/transcript ./internal/domain/speaker ./internal/domain/correction ./internal/adapter/asr/volcano ./internal/service/meeting ./internal/service/transcript ./internal/service/speaker ./internal/service/correction ./tests/unit/app ./tests/unit/apperr ./tests/unit/assets ./tests/unit/clock ./tests/unit/codex ./tests/unit/config ./tests/unit/filesystem ./tests/unit/health ./tests/unit/identity ./tests/unit/logger ./tests/contract/port ./tests/contract/transport ./tests/contract/wails ./tests/integration/app ./tests/integration/codex ./tests/integration/http ./tests/integration/meeting -count=1
+	mise exec -- go test -race ./internal/domain/agent ./internal/domain/meeting ./internal/domain/transcript ./internal/domain/speaker ./internal/domain/correction ./internal/domain/guest ./internal/domain/gap ./internal/domain/minutes ./internal/adapter/agent/codex ./internal/adapter/asr/volcano ./internal/adapter/network ./internal/service/agent ./internal/service/meeting ./internal/service/transcript ./internal/service/speaker ./internal/service/correction ./internal/service/guest ./internal/service/lan ./internal/service/resource ./internal/service/finalization ./internal/service/gap ./internal/service/minutes ./internal/transport/http/guest ./tests/unit/agent ./tests/unit/app ./tests/unit/apperr ./tests/unit/assets ./tests/unit/clock ./tests/unit/codex ./tests/unit/config ./tests/unit/filesystem ./tests/unit/finalization ./tests/unit/gap ./tests/unit/health ./tests/unit/identity ./tests/unit/logger ./tests/unit/minutes ./tests/contract/port ./tests/contract/transport ./tests/contract/wails ./tests/integration/agent ./tests/integration/app ./tests/integration/codex ./tests/integration/finalization ./tests/integration/gap ./tests/integration/guest ./tests/integration/http ./tests/integration/meeting ./tests/integration/minutes ./tests/integration/resource -count=1
 
-# test-contract 验证 Wails 与 Codex schema 的稳定契约文件。
+# test-contract 验证 Wails 与 Codex 必要 schema metadata 的稳定契约。
 test-contract:
 	mise exec -- go test ./tests/contract/... -count=1
-	test -f tests/contract/codex/schema/v1/InitializeParams.json
-	test -f tests/contract/codex/schema/ClientNotification.json
+	test -f tests/contract/codex/metadata.json
 
 # test-asr-real 显式使用真实火山凭据和默认麦克风；缺少开关或凭据时必须失败。
 test-asr-real:

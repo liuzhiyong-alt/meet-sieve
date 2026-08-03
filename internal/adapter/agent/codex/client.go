@@ -12,9 +12,10 @@ import (
 	"meet-sieve/internal/infra/apperr"
 )
 
+var initializeRequestID = IntRequestID(1)
+
 const (
-	initializeRequestID = 1
-	processExitTimeout  = 3 * time.Second
+	processExitTimeout = 3 * time.Second
 )
 
 // Config 描述 Codex app-server 可执行文件和固定参数。
@@ -79,7 +80,7 @@ func writeInitialize(codec *Codec) error {
 		},
 		"capabilities": map[string]bool{"experimentalApi": false},
 	}
-	return codec.Write(Request{ID: initializeRequestID, Method: "initialize", Params: params})
+	return codec.Write(Request{ID: &initializeRequestID, Method: "initialize", Params: params})
 }
 
 // readInitializeResponse 等待匹配请求 ID 的响应，并把取消和超时转换为统一错误。
@@ -113,7 +114,7 @@ func readInitializeResponse(ctx context.Context, process *process) (Message, err
 		if result.err != nil {
 			return Message{}, dependencyError(result.err, "codex.initialize.read")
 		}
-		if result.message.ID == nil || *result.message.ID != initializeRequestID {
+		if result.message.ID == nil || !result.message.ID.Equal(initializeRequestID) {
 			return Message{}, dependencyError(fmt.Errorf("initialize 响应 ID 不匹配"), "codex.initialize.match")
 		}
 		return result.message, nil

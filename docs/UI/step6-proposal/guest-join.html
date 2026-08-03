@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>加入会议消息 · Step 6 提案 · MeetSieve</title>
+    <link rel="stylesheet" href="../../style/meet-sieve/tokens.css" />
+    <link rel="stylesheet" href="../assets/meetsieve.css" />
+    <link rel="stylesheet" href="step6-proposal.css" />
+  </head>
+  <body class="guest-page">
+    <main class="join-shell">
+      <div class="brand">
+        <span class="brand-mark">M</span><span>会议消息</span>
+      </div>
+      <section
+        class="page-head"
+        style="display: block; margin-top: var(--ms-space-8)"
+      >
+        <div>
+          <p class="eyebrow">AI 会议助手产品评审</p>
+          <h1>加入本场会议</h1>
+          <p>
+            填写临时显示名称。这里不展示录音、实时转写、正式成员库或会后纪要。
+          </p>
+        </div>
+      </section>
+      <section class="card">
+        <label class="label" for="display-name"
+          >你的临时显示名称<input
+            class="field"
+            id="display-name"
+            maxlength="40"
+            autocomplete="name"
+            placeholder="例如：林舟"
+        /></label>
+        <p class="help">最多 40 个字符，仅用于本场消息和资料署名。</p>
+        <button
+          class="btn btn-primary"
+          type="button"
+          style="width: 100%; margin-top: var(--ms-space-4)"
+        >
+          进入会议消息
+        </button>
+      </section>
+      <div class="notice warn" style="margin-top: var(--ms-space-4)">
+        <div>
+          <strong>只在可信的私有网络使用</strong>
+          <p class="muted">
+            本页面使用 HTTP。请不要在公共 Wi-Fi 中发送敏感资料。
+          </p>
+        </div>
+      </div>
+    </main>
+  </body>
+</html>

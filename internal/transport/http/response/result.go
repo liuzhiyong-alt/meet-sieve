@@ -19,6 +19,15 @@ type Result[T any] struct {
 	RequestID string `json:"request_id"`
 }
 
+// GuestResult 是仅用于 `/api/v1/guest` 的字符串错误码契约。
+type GuestResult[T any] struct {
+	Success   bool   `json:"success"`
+	Code      string `json:"code"`
+	Message   string `json:"message"`
+	Data      *T     `json:"data"`
+	RequestID string `json:"request_id"`
+}
+
 // Success 输出成功响应，HTTP status 与 body code 保持一致。
 func Success[T any](ctx *gin.Context, requestID string, data T) {
 	ctx.JSON(apperr.CodeOK.Value, Result[T]{
@@ -38,5 +47,22 @@ func Failure(ctx *gin.Context, requestID string, appErr *apperr.AppError) {
 		Code:      appErr.Code,
 		Message:   appErr.Message,
 		RequestID: requestID,
+	})
+}
+
+// GuestSuccess 输出不影响 `/health` 整数 code 契约的 Guest 成功响应。
+func GuestSuccess[T any](ctx *gin.Context, requestID string, data T) {
+	ctx.JSON(apperr.CodeOK.Value, GuestResult[T]{
+		Success: true, Code: "OK", Message: apperr.CodeOK.Message, Data: &data, RequestID: requestID,
+	})
+}
+
+// GuestFailure 输出不包含 cause、路径和堆栈的 Guest 失败响应。
+func GuestFailure(ctx *gin.Context, requestID string, appErr *apperr.AppError) {
+	if appErr == nil || appErr.ErrorCode == "" {
+		appErr = apperr.Sys(nil, apperr.WithOp("http.guest.response"))
+	}
+	ctx.JSON(appErr.Code, GuestResult[struct{}]{
+		Success: false, Code: appErr.ErrorCode, Message: appErr.Message, Data: nil, RequestID: requestID,
 	})
 }

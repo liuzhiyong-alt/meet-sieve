@@ -68,6 +68,43 @@ type ASRGap struct {
 // TableName 返回 ASRGap 的显式数据库表名。
 func (ASRGap) TableName() string { return "asr_gaps" }
 
+// GapTranscriptionAttempt 映射一次可审计的会后缺口补转写请求。
+type GapTranscriptionAttempt struct {
+	ID                  string  `gorm:"column:id"`
+	MeetingID           string  `gorm:"column:meeting_id"`
+	AudioAssetID        string  `gorm:"column:audio_asset_id"`
+	Provider            string  `gorm:"column:provider"`
+	ProviderRequestID   string  `gorm:"column:provider_request_id"`
+	CoreStartSample     int64   `gorm:"column:core_start_sample"`
+	CoreEndSample       int64   `gorm:"column:core_end_sample"`
+	AudioStartSample    int64   `gorm:"column:audio_start_sample"`
+	AudioEndSample      int64   `gorm:"column:audio_end_sample"`
+	State               string  `gorm:"column:state"`
+	AttemptNo           int     `gorm:"column:attempt_no"`
+	RequestSHA256       string  `gorm:"column:request_sha256"`
+	ResponseJSON        *string `gorm:"column:response_json"`
+	ProviderLogIDSuffix *string `gorm:"column:provider_log_id_suffix"`
+	LastErrorCode       *string `gorm:"column:last_error_code"`
+	StartedAt           *int64  `gorm:"column:started_at"`
+	EndedAt             *int64  `gorm:"column:ended_at"`
+	CreatedAt           int64   `gorm:"column:created_at"`
+	UpdatedAt           int64   `gorm:"column:updated_at"`
+}
+
+// TableName 返回 GapTranscriptionAttempt 的显式数据库表名。
+func (GapTranscriptionAttempt) TableName() string { return "gap_transcription_attempts" }
+
+// GapTranscriptionAttemptItem 映射一次补转写尝试包含的有序 gap。
+type GapTranscriptionAttemptItem struct {
+	AttemptID string `gorm:"column:attempt_id"`
+	GapID     string `gorm:"column:gap_id"`
+	ItemOrder int    `gorm:"column:item_order"`
+	CreatedAt int64  `gorm:"column:created_at"`
+}
+
+// TableName 返回 GapTranscriptionAttemptItem 的显式数据库表名。
+func (GapTranscriptionAttemptItem) TableName() string { return "gap_transcription_attempt_items" }
+
 // VoiceSample 映射成员的原始声纹样本。
 type VoiceSample struct {
 	ID                 string  `gorm:"column:id"`

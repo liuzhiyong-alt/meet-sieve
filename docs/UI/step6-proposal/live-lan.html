@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>会议进行中 · 局域网提案 · MeetSieve</title>
+    <link rel="stylesheet" href="../../style/meet-sieve/tokens.css" />
+    <link rel="stylesheet" href="../assets/meetsieve.css" />
+    <link rel="stylesheet" href="step6-proposal.css" />
+    <script src="../assets/meetsieve.js" defer></script>
+  </head>
+  <body class="page-live">
+    <div class="app">
+      <aside class="sidebar">
+        <a class="brand" href="../index.html"
+          ><span class="brand-mark">M</span><span>MeetSieve</span></a
+        >
+        <nav class="nav" aria-label="主导航">
+          <a class="active" aria-current="page" href="live-lan.html"
+            >会议进行中</a
+          ><a href="../records.html">会议记录</a
+          ><a href="../people.html">常用小组</a
+          ><a href="../settings.html">设置</a>
+        </nav>
+        <div class="sidebar-foot">
+          <span class="status ok">正在本地保存</span>
+          <p class="meta num">20260802-A7K2-04</p>
+        </div>
+      </aside>
+      <main class="main">
+        <header class="titlebar">
+          <span class="recording-line"
+            ><span class="recording-dot" aria-hidden="true"></span
+            ><span>录音中</span></span
+          ><button class="btn btn-danger" type="button" data-open="end-meeting">
+            结束会议
+          </button>
+        </header>
+        <div class="content">
+          <section class="page-head live-stage">
+            <div>
+              <div class="recording-line">
+                <span class="recording-dot" aria-hidden="true"></span
+                ><span>录音中 · 本地保存正常</span>
+              </div>
+              <h1>AI 会议助手产品评审</h1>
+              <p>录音、实时转写、Codex 和局域网分别显示状态。</p>
+            </div>
+            <div class="live-meter">
+              <span class="live-clock" aria-label="会议已进行 24 分 18 秒"
+                >00:24:18</span
+              >
+              <div class="audio-bar" aria-label="麦克风输入正常">
+                <i style="--h: 9px"></i><i style="--h: 21px"></i
+                ><i style="--h: 14px"></i><i style="--h: 27px"></i
+                ><i style="--h: 18px"></i><i style="--h: 11px"></i>
+              </div>
+              <span class="meta">麦克风输入正常</span>
+            </div>
+          </section>
+          <section class="split">
+            <article class="card">
+              <div class="card-head">
+                <div>
+                  <p class="eyebrow">统一时间线</p>
+                  <h2>会议消息与发言</h2>
+                </div>
+              </div>
+              <div class="timeline">
+                <article class="event">
+                  <span class="meta num">00:22:41 · 会议发言</span>
+                  <p>
+                    <span class="speaker">陈然</span
+                    >：访客只能读取明确公开的会议消息。
+                  </p>
+                </article>
+                <article class="event">
+                  <span class="meta num">00:23:08 · 访客消息</span>
+                  <p>
+                    <span class="speaker">访客 · 林舟</span>：Windows
+                    验收清单已经上传。
+                  </p>
+                </article>
+                <article class="event">
+                  <span class="meta num">00:23:18 · 附件</span>
+                  <p>
+                    <span class="speaker">访客 · 林舟</span
+                    >：Windows-Alpha-验收清单.pdf · 2.8 MB
+                  </p>
+                </article>
+              </div>
+            </article>
+            <aside class="stack">
+              <article class="card">
+                <div class="card-head">
+                  <h3>系统状态</h3>
+                  <span class="status ok">运行中</span>
+                </div>
+                <ul class="list">
+                  <li class="list-item">
+                    <span>录音</span><span class="status ok">PCM 写入中</span>
+                  </li>
+                  <li class="list-item">
+                    <span>本地保存</span><span class="status ok">2 秒前</span>
+                  </li>
+                  <li class="list-item">
+                    <span>实时转写</span><span class="status ok">正常</span>
+                  </li>
+                  <li class="list-item">
+                    <span>Codex</span><span class="status ok">可参与</span>
+                  </li>
+                </ul>
+              </article>
+              <article class="card">
+                <div class="card-head">
+                  <div class="lan-card-copy">
+                    <h3>局域网访客页</h3>
+                    <p class="muted">Wi-Fi · 192.168.1.18</p>
+                  </div>
+                  <span class="status ok">3 人在线</span>
+                </div>
+                <p class="lan-address">
+                  http://192.168.1.18:43120/join#k=••••••••
+                </p>
+                <div class="row" style="margin-top: var(--ms-space-4)">
+                  <button
+                    class="btn btn-quiet"
+                    type="button"
+                    data-open="guest-entry"
+                  >
+                    显示入口</button
+                  ><button class="btn" type="button">重新启动</button>
+                </div>
+                <p class="help" style="margin-bottom: 0">
+                  访客只能查看会议消息和已公开资料，不能查看实时转写。
+                </p>
+              </article>
+            </aside>
+          </section>
+        </div>
+      </main>
+    </div>
+    <div class="modal-backdrop" id="guest-entry">
+      <div class="modal">
+        <h2>局域网访客入口</h2>
+        <div
+          class="row"
+          style="align-items: flex-start; margin-top: var(--ms-space-5)"
+        >
+          <div class="qr-placeholder" aria-label="二维码将在运行时生成">
+            二维码将在运行时生成
+          </div>
+          <div class="lan-card-copy">
+            <strong>同一 Wi-Fi 内扫码进入</strong>
+            <p class="lan-address">http://192.168.1.18:43120/join#k=••••••••</p>
+            <p class="muted">会议结束或重新启动访客页后，此入口立即失效。</p>
+          </div>
+        </div>
+        <div class="notice warn" style="margin-top: var(--ms-space-5)">
+          <div>
+            <strong>不要在公共网络分享</strong>
+            <p class="muted">访客页使用 HTTP，仅适合可信私有网络。</p>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button class="btn" type="button" data-close>返回会议</button
+          ><button
+            class="btn btn-primary"
+            type="button"
+            data-copy="http://192.168.1.18:43120/join#k=token"
+          >
+            复制入口
+          </button>
+        </div>
+      </div>
+    </div>
+    <div class="modal-backdrop" id="end-meeting">
+      <div class="modal">
+        <h2>结束并保存会议？</h2>
+        <p class="muted">
+          将立即停止访客访问，再完成尾部转写、合并录音并刷新原始记录。
+        </p>
+        <div class="modal-actions">
+          <button class="btn" type="button" data-close>继续会议</button
+          ><a class="btn btn-primary" href="../detail.html">结束并保存</a>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

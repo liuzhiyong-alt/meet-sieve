@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>AI 正在参与 · Step 7 提案 · MeetSieve</title>
+    <link rel="stylesheet" href="../assets/meetsieve.css" />
+    <link rel="stylesheet" href="step7-proposal.css" />
+    <script src="../assets/meetsieve.js" defer></script>
+  </head>
+  <body class="page-live">
+    <div class="app">
+      <aside class="sidebar">
+        <a class="brand" href="../index.html"><span class="brand-mark">M</span><span>MeetSieve</span></a>
+        <nav class="nav" aria-label="主导航">
+          <a class="active" aria-current="page" href="live-agent-busy.html">会议进行中</a>
+          <a href="../records.html">会议记录</a><a href="../people.html">常用小组</a>
+          <a href="settings-codex.html">设置</a>
+        </nav>
+        <div class="sidebar-foot"><span class="status ok">正在本地保存</span><p class="meta num">20260802-A7K2-05</p></div>
+      </aside>
+      <main class="main">
+        <header class="titlebar"><span class="meta">MeetSieve / 会议进行中</span><div class="row"><button class="btn btn-quiet" type="button">最小化到托盘</button><button class="btn btn-danger" type="button" data-open="end-meeting">结束会议</button></div></header>
+        <div class="content">
+          <section class="page-head live-stage">
+            <div><div class="recording-line"><span class="recording-dot" aria-hidden="true"></span><span>录音中 · 本地保存正常</span></div><h1>AI 会议助手产品评审</h1><p>录音、实时转写、Codex 和局域网分别显示状态。</p></div>
+            <div class="live-meter"><span class="live-clock" aria-label="会议已进行 26 分 11 秒">00:26:11</span><div class="audio-bar" aria-label="麦克风输入正常"><i style="--h:9px"></i><i style="--h:21px"></i><i style="--h:14px"></i><i style="--h:27px"></i><i style="--h:18px"></i><i style="--h:11px"></i></div><span class="meta">麦克风输入正常</span></div>
+          </section>
+          <section class="split">
+            <article class="card">
+              <div class="row-between" style="margin-bottom:24px"><div><p class="eyebrow">统一时间线</p><span class="muted">最近发言与 AI 参与记录</span></div><button class="btn btn-primary" type="button" disabled>请 AI 参与</button></div>
+              <div class="timeline">
+                <article class="event"><span class="meta num">00:24:52 · 会议发言</span><p><span class="speaker">陈然</span>：内部访客上传的验收清单也要纳入这次分析。</p></article>
+                <article class="event ai"><span class="meta num">00:25:06 · AI 问题</span><p><span class="speaker">刘毅</span>：AI 助手，总结当前风险，并结合林舟上传的验收清单给出建议。</p></article>
+                <article class="event ai">
+                  <span class="meta num">00:25:09 · AI 正在回答</span>
+                  <div class="agent-answer" aria-live="polite" aria-busy="true">
+                    <div class="agent-answer-head"><strong>AI 助手</strong><span class="status warn">处理中 1 分 02 秒</span></div>
+                    <p class="agent-cursor">目前有三项主要风险。第一，Windows 真机验证仍后置；第二，审批只能由主持人处理；第三，访客附件应在上传完成后进入上下文</p>
+                    <p class="help">当前内容仅主持人可见。最终回答成功后会自动公开到局域网访客页。</p>
+                    <div class="agent-actions"><button class="btn btn-quiet" type="button">停止回答</button></div>
+                  </div>
+                </article>
+              </div>
+            </article>
+            <aside class="stack">
+              <article class="card"><div class="card-head"><h3>系统状态</h3><span class="status ok">运行中</span></div><ul class="list"><li class="list-item"><span>录音</span><span class="status ok">PCM 写入中</span></li><li class="list-item"><span>本地保存</span><span class="status ok">2 秒前</span></li><li class="list-item"><span>实时转写</span><span class="status ok">正常</span></li><li class="list-item"><span>Codex</span><span class="status warn">正在回答</span></li></ul></article>
+              <article class="card"><div class="card-head"><h3>局域网访客页</h3><span class="status ok">3 人在线</span></div><p class="muted">访客提交的文字和已完成文件会进入主持人下一次提问的上下文。</p><div class="notice"><span>访客不能唤醒 Codex、手动提问或处理审批。</span></div></article>
+            </aside>
+          </section>
+        </div>
+      </main>
+    </div>
+    <div class="modal-backdrop" id="end-meeting"><div class="modal" role="dialog" aria-modal="true" aria-labelledby="end-title"><h2 id="end-title">结束并保存会议？</h2><p class="muted">将停止当前回答和访客访问，再完成尾部转写与本地保存。</p><div class="modal-actions"><button class="btn" type="button" data-close>继续会议</button><button class="btn btn-primary" type="button">结束并保存</button></div></div></div>
+  </body>
+</html>

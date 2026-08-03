@@ -1,18 +1,19 @@
 package meeting
 
 import (
-	"encoding/binary"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+
+	domainaudio "meet-sieve/internal/domain/audio"
 )
 
 const (
-	recordingSampleRate = 16000
-	recordingBitDepth   = 16
-	recordingChannels   = 1
-	wavHeaderSize       = 44
+	recordingSampleRate = domainaudio.SampleRate
+	recordingBitDepth   = domainaudio.BitDepth
+	recordingChannels   = domainaudio.Channels
+	wavHeaderSize       = domainaudio.WAVHeaderSize
 )
 
 // WAVWriteResult 描述完成分片可与文件系统核对的样本数和字节数。
@@ -161,25 +162,7 @@ func (writer *WAVPartWriter) writeHeader() error {
 
 // encodeRecordingWAVHeader 生成与指定样本数一致的固定格式 WAV header。
 func encodeRecordingWAVHeader(sampleCount int64) ([]byte, error) {
-	dataSize := sampleCount * 2
-	if sampleCount < 0 || dataSize > int64(^uint32(0))-36 {
-		return nil, fmt.Errorf("WAV 数据超过 RIFF 上限")
-	}
-	header := make([]byte, wavHeaderSize)
-	copy(header[0:4], "RIFF")
-	binary.LittleEndian.PutUint32(header[4:8], uint32(36+dataSize))
-	copy(header[8:12], "WAVE")
-	copy(header[12:16], "fmt ")
-	binary.LittleEndian.PutUint32(header[16:20], 16)
-	binary.LittleEndian.PutUint16(header[20:22], 1)
-	binary.LittleEndian.PutUint16(header[22:24], recordingChannels)
-	binary.LittleEndian.PutUint32(header[24:28], recordingSampleRate)
-	binary.LittleEndian.PutUint32(header[28:32], recordingSampleRate*2)
-	binary.LittleEndian.PutUint16(header[32:34], 2)
-	binary.LittleEndian.PutUint16(header[34:36], recordingBitDepth)
-	copy(header[36:40], "data")
-	binary.LittleEndian.PutUint32(header[40:44], uint32(dataSize))
-	return header, nil
+	return domainaudio.EncodeCanonicalWAVHeader(sampleCount)
 }
 
 // syncDirectory 同步原子重命名所在目录，确保目录项进入稳定存储。

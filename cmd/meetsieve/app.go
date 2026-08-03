@@ -104,6 +104,7 @@ func (app *App) shutdown(ctx context.Context) {
 			)
 		}
 		app.meeting.StopSpeakerAutomation()
+		app.meeting.StopAgentRuntime(ctx)
 	}
 	if app.workspace != nil {
 		_ = app.workspace.Stop()

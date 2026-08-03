@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>结束会议与上传 · Step 6 提案 · MeetSieve</title>
+    <link rel="stylesheet" href="../../style/meet-sieve/tokens.css" />
+    <link rel="stylesheet" href="../assets/meetsieve.css" />
+    <link rel="stylesheet" href="step6-proposal.css" />
+  </head>
+  <body class="page-live">
+    <div class="app" inert>
+      <aside class="sidebar">
+        <a class="brand"
+          ><span class="brand-mark">M</span><span>MeetSieve</span></a
+        >
+        <nav class="nav">
+          <a class="active">会议进行中</a><a>会议记录</a><a>常用小组</a
+          ><a>设置</a>
+        </nav>
+        <div class="sidebar-foot">
+          <span class="status ok">正在本地保存</span>
+        </div>
+      </aside>
+      <main class="main">
+        <header class="titlebar">
+          <span class="recording-line"
+            ><span class="recording-dot"></span><span>录音中</span></span
+          ><button class="btn btn-danger">结束会议</button>
+        </header>
+        <div class="content">
+          <section class="page-head live-stage">
+            <div>
+              <div class="recording-line">
+                <span class="recording-dot"></span
+                ><span>录音中 · 本地保存正常</span>
+              </div>
+              <h1>AI 会议助手产品评审</h1>
+              <p>局域网访客页运行中，3 人在线。</p>
+            </div>
+            <span class="live-clock">00:24:18</span>
+          </section>
+        </div>
+      </main>
+    </div>
+    <div class="modal-backdrop open">
+      <div
+        class="modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="end-title"
+        aria-describedby="end-desc"
+      >
+        <h2 id="end-title">还有附件正在上传</h2>
+        <p id="end-desc" class="muted">
+          结束会议会立即停止访客访问，并取消尚未完成的上传。已保存的录音、消息和附件不会受影响。
+        </p>
+        <div class="upload-item">
+          <div class="row-between">
+            <div class="upload-copy">
+              <strong>Windows-Alpha-验收录像.mp4</strong>
+              <p class="meta num">318.4 MB / 486.0 MB</p>
+            </div>
+            <span class="status warn">上传中</span>
+          </div>
+          <div
+            class="progress"
+            role="progressbar"
+            aria-label="附件上传进度"
+            aria-valuemin="0"
+            aria-valuemax="100"
+            aria-valuenow="66"
+          >
+            <span style="--progress: 66%"></span>
+          </div>
+        </div>
+        <div class="end-upload-actions">
+          <button class="btn btn-primary" type="button">等待上传完成</button
+          ><button class="btn btn-danger" type="button">结束并取消上传</button
+          ><button class="btn" type="button">继续会议</button>
+        </div>
+        <p class="help">
+          取消后不会留下正式附件。访客需要在以后的会议中重新选择原文件。
+        </p>
+      </div>
+    </div>
+  </body>
+</html>

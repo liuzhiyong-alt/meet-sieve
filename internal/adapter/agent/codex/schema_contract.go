@@ -1,0 +1,53 @@
+package codex
+
+// RequiredSchemaContract 返回 Step 7 实际使用的 Codex 0.146.0 必要 schema 契约。
+// 返回值由调用方独占，可安全传给运行时校验器。
+func RequiredSchemaContract() SchemaContract {
+	return SchemaContract{
+		Version: "codex-cli 0.146.0",
+		Files: map[string]string{
+			"v1/InitializeParams.json":                     "4f576f99e285beb28f71f48a72b887c1f517dada86fee348fe2af0a35511de23",
+			"v1/InitializeResponse.json":                   "86dcd236d0576a82c85b933586dc45731260eab1b6edb3447b03f790277322b1",
+			"v2/GetAccountParams.json":                     "d0dc3c0d428d37b1ec7887fa6b044244e6474578e1ff397c0872b2a6292073db",
+			"v2/GetAccountResponse.json":                   "a8b27a203541460d6593723f646900e1df4417e0de43dfc36c485643810e1f1a",
+			"v2/ThreadStartParams.json":                    "eb71bad1d51a052b311e8beb76709bc5ac287d7e27fa0a25d8c7608f630254da",
+			"v2/ThreadStartResponse.json":                  "dc78f57eb18355c508254c5dda20f83cf161c353ee6564c6395ab417dd864544",
+			"v2/ThreadResumeParams.json":                   "1dc47d294d0de32f334e0829893d743ec64393ebcf00d7212c9c55b03c34ed23",
+			"v2/ThreadResumeResponse.json":                 "a729b3d290402b1e7ee11661001dc194b59f0b5743cbe9e64cd6720862179865",
+			"v2/TurnStartParams.json":                      "48a0ee95b669b47f5557c68b99a4d459b50577ccce8ebc5976532f50e3c6d059",
+			"v2/TurnStartResponse.json":                    "099184dc9d6195cd965b8a90ee5d1cb05c87d9b329acecdfbd63f358e660d568",
+			"v2/TurnInterruptParams.json":                  "49132b57b09f09dc545ed1cd373c12eede6e880e9afb54ae50add78bb42490cd",
+			"v2/TurnInterruptResponse.json":                "531de6be06fe979b5963f249bab82498a175e614bf65ac12fb2e849dfe60bcf1",
+			"v2/AgentMessageDeltaNotification.json":        "6446e05718f69c5bbbdb7da92997ffddbc307c13c1222581708f7e5ce1c9e924",
+			"v2/ItemCompletedNotification.json":            "49ef255afe401aaeff455f99175532cbc5ff948f2055e5bde68792953a010252",
+			"v2/TurnStartedNotification.json":              "e268134e79cae246e39f110e67bd2efbb49ce9a572520a85a96a7325eaf31e03",
+			"v2/TurnCompletedNotification.json":            "5b5f2ca515658ea6fcce7e961d1c3feddb3f48c0dcc813260c7ccf77a2d016af",
+			"CommandExecutionRequestApprovalParams.json":   "cdae97800b9d40bf42299df4705d0a6ffb23265c8107895f3a7bf74e131e6ee1",
+			"CommandExecutionRequestApprovalResponse.json": "42010a48dd9ad989171728c30338e1ff8144c31bd33921cbfb5608fd6c85a3b5",
+			"FileChangeRequestApprovalParams.json":         "7b465f7c5671adffdc5c339f50799860950307456e2a2b52c5ce1d3018f4babd",
+			"FileChangeRequestApprovalResponse.json":       "7ccbd29e5f8840c7c8aa96c5c3b6d52bc71ec5c5d7e1ad05ab958afd44c0c94c",
+			"ApplyPatchApprovalParams.json":                "9de5a28a543214033b546db66ad8d34748a949c9878a7e51ec57a99feb2b8e67",
+			"ApplyPatchApprovalResponse.json":              "2b9fe9eec357d940bef643bb656707efea0889787f31c4e69c12e58606468a0e",
+			"ExecCommandApprovalParams.json":               "6b34b7c6c999280f51146c8f44b08a368987c0c3624b02a89904330b0178cd9e",
+			"ExecCommandApprovalResponse.json":             "d044005b62cb8de446cbaf7f598916974b5c6546b04f3fe552d7b8f880f069c7",
+			"PermissionsRequestApprovalParams.json":        "f40bc002f08d8a5ca6da7849778c6f262a0fc6fccafa00b30f9fac231312b29e",
+			"PermissionsRequestApprovalResponse.json":      "e8669e089a78581a2f6c702dff906038032a6055c103c07870aa42c06b7fe3fb",
+			"McpServerElicitationRequestParams.json":       "12e180a344101863b73a3ba101d12ae14fff1b6eff679b7ccd0769cc22827261",
+			"McpServerElicitationRequestResponse.json":     "b9658ba208bfc7ecb3139c4d9742608f260e1583bd6cd11666dce289c975d670",
+			"DynamicToolCallParams.json":                   "e36242b331ca665c74993e55abbea381b1c8a961b29a42579029cff1ad26b20d",
+			"DynamicToolCallResponse.json":                 "b5fd10c265be9023f038fe3e4c937a8e215906c8ab31e35d61d28bbc0b755af9",
+			"ToolRequestUserInputParams.json":              "21e569e32c05d51c1ee5e587730c182b911ede97a4df267f6e4ef24e1717f34e",
+			"ToolRequestUserInputResponse.json":            "14ede53c2e51b289fb3c80903292d4b0f0b387eae217dbb257c201b2b7c65bf1",
+			"ServerRequest.json":                           "177f8b7de9dd8ce2055c56a5fd22dbc6ec24e2a4d706d08fef9f5ad4effe71f6",
+			"ServerNotification.json":                      "b0168c86f69029a51bb30adf78307d563cca96237cc76d2244aea6a1f5a7c7d0",
+			"ClientRequest.json":                           "c144b03ec341572756c8296727837c38e99cdedf907aeb7b28e458dd72e16dc0",
+			"ClientNotification.json":                      "a30b3041578845b11add3d07d5a63cd3a12d5d126e87b8c591862b4aeb68d97c",
+			"RequestId.json":                               "a33325d0eca49631bf935e9a30d02ba542b42d563f8c58955d3e8f14ad6d3ab1",
+			"JSONRPCMessage.json":                          "7b819754ee909272f46d45dbd51bc9eb7bab9861905ac1195f1fb5afd7ff5e83",
+			"JSONRPCRequest.json":                          "a174dbc58be007346f5a10fe2f8c8f8c14ccb36191dc1ad0fdd8ce1828f8db1c",
+			"JSONRPCResponse.json":                         "94ecf5e81bdbc2af858afad0044b95c7fb4decf77d7fd7d6321324dad79eef57",
+			"JSONRPCNotification.json":                     "a8f8bfca7128b6ffbba13905cba6af966f8598c12237b5cb189b81861cb24e92",
+			"JSONRPCError.json":                            "05277af4e68caeabae353d1e643d60501c7f2bf2dcc97348e4cde4d0eba83eb4",
+		},
+	}
+}

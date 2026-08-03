@@ -15,21 +15,28 @@
 
 ## 2. 会议生命周期
 
-| 后端状态        | UI 表达                                                                   | 主操作        | 成熟度          |
-| --------------- | ------------------------------------------------------------------------- | ------------- | --------------- |
-| `preparing`     | 创建会议页；检查目录、麦克风、转写、Codex、LAN                            | 开始会议      | existing        |
-| `recording`     | LiveStage + 持续录音状态 + 时间线                                         | 结束会议      | existing        |
-| `finalizing`    | 会中页面切为 OperationSteps；停止 LAN、尾部 final、合并录音、刷新原始记录 | 查看失败/等待 | design-required |
-| `ended`         | 会议详情；显示本地保存、缺口、纪要和同步状态                              | 会后处理      | existing        |
-| `interrupted`   | 中断恢复页；说明可恢复内容、缺口和不能继续原录音                          | 恢复已有数据  | design-required |
-| `deleting`      | 页面或 Modal 持续显示删除中，禁止重复操作                                 | 等待          | derived         |
-| `delete_failed` | Danger Notice + 未删除文件 + 重试                                         | 重试删除      | existing        |
+| 后端状态            | UI 表达                                                                   | 主操作       | 成熟度          |
+| ------------------- | ------------------------------------------------------------------------- | ------------ | --------------- |
+| `preparing`         | 创建会议页；检查目录、麦克风、转写、Codex、LAN                            | 开始会议     | existing        |
+| `recording`         | LiveStage + 持续录音状态 + 时间线                                         | 结束会议     | existing        |
+| `finalizing`        | 会中页面切为 OperationSteps；停止 LAN、尾部 final、合并录音、刷新原始记录 | 等待本地保存 | existing        |
+| `finalizing/failed` | 保留已关闭分片和会议事件，明确完整录音尚未完成校验                        | 重试本地保存 | existing        |
+| `ended`             | 会议详情；显示本地保存、缺口、纪要和同步状态                              | 会后处理     | existing        |
+| `interrupted`       | 中断恢复页；说明可恢复内容、缺口和不能继续原录音                          | 恢复已有数据 | design-required |
+| `deleting`          | 页面或 Modal 持续显示删除中，禁止重复操作                                 | 等待         | derived         |
+| `delete_failed`     | Danger Notice + 未删除文件 + 重试                                         | 重试删除     | existing        |
 
 ### 约束
 
 - 正在录音关闭应用时显示 `继续会议 / 结束会议并退出`，成熟度 `derived`。
 - `finalizing` 不能用全屏通用 Spinner 代替步骤。
+- 收尾页分别展示录音、本地保存、实时转写、访客页和 Codex 状态；外部补转写与
+  Codex 同步不得阻塞或伪装本地保存。
+- 收尾失败必须说明仍安全的内容、失败步骤和诊断编号，不提供“忽略并标记成功”。
 - 崩溃恢复禁止提供“继续原会议录音”。
+
+收尾页面级金标为 `docs/UI/step8-proposal/finalizing.html` 与
+`docs/UI/step8-proposal/finalizing-failed.html`，已于 2026-08-03 经用户确认。
 
 ## 3. 本地保存
 
@@ -74,29 +81,35 @@
 
 ## 5. 补转写缺口
 
-| 状态         | UI 表达                   | 主操作       | 成熟度          |
-| ------------ | ------------------------- | ------------ | --------------- |
-| `none`       | 不显示缺口提示            | 无           | existing        |
-| `pending`    | 缺口范围 + Warning Status | 立即处理     | existing        |
-| `processing` | 范围 + Progress/阶段      | 停止或等待   | derived         |
-| `completed`  | 已补齐并标记来源          | 查看原始记录 | derived         |
-| `failed`     | 保留缺口范围和失败原因    | 重试补转写   | derived         |
-| `conflict`   | 同一时间范围保留两份结果  | 进入人工校对 | design-required |
+| 状态         | UI 表达                   | 主操作       | 成熟度   |
+| ------------ | ------------------------- | ------------ | -------- |
+| `none`       | 不显示缺口提示            | 无           | existing |
+| `pending`    | 缺口范围 + Warning Status | 立即处理     | existing |
+| `processing` | 范围 + Progress/阶段      | 停止或等待   | derived  |
+| `completed`  | 已补齐并标记来源          | 查看原始记录 | derived  |
+| `failed`     | 保留缺口范围和失败原因    | 重试补转写   | derived  |
+| `conflict`   | 同一时间范围保留两份结果  | 进入人工校对 | existing |
 
 冲突结果不得自动覆盖已有 final。补转写失败时允许生成纪要，但生成确认必须持续显示
 缺口范围。
 
+补转写冲突使用独立工作台，同时展示冲突录音、实时转写、文件补转写、相邻会议内容和
+最终文字。任一重叠会阻止整段文件结果自动写入，用户可保留当前记录、采用文件补转写或
+手动修改。页面级金标为 `docs/UI/step8-proposal/gap-conflict.html`，已于 2026-08-03
+经用户确认。
+
 ## 6. Codex
 
-| 状态           | 文案基线                        | 组件                         | 成熟度   |
-| -------------- | ------------------------------- | ---------------------------- | -------- |
-| `unchecked`    | 尚未检测                        | Neutral Status               | derived  |
-| `initializing` | 正在准备 AI                     | Info Status                  | derived  |
-| `available`    | AI 可参与                       | Success Status               | existing |
-| `busy`         | AI 正在参与                     | Timeline Event + Stop Button | derived  |
-| `busy_long`    | AI 处理时间较长                 | Warning/Info Notice + Stop   | derived  |
-| `unavailable`  | AI 暂不可用，录音和转写不受影响 | Warning Notice               | derived  |
-| `unsynced`     | Codex 结束同步失败，可重试      | Danger/Warning Status        | existing |
+| 状态               | 文案基线                        | 组件                         | 成熟度   |
+| ------------------ | ------------------------------- | ---------------------------- | -------- |
+| `unchecked`        | 尚未检测                        | Neutral Status               | derived  |
+| `initializing`     | 正在准备 AI                     | Info Status                  | derived  |
+| `available`        | AI 可参与                       | Success Status               | existing |
+| `busy`             | AI 正在参与                     | Timeline Event + Stop Button | existing |
+| `busy_long`        | AI 处理时间较长                 | Warning/Info Notice + Stop   | existing |
+| `unavailable`      | AI 暂不可用，录音和转写不受影响 | Warning Notice               | existing |
+| `approval_pending` | 等待主持人审批                  | Native Approval Modal        | existing |
+| `unsynced`         | Codex 结束同步失败，可重试      | Danger/Warning Status        | existing |
 
 ### Turn
 
@@ -107,6 +120,16 @@
 - 取消后显示取消状态，不保存 partial 回答；
 - Busy 时忽略新唤醒，不排队；
 - 10 分钟超时转换为失败并允许重新提问。
+- Partial、问题、失败和取消只对主持人可见；成功最终回答自动公开到 LAN 访客页；
+- LAN 访客只能提交文字和文件，不能唤醒、手动触发或处理审批。
+
+### 原生审批
+
+- 沿用 Codex 原生 sandbox、审批频率、MCP、Apps 和工具权限，不建立第二套权限；
+- 只有 Codex 发出原生审批请求时才显示 Modal，原生已允许的操作不重复询问；
+- Modal 显示工具、目标、操作摘要和原生风险说明，只提供“拒绝”和“允许本次操作”；
+- 审批只出现在主持人桌面端，等待时间计入当前任务 10 分钟上限；
+- 未知、过期或无法呈现的请求安全拒绝，不能自动允许或保持悬挂。
 
 ### 恢复
 
@@ -117,16 +140,22 @@
 
 ## 7. 会议纪要
 
-| 状态            | UI 表达                        | 主操作            | 成熟度          |
-| --------------- | ------------------------------ | ----------------- | --------------- |
-| `not_generated` | 尚未生成会议纪要               | 生成纪要          | existing        |
-| `generating`    | 当前生成任务、耗时和停止入口   | 停止生成          | derived         |
-| `draft`         | 最新 AI 草稿、当前版本和操作区 | 编辑/确认         | design-required |
-| `confirmed`     | 当前已确认版本                 | 重新生成/查看历史 | design-required |
-| `failed`        | 保留上个成功版本并说明失败     | 重试生成          | derived         |
+| 状态            | UI 表达                        | 主操作            | 成熟度   |
+| --------------- | ------------------------------ | ----------------- | -------- |
+| `not_generated` | 尚未生成会议纪要               | 生成纪要          | existing |
+| `generating`    | 当前生成任务、耗时和停止入口   | 停止生成          | derived  |
+| `draft`         | 最新 AI 草稿、当前版本和操作区 | 编辑/确认         | existing |
+| `confirmed`     | 当前已确认版本                 | 重新生成/查看历史 | existing |
+| `failed`        | 保留上个成功版本并说明失败     | 重试生成          | derived  |
 
-版本比较、历史恢复、人工编辑和确认属于新关键工作区，必须先补设计。重新生成不得覆盖
-人工当前版本。
+纪要版本工作区固定区分 AI 草稿、人工草稿、已确认版本和只读历史版本。人工保存创建
+新版本；确认只改变当前草稿状态；恢复历史版本会复制出新的当前版本。重新生成不得覆盖
+人工或已确认的当前版本。页面级金标为：
+
+- `docs/UI/step8-proposal/minutes-workspace.html`；
+- `docs/UI/step8-proposal/minutes-history.html`。
+
+两页已于 2026-08-03 经用户确认。
 
 ## 8. LAN
 
@@ -146,7 +175,17 @@
 - 会议结束立即失效；
 - 访客填写临时显示名称，不选择正式成员身份。
 
-LAN Desktop 页面布局为 `design-required`；当前 `guest.html` 只作为组件和内容证据。
+LAN Desktop 与手机兼容页面已经用户于 2026-08-02 确认，页面级金标为：
+
+- `docs/UI/step6-proposal/guest-join.html`；
+- `docs/UI/step6-proposal/guest-active.html`；
+- `docs/UI/step6-proposal/guest-ended.html`。
+
+宿主端网卡选择、会中入口和上传中结束会议的页面级金标为：
+
+- `docs/UI/step6-proposal/start-lan.html`；
+- `docs/UI/step6-proposal/live-lan.html`；
+- `docs/UI/step6-proposal/live-upload-ending.html`。
 
 ## 9. 附件上传
 
@@ -166,19 +205,22 @@ LAN Desktop 页面布局为 `design-required`；当前 `guest.html` 只作为组
 结束会议时存在上传任务，确认弹窗必须明确等待或结束的后果；如果承诺会后重试，详情页
 必须提供真实入口。
 
+MeetSieve 不提供会后恢复访客上传。用户只能等待当前上传完成，或结束会议并取消上传；
+取消后不留下正式附件，访客以后需要重新选择原文件。该模式成熟度为 `existing`。
+
 ## 10. 说话人与声纹
 
-| 场景         | UI 表达                     | 成熟度          |
-| ------------ | --------------------------- | --------------- |
-| 无声纹成员   | 仍可参会，显示“未录入声纹”  | existing        |
-| 样本列表     | 环境、时长、质量和删除/新增 | existing        |
-| 录入新样本   | 录音、音量、时长、质量结果  | existing        |
-| 删除全部声纹 | 永久删除确认，不改历史会议  | derived         |
-| 模型重建     | 进度 + 自动匹配暂不可用     | derived         |
-| 低置信度     | 显示未知说话人，不强行认人  | derived         |
-| 单条校对     | 修改选中片段                | existing        |
-| 本场批量校对 | 修改本场同一未知说话人      | existing        |
-| 加入声纹     | 独立明确确认                | existing        |
+| 场景         | UI 表达                     | 成熟度   |
+| ------------ | --------------------------- | -------- |
+| 无声纹成员   | 仍可参会，显示“未录入声纹”  | existing |
+| 样本列表     | 环境、时长、质量和删除/新增 | existing |
+| 录入新样本   | 录音、音量、时长、质量结果  | existing |
+| 删除全部声纹 | 永久删除确认，不改历史会议  | derived  |
+| 模型重建     | 进度 + 自动匹配暂不可用     | derived  |
+| 低置信度     | 显示未知说话人，不强行认人  | derived  |
+| 单条校对     | 修改选中片段                | existing |
+| 本场批量校对 | 修改本场同一未知说话人      | existing |
+| 加入声纹     | 独立明确确认                | existing |
 
 录入新样本的页面级金标为 `docs/UI/voice-enrollment.html`。设置页模型下载与离线导入的
 页面级金标为 `docs/UI/model-management.html`；两者均已于 2026-08-01 经用户确认。

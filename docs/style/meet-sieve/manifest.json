@@ -2,7 +2,7 @@
   "schemaVersion": "meet-sieve-design-system/v1",
   "id": "meet-sieve",
   "name": "MeetSieve",
-  "version": "1.1.0",
+  "version": "1.4.0",
   "theme": "light",
   "description": "安静、可靠、克制、状态优先的跨平台会议桌面工具设计系统。",
   "authority": [

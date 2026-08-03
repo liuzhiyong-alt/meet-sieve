@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>会议纪要版本 · Step 8 提案 · MeetSieve</title>
+    <link rel="stylesheet" href="../../style/meet-sieve/tokens.css" />
+    <link rel="stylesheet" href="../assets/meetsieve.css" />
+    <link rel="stylesheet" href="step8-proposal.css" />
+    <script src="../assets/meetsieve.js" defer></script>
+  </head>
+  <body>
+    <div class="app">
+      <aside class="sidebar">
+        <a class="brand" href="../index.html"
+          ><span class="brand-mark">M</span><span>MeetSieve</span></a
+        >
+        <nav class="nav" aria-label="主导航">
+          <a href="../start.html">开始会议</a
+          ><a class="active" aria-current="page" href="../records.html"
+            >会议记录</a
+          ><a href="../people.html">常用小组</a
+          ><a href="../settings.html">设置</a>
+        </nav>
+        <div class="sidebar-foot">
+          <span class="status warn">纪要草稿未确认</span>
+          <p class="meta num">20260731-A7K2-03</p>
+        </div>
+      </aside>
+      <main class="main">
+        <header class="titlebar">
+          <a href="../detail.html">返回会议详情</a
+          ><span class="meta">会议纪要 / 当前版本</span>
+        </header>
+        <div class="content">
+          <section class="page-head">
+            <div>
+              <p class="eyebrow">20260731-A7K2-03</p>
+              <h1>会议纪要版本</h1>
+              <p>
+                编辑当前草稿、确认正式版本，或查看历史。重新生成不会覆盖人工修改。
+              </p>
+            </div>
+            <span class="status warn">人工草稿 v3</span>
+          </section>
+          <div class="notice warn minute-gap-notice">
+            <div>
+              <strong>本版本包含转写缺口提示</strong>
+              <p class="muted num">
+                00:37:14–00:39:02 补转写失败。该范围未作为会议事实生成结论。
+              </p>
+            </div>
+          </div>
+
+          <section class="minute-layout">
+            <article class="card">
+              <div class="minute-toolbar">
+                <div class="minute-summary">
+                  <strong>当前版本 v3</strong
+                  ><span class="meta"
+                    >人工草稿 · 基于 AI 草稿 v2 修改 · 10:42 保存</span
+                  >
+                </div>
+                <div class="tabs" role="tablist" aria-label="纪要查看方式">
+                  <button
+                    class="tab active"
+                    type="button"
+                    role="tab"
+                    aria-selected="true"
+                    aria-controls="minute-editor-panel"
+                  >
+                    编辑</button
+                  ><button
+                    class="tab"
+                    type="button"
+                    role="tab"
+                    aria-selected="false"
+                    tabindex="-1"
+                  >
+                    预览
+                  </button>
+                </div>
+              </div>
+              <label class="label" id="minute-editor-panel"
+                >纪要内容<textarea class="textarea minute-editor">
+# 会议结论
+
+1. Alpha 功能范围保持不变，Windows 真机验证按计划后置。（原始记录 00:12:48）
+2. 会议结束后只由主持人主动生成纪要。（原始记录 00:18:21）
+
+# 按议题组织的讨论内容
+
+## 会议收尾
+
+本地保存与 Codex 结束同步分别展示；外部同步失败不影响本地录音和原始记录。（原始记录 00:23:06）
+
+# 任务与排期
+
+- 8 月 12 日执行 Windows 真机复验。负责人未在会议中明确。（原始记录 00:37:12）
+
+# 参考资料
+
+- Windows-Alpha-验收清单.docx
+
+# 转写缺口
+
+- 00:37:14–00:39:02 补转写失败，本版本未依据该范围生成事实。</textarea>
+              </label>
+              <p class="help">
+                保存修改会创建新的人工草稿版本，旧版本仍可查看和恢复。
+              </p>
+              <div class="minute-actions minute-actions-spaced">
+                <button class="btn btn-primary" type="button">保存修改</button
+                ><button class="btn" type="button">放弃未保存修改</button>
+              </div>
+            </article>
+
+            <aside class="minute-sidebar">
+              <article class="card">
+                <div class="card-head">
+                  <h3>当前版本</h3>
+                  <span class="status warn">有未保存修改</span>
+                </div>
+                <ul class="list system-state-list">
+                  <li class="list-item">
+                    <span>来源</span><strong>人工修改</strong>
+                  </li>
+                  <li class="list-item">
+                    <span>状态</span><span class="status warn">草稿</span>
+                  </li>
+                  <li class="list-item">
+                    <span>文件投影</span><span class="status ok">已刷新</span>
+                  </li>
+                </ul>
+                <div class="minute-actions">
+                  <button
+                    class="btn btn-primary"
+                    type="button"
+                    aria-describedby="confirm-version-help"
+                    disabled
+                  >
+                    确认当前版本</button
+                  ><button class="btn btn-quiet" type="button">
+                    重新生成 AI 草稿
+                  </button>
+                </div>
+                <p class="help" id="confirm-version-help">
+                  请先保存修改，再确认当前版本。新的 AI 草稿只会作为候选。
+                </p>
+              </article>
+              <article class="card">
+                <div class="card-head">
+                  <h3>版本历史</h3>
+                  <a class="btn" href="minutes-history.html">查看全部</a>
+                </div>
+                <div class="version-list">
+                  <div class="version-item is-current">
+                    <div class="version-copy">
+                      <strong>v3 · 人工草稿</strong>
+                      <p class="meta">当前版本 · 10:42</p>
+                    </div>
+                    <span class="status warn">草稿</span>
+                  </div>
+                  <div class="version-item">
+                    <div class="version-copy">
+                      <strong>v2 · AI 草稿</strong>
+                      <p class="meta">10:36</p>
+                    </div>
+                    <span class="status">候选</span>
+                  </div>
+                  <div class="version-item">
+                    <div class="version-copy">
+                      <strong>v1 · 已确认</strong>
+                      <p class="meta">昨天 18:12</p>
+                    </div>
+                    <span class="status ok">已确认</span>
+                  </div>
+                </div>
+              </article>
+            </aside>
+          </section>
+        </div>
+      </main>
+    </div>
+  </body>
+</html>

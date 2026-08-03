@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>正在结束并保存 · Step 8 提案 · MeetSieve</title>
+    <link rel="stylesheet" href="../../style/meet-sieve/tokens.css" />
+    <link rel="stylesheet" href="../assets/meetsieve.css" />
+    <link rel="stylesheet" href="step8-proposal.css" />
+  </head>
+  <body>
+    <div class="app">
+      <aside class="sidebar">
+        <a class="brand" href="../index.html"
+          ><span class="brand-mark">M</span><span>MeetSieve</span></a
+        >
+        <nav class="nav" aria-label="主导航">
+          <a class="active" aria-current="page" href="finalizing.html"
+            >会议收尾中</a
+          >
+          <a href="../records.html">会议记录</a>
+          <a href="../people.html">常用小组</a>
+          <a href="../settings.html">设置</a>
+        </nav>
+        <div class="sidebar-foot">
+          <span class="status warn">正在本地保存</span>
+          <p class="meta num">20260803-A7K2-06</p>
+        </div>
+      </aside>
+      <main class="main">
+        <header class="titlebar">
+          <span class="meta">MeetSieve / 会议收尾</span>
+          <span class="status warn">请保持应用打开</span>
+        </header>
+        <div class="content">
+          <section
+            class="finalization-stage"
+            aria-labelledby="finalization-title"
+          >
+            <div class="finalization-stage-head">
+              <div class="finalization-stage-copy">
+                <p class="eyebrow">20260803-A7K2-06</p>
+                <h1 id="finalization-title">正在结束并保存会议</h1>
+                <p class="muted">
+                  访客入口和录音已停止。录音合并与原始记录完成后，将自动进入会议详情。
+                </p>
+              </div>
+              <span class="status warn">正在合并录音</span>
+            </div>
+            <div
+              class="progress"
+              role="progressbar"
+              aria-label="会议收尾进度"
+              aria-valuemin="0"
+              aria-valuemax="6"
+              aria-valuenow="4"
+            >
+              <span style="--progress: 67%"></span>
+            </div>
+            <span class="meta num">已完成 4 / 6 项 · 00:08</span>
+          </section>
+
+          <section class="operation-layout">
+            <article class="card" aria-labelledby="steps-title">
+              <div class="card-head">
+                <div>
+                  <h2 id="steps-title">本地安全收尾</h2>
+                  <p class="muted">外部补转写和 Codex 同步不会阻塞本地保存。</p>
+                </div>
+              </div>
+              <div class="operation-list">
+                <div class="operation-step is-complete">
+                  <div class="operation-step-main">
+                    <span class="operation-step-index">1</span>
+                    <div class="operation-step-copy">
+                      <strong>停止访客访问</strong
+                      ><span>局域网入口和会议令牌已失效</span>
+                    </div>
+                  </div>
+                  <span class="status ok">已完成</span>
+                </div>
+                <div class="operation-step is-complete">
+                  <div class="operation-step-main">
+                    <span class="operation-step-index">2</span>
+                    <div class="operation-step-copy">
+                      <strong>停止录音采集</strong
+                      ><span>最后一个 WAV 分片已安全关闭</span>
+                    </div>
+                  </div>
+                  <span class="status ok">已完成</span>
+                </div>
+                <div class="operation-step is-complete">
+                  <div class="operation-step-main">
+                    <span class="operation-step-index">3</span>
+                    <div class="operation-step-copy">
+                      <strong>等待尾部转写</strong
+                      ><span>尾部 final 已保存，未覆盖范围已登记</span>
+                    </div>
+                  </div>
+                  <span class="status ok">已完成</span>
+                </div>
+                <div class="operation-step is-current" aria-current="step">
+                  <div class="operation-step-main">
+                    <span class="operation-step-index">4</span>
+                    <div class="operation-step-copy">
+                      <strong>合并并校验录音</strong
+                      ><span>正在生成并核对 recording.wav</span>
+                    </div>
+                  </div>
+                  <span class="status warn">处理中</span>
+                </div>
+                <div class="operation-step">
+                  <div class="operation-step-main">
+                    <span class="operation-step-index">5</span>
+                    <div class="operation-step-copy">
+                      <strong>刷新会议原始记录</strong
+                      ><span>等待录音合并完成</span>
+                    </div>
+                  </div>
+                  <span class="status">等待</span>
+                </div>
+                <div class="operation-step">
+                  <div class="operation-step-main">
+                    <span class="operation-step-index">6</span>
+                    <div class="operation-step-copy">
+                      <strong>确认本地已保存</strong
+                      ><span>完成后进入会议详情</span>
+                    </div>
+                  </div>
+                  <span class="status">等待</span>
+                </div>
+              </div>
+            </article>
+
+            <aside class="stack">
+              <article class="card">
+                <div class="card-head">
+                  <h3>当前状态</h3>
+                  <span class="status warn">收尾中</span>
+                </div>
+                <ul class="list system-state-list">
+                  <li class="list-item">
+                    <span>录音</span><span class="status">已停止</span>
+                  </li>
+                  <li class="list-item">
+                    <span>本地保存</span
+                    ><span class="status warn">正在保存</span>
+                  </li>
+                  <li class="list-item">
+                    <span>实时转写</span><span class="status">已停止</span>
+                  </li>
+                  <li class="list-item">
+                    <span>访客页</span><span class="status">已停止</span>
+                  </li>
+                  <li class="list-item">
+                    <span>Codex</span><span class="status">等待结束同步</span>
+                  </li>
+                </ul>
+              </article>
+              <div class="notice">
+                <span
+                  >本地保存完成后会自动开始缺口补转写。你可以在会议详情中查看或停止。</span
+                >
+              </div>
+            </aside>
+          </section>
+        </div>
+      </main>
+    </div>
+  </body>
+</html>

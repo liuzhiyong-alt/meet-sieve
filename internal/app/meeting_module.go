@@ -3,11 +3,19 @@ package app
 import (
 	"context"
 	"fmt"
+	"io/fs"
+	"net/http"
+	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"time"
 
+	codexagent "meet-sieve/internal/adapter/agent/codex"
 	volcanoasr "meet-sieve/internal/adapter/asr/volcano"
+	fileflash "meet-sieve/internal/adapter/asr/volcano/fileflash"
+	networkadapter "meet-sieve/internal/adapter/network"
 	appbootstrap "meet-sieve/internal/app/bootstrap"
+	"meet-sieve/internal/app/health"
 	transcriptdomain "meet-sieve/internal/domain/transcript"
 	domainworkspace "meet-sieve/internal/domain/workspace"
 	"meet-sieve/internal/infra/clock"
@@ -15,13 +23,28 @@ import (
 	"meet-sieve/internal/infra/database"
 	"meet-sieve/internal/infra/filesystem"
 	"meet-sieve/internal/infra/identity"
+	infraLogger "meet-sieve/internal/infra/logger"
 	"meet-sieve/internal/port"
+	agentrepository "meet-sieve/internal/repository/agent"
+	contentrepository "meet-sieve/internal/repository/content"
+	gaprepository "meet-sieve/internal/repository/gap"
+	guestrepository "meet-sieve/internal/repository/guest"
 	meetingrepository "meet-sieve/internal/repository/meeting"
+	minutesrepository "meet-sieve/internal/repository/minutes"
 	speakerrepository "meet-sieve/internal/repository/speaker"
 	transcriptrepository "meet-sieve/internal/repository/transcript"
+	agentservice "meet-sieve/internal/service/agent"
+	finalizationservice "meet-sieve/internal/service/finalization"
+	gapservice "meet-sieve/internal/service/gap"
+	guestservice "meet-sieve/internal/service/guest"
+	lanservice "meet-sieve/internal/service/lan"
 	meetingservice "meet-sieve/internal/service/meeting"
+	minutesservice "meet-sieve/internal/service/minutes"
+	resourceservice "meet-sieve/internal/service/resource"
 	speakerservice "meet-sieve/internal/service/speaker"
 	transcriptservice "meet-sieve/internal/service/transcript"
+	transporthttp "meet-sieve/internal/transport/http"
+	guesthttp "meet-sieve/internal/transport/http/guest"
 	"meet-sieve/models"
 
 	"gorm.io/gorm"
@@ -41,6 +64,48 @@ type MeetingServices struct {
 	TranscriptRuntime *transcriptservice.MeetingRuntime
 	// TranscriptTimeline 提供可按 seq 恢复的 final/gap 快照。
 	TranscriptTimeline *transcriptservice.TimelineService
+	// LAN 管理网卡、运行时与独立状态轴。
+	LAN *lanservice.Manager
+	// LANRuntime 持有当前进程的会议令牌和 Listener。
+	LANRuntime *lanservice.Runtime
+	// GuestPresence 提供宿主 UI 的 45 秒在线人数。
+	GuestPresence *guesthttp.Presence
+	// GuestUploads 提供宿主取消活动上传的边界。
+	GuestUploads *resourceservice.UploadCoordinator
+	// RecoverAttachments 清理活动会议中仅由应用拥有的附件暂存和孤儿候选。
+	RecoverAttachments func(context.Context) error
+	// AgentSettings 提供 Codex 和唤醒词设置。
+	AgentSettings *agentservice.SettingsService
+	// AgentWakeTest 运行不落盘的真实三次唤醒测试。
+	AgentWakeTest *agentservice.WakeWordTestService
+	// AgentOrchestrator 持有本场唯一 Codex session。
+	AgentOrchestrator *agentservice.Orchestrator
+	// AgentTurns 编排主持人问题、审批和停止。
+	AgentTurns *agentservice.TurnService
+	// AgentRecoveryCommands 投影可信恢复命令。
+	AgentRecoveryCommands *agentservice.RecoveryCommandService
+	// FinalSync 执行不公开回答的 Codex 结束同步。
+	FinalSync *agentservice.FinalSyncService
+	// PostMeeting 串行拥有一场会议的后台补转写与结束同步。
+	PostMeeting *finalizationservice.PostMeetingProcessor
+	// GapRunner 执行一次真实补转写请求。
+	GapRunner *gapservice.Runner
+	// GapRepository 提供页面状态的 SQLite 重建查询。
+	GapRepository *gaprepository.Repository
+	// GapConflicts 查询实时冲突双份证据。
+	GapConflicts *gapservice.ConflictQueryService
+	// GapResolution 原子提交主持人的冲突解决动作。
+	GapResolution *gapservice.ResolutionService
+	// GapClips 为冲突工作台签发不泄漏路径的短期回放 URL。
+	GapClips *gapservice.AudioClipService
+	// MinutesGeneration 执行白名单事实驱动的纪要生成。
+	MinutesGeneration *minutesservice.GenerationService
+	// MinutesVersions 维护人工、确认和恢复版本。
+	MinutesVersions *minutesservice.VersionService
+	// MinutesRepository 提供当前版本与历史只读查询。
+	MinutesRepository *minutesrepository.Repository
+	// MinutesProjector 维护 SQLite current 到 Markdown 的独立投影。
+	MinutesProjector *minutesservice.MinuteProjector
 }
 
 // MeetingModule 延迟装配工作目录相关的 Step 3 服务，并跨 Wails 调用保留唯一录音会话。
@@ -50,19 +115,82 @@ type MeetingModule struct {
 	recordingConfig config.RecordingConfig
 	asrConfig       config.ASRConfig
 	voice           *VoiceModule
+	logger          *infraLogger.AppLogger
+	health          *health.Registry
+	guestAssets     fs.FS
 
-	mu               sync.Mutex
-	reader           *gorm.DB
-	services         *MeetingServices
-	partialPublisher transcriptservice.PartialPublisher
-	statePublisher   transcriptservice.RealtimeStatePublisher
-	speakerPublisher func(meetingID string, trackID string)
-	speakerCancel    context.CancelFunc
+	mu                 sync.Mutex
+	reader             *gorm.DB
+	services           *MeetingServices
+	partialPublisher   transcriptservice.PartialPublisher
+	statePublisher     transcriptservice.RealtimeStatePublisher
+	speakerPublisher   func(meetingID string, trackID string)
+	agentPublisher     func(port.AgentEvent)
+	wakeTestPublisher  func(agentservice.WakeWordTestState)
+	speakerCancel      context.CancelFunc
+	postMeetingCancel  context.CancelFunc
+	finalizationEvents meetingservice.FinalizationEventSink
+	gapEvents          gapservice.EventSink
+	minutesEvents      minutesservice.GenerationEventSink
+	finalSyncEvents    agentservice.FinalSyncEventSink
+}
+
+// SetStep8Publishers 在首次装配前登记四类会后轻量事件出口。
+func (module *MeetingModule) SetStep8Publishers(finalization meetingservice.FinalizationEventSink, gap gapservice.EventSink, minutes minutesservice.GenerationEventSink, finalSync agentservice.FinalSyncEventSink) error {
+	if module == nil {
+		return fmt.Errorf("会议模块不可用")
+	}
+	module.mu.Lock()
+	defer module.mu.Unlock()
+	if module.services != nil {
+		return fmt.Errorf("会议服务已装配，不能更换会后事件发布器")
+	}
+	module.finalizationEvents, module.gapEvents = finalization, gap
+	module.minutesEvents, module.finalSyncEvents = minutes, finalSync
+	return nil
+}
+
+// SetAgentPublishers 在首次装配前登记 AI 和唤醒测试事件发布边界。
+func (module *MeetingModule) SetAgentPublishers(agentPublisher func(port.AgentEvent), wakeTestPublisher func(agentservice.WakeWordTestState)) error {
+	if module == nil {
+		return fmt.Errorf("会议模块不可用")
+	}
+	module.mu.Lock()
+	defer module.mu.Unlock()
+	if module.services != nil {
+		return fmt.Errorf("会议服务已装配，不能更换智能体事件发布器")
+	}
+	module.agentPublisher, module.wakeTestPublisher = agentPublisher, wakeTestPublisher
+	return nil
+}
+
+// SetGuestAssets 在首次服务装配前接入独立 Guest Web 构建产物。
+func (module *MeetingModule) SetGuestAssets(assets fs.FS) error {
+	if module == nil || assets == nil {
+		return fmt.Errorf("访客页面资源不可用")
+	}
+	module.mu.Lock()
+	defer module.mu.Unlock()
+	if module.services != nil {
+		return fmt.Errorf("会议服务已装配，不能更换访客页面资源")
+	}
+	module.guestAssets = assets
+	return nil
 }
 
 // NewMeetingModule 创建会议模块；工作目录 ready 前不访问数据库或麦克风。
-func NewMeetingModule(workspace *appbootstrap.Coordinator, capture port.AudioCapture, recordingConfig config.RecordingConfig, asrConfig config.ASRConfig) *MeetingModule {
-	return &MeetingModule{workspace: workspace, capture: capture, recordingConfig: recordingConfig, asrConfig: asrConfig}
+func NewMeetingModule(
+	workspace *appbootstrap.Coordinator,
+	capture port.AudioCapture,
+	recordingConfig config.RecordingConfig,
+	asrConfig config.ASRConfig,
+	appLogger *infraLogger.AppLogger,
+	registry *health.Registry,
+) *MeetingModule {
+	return &MeetingModule{
+		workspace: workspace, capture: capture, recordingConfig: recordingConfig, asrConfig: asrConfig,
+		logger: appLogger, health: registry,
+	}
 }
 
 // SetVoiceModule 在首次工作目录服务装配前接入异步模型提供器。
@@ -125,6 +253,10 @@ func (module *MeetingModule) Current() (*MeetingServices, error) {
 		module.speakerCancel()
 		module.speakerCancel = nil
 	}
+	if module.postMeetingCancel != nil {
+		module.postMeetingCancel()
+		module.postMeetingCancel = nil
+	}
 	services, err := module.buildServices(reader, transactions)
 	if err != nil {
 		return nil, err
@@ -147,6 +279,28 @@ func (module *MeetingModule) StopSpeakerAutomation() {
 	module.mu.Unlock()
 }
 
+// StopAgentRuntime 停止设置页临时采集和当前会议 Codex 子进程。
+func (module *MeetingModule) StopAgentRuntime(ctx context.Context) {
+	if module == nil {
+		return
+	}
+	module.mu.Lock()
+	services := module.services
+	module.mu.Unlock()
+	if services == nil {
+		return
+	}
+	if services.AgentWakeTest != nil {
+		_ = services.AgentWakeTest.Stop(ctx)
+	}
+	if services.PostMeeting != nil {
+		_ = services.PostMeeting.Stop(ctx)
+	}
+	if services.AgentOrchestrator != nil {
+		_ = services.AgentOrchestrator.Shutdown(ctx)
+	}
+}
+
 // Recover 在业务 UI 开放后对遗留活动会议执行一次幂等文件对账。
 func (module *MeetingModule) Recover(ctx context.Context) ([]meetingservice.RecoveryResult, error) {
 	if module == nil || module.workspace == nil || module.workspace.GetState().Phase != domainworkspace.BootstrapPhaseReady {
@@ -156,7 +310,21 @@ func (module *MeetingModule) Recover(ctx context.Context) ([]meetingservice.Reco
 	if err != nil {
 		return nil, err
 	}
-	return services.Recovery.RecoverInterruptedMeetings(ctx)
+	if services.RecoverAttachments != nil {
+		if err := services.RecoverAttachments(ctx); err != nil {
+			return nil, err
+		}
+	}
+	results, err := services.Recovery.RecoverInterruptedMeetings(ctx)
+	if err != nil {
+		return results, err
+	}
+	if services.PostMeeting != nil {
+		if err := services.PostMeeting.Recover(ctx); err != nil {
+			return results, err
+		}
+	}
+	return results, nil
 }
 
 // FinishActiveMeeting 在应用关闭前复用正常结束流程，不静默丢弃活动录音。
@@ -225,6 +393,137 @@ func (module *MeetingModule) buildServices(reader *gorm.DB, transactions *databa
 	rawRecord := transcriptservice.NewRawRecordProjector(transcriptservice.RawRecordProjectorDependencies{
 		Repository: transcripts, WorkspaceRoot: settings.ActivePath, Debounce: 2 * time.Second,
 	})
+	agentRepository := agentrepository.NewRepository(reader, transactions)
+	agentProvider := codexagent.NewProvider("codex")
+	agentContext := agentservice.NewContextBuilder(agentRepository)
+	agentTurns := agentservice.NewTurnService(agentservice.TurnServiceDependencies{
+		Repository: agentRepository, Context: agentContext, Provider: agentProvider, RawRecord: rawRecord,
+		IDs: identity.NewUUIDGenerator(), Clock: currentClock, Events: agentservice.TurnEventSinkFunc(module.agentPublisher),
+	})
+	agentOrchestrator := agentservice.NewOrchestrator(agentservice.OrchestratorDependencies{
+		Repository: agentRepository, Context: agentContext, Provider: agentProvider, RawRecord: rawRecord,
+		IDs: identity.NewUUIDGenerator(), Clock: currentClock, WorkspaceRoot: settings.ActivePath,
+		Executable: func(ctx context.Context) (string, error) {
+			current, err := agentRepository.GetSettings(ctx)
+			if err != nil || current.CodexExecutablePath == nil {
+				return "", err
+			}
+			return *current.CodexExecutablePath, nil
+		},
+	})
+	agentSettings := agentservice.NewSettingsService(agentRepository, agentProvider, currentClock)
+	agentWakeTest := agentservice.NewWakeWordTestService(agentservice.WakeWordTestDependencies{
+		Guard: agentRepository, Capture: module.capture, Credentials: transcriptSettings.CurrentCredentials,
+		Transcriber: transcriberFactory,
+		WakeWord: func(ctx context.Context) (string, error) {
+			current, err := agentRepository.GetSettings(ctx)
+			return current.WakeWord, err
+		},
+		DeviceID: agentRepository.GetDefaultMicrophoneID, Publish: module.wakeTestPublisher,
+	})
+	wakeObserver := agentservice.NewWakeObserver(agentRepository, agentTurns)
+	agentRecoveryCommands := agentservice.NewRecoveryCommandService(agentRepository, settings.ActivePath)
+	gapRepository := gaprepository.NewRepository(reader, transactions)
+	gapExtractor := gapservice.NewExtractor(gapRepository, settings.ActivePath)
+	gapCommitter := gapservice.NewCompensationCommitter(gapservice.CommitterDependencies{
+		Repository: gapRepository, RawRecord: rawRecord, IDs: identity.NewUUIDGenerator(), Clock: currentClock,
+	})
+	gapRunner := gapservice.NewRunner(gapservice.RunnerDependencies{
+		Repository: gapRepository, Extractor: gapExtractor,
+		Transcriber: fileflash.NewDynamicAdapter(transcriptSettings.CurrentCredentials), Committer: gapCommitter,
+		IDs: identity.NewUUIDGenerator(), Clock: currentClock, Events: module.gapEvents,
+	})
+	gapConflicts := gapservice.NewConflictQueryService(gapRepository)
+	gapResolution := gapservice.NewResolutionService(gapRepository, gapExtractor, rawRecord, identity.NewUUIDGenerator(), currentClock)
+	gapResolution.SetEventSink(module.gapEvents)
+	gapClips, err := gapservice.NewAudioClipService(gapservice.AudioClipDependencies{
+		Repository: gapRepository, WorkspaceRoot: settings.ActivePath, Clock: currentClock,
+	})
+	if err != nil {
+		return nil, err
+	}
+	minutesRepository := minutesrepository.NewRepository(reader, transactions)
+	minutesProjector := minutesservice.NewMinuteProjector(minutesRepository, settings.ActivePath)
+	minutesGeneration := minutesservice.NewGenerationService(minutesservice.GenerationDependencies{
+		Repository: minutesRepository, AgentRepository: agentRepository, Facts: minutesRepository,
+		Provider: agentProvider, RawRecord: rawRecord, Projector: minutesProjector,
+		IDs: identity.NewUUIDGenerator(), Clock: currentClock, Sessions: agentOrchestrator, Events: module.minutesEvents,
+	})
+	minutesVersions := minutesservice.NewVersionService(minutesRepository, repository, minutesProjector, identity.NewUUIDGenerator(), currentClock)
+	minutesVersions.SetEventSink(module.minutesEvents)
+	finalSync := agentservice.NewFinalSyncService(agentservice.FinalSyncDependencies{
+		Repository: agentRepository, Context: agentContext, Provider: agentProvider, RawRecord: rawRecord,
+		Sessions: agentOrchestrator, IDs: identity.NewUUIDGenerator(), Clock: currentClock, Events: module.finalSyncEvents,
+	})
+	recoveryCoordinator := finalizationservice.NewRecoveryCoordinator(gapRepository, minutesRepository, agentRepository, currentClock)
+	postMeeting := finalizationservice.NewPostMeetingProcessor(finalizationservice.ProcessorDependencies{
+		Gaps: gapRunner, Syncer: finalSync, Recovery: recoveryCoordinator,
+	})
+	contentRepository := contentrepository.NewRepository(reader)
+	guestRepository := guestrepository.NewRepository(reader, transactions)
+	if err := guestRepository.RevokeAllActive(context.Background()); err != nil {
+		return nil, fmt.Errorf("撤销上一进程访客会话：%w", err)
+	}
+	uploadCoordinator := resourceservice.NewUploadCoordinator()
+	handlerProxy := &atomicHTTPHandler{}
+	lanRuntime := lanservice.NewRuntime(lanservice.Dependencies{
+		IDs: identity.NewUUIDGenerator(), Handler: handlerProxy,
+		Sessions: guestRepository, Uploads: uploadCoordinator,
+	})
+	networkResolver := networkadapter.NewResolver()
+	lanManager := lanservice.NewManager(networkResolver, lanRuntime, repository, currentClock)
+	sessionService := guestservice.NewSessionService(guestservice.SessionDependencies{
+		Repository: guestRepository, Access: lanRuntime, Clock: currentClock,
+		IDs: identity.NewUUIDGenerator(),
+	})
+	contentService := guestservice.NewContentService(guestservice.ContentDependencies{
+		Repository: contentRepository, Transactions: transactions, Clock: currentClock, IDs: identity.NewUUIDGenerator(),
+		OnPersisted: func(meetingID string) { _ = rawRecord.MarkDirty(meetingID) },
+	})
+	directoryResolver := &meetingDirectoryResolver{repository: repository, workspaceRoot: settings.ActivePath}
+	attachmentService := resourceservice.NewAttachmentService(resourceservice.AttachmentDependencies{
+		Repository: contentRepository, Transactions: transactions, Coordinator: uploadCoordinator,
+		Policy: resourceservice.NewFilePolicy(), Directories: directoryResolver, Clock: currentClock,
+		IDs: identity.NewUUIDGenerator(), AvailableBytes: filesystem.AvailableBytes,
+		MinimumFreeBytes: uint64(module.recordingConfig.MinimumFreeSpaceGiB) << 30,
+		OnPersisted:      func(meetingID string) { _ = rawRecord.MarkDirty(meetingID) },
+	})
+	downloadService := resourceservice.NewDownloadService(contentRepository, directoryResolver, resourceservice.NewFileStore())
+	attachmentRecovery := resourceservice.NewRecovery(contentRepository.ListReferencedSafeNames)
+	recoverAttachments := func(ctx context.Context) error {
+		activeMeetings, err := repository.ListActiveMeetings(ctx)
+		if err != nil {
+			return err
+		}
+		for _, activeMeeting := range activeMeetings {
+			directory, resolveErr := directoryResolver.ResolveMeetingDirectory(ctx, activeMeeting.ID)
+			if resolveErr != nil {
+				return resolveErr
+			}
+			if recoverErr := attachmentRecovery.RecoverMeeting(ctx, activeMeeting.ID, directory); recoverErr != nil {
+				return recoverErr
+			}
+		}
+		return nil
+	}
+	presence := guesthttp.NewPresence()
+	limiter := guesthttp.NewLimiter()
+	appLogger := module.logger
+	if appLogger == nil {
+		appLogger = infraLogger.NewNop()
+	}
+	registry := module.health
+	if registry == nil {
+		registry = health.NewRegistry()
+	}
+	guestEngine := transporthttp.NewGuestEngine(registry, appLogger, guesthttp.RouteDependencies{
+		Sessions: sessionService, Content: contentService, Timeline: guestservice.NewTimelineService(contentRepository),
+		Attachments: attachmentService, Downloads: downloadService, Limiter: limiter, Presence: presence,
+		ExpectedOrigin: func() string { return guesthttp.ExpectedOriginFromJoinURL(lanRuntime.Snapshot().JoinURL) },
+		Generation:     func() string { return lanRuntime.Snapshot().Generation },
+		WebAssets:      module.guestAssets,
+	})
+	handlerProxy.Store(guestEngine)
 	rolling, err := speakerservice.NewRollingBuffer(120 * 16000)
 	if err != nil {
 		return nil, err
@@ -266,6 +565,7 @@ func (module *MeetingModule) buildServices(reader *gorm.DB, transactions *databa
 			// final 提交后留下可恢复的 speaker 事实；模型门禁只影响后续自动匹配。
 			if event.Kind == "utterance.final" && event.EntityID != "" {
 				_, _ = speakerObserver.Observe(context.Background(), event.EntityID)
+				_, _ = wakeObserver.Observe(context.Background(), event.EntityID)
 			}
 		},
 	})
@@ -288,13 +588,25 @@ func (module *MeetingModule) buildServices(reader *gorm.DB, transactions *databa
 		module.capture, maxSamples, checkpointSamples,
 		time.Duration(module.recordingConfig.FirstFrameTimeoutSeconds)*time.Second,
 	)
+	postMeetingContext, cancelPostMeeting := context.WithCancel(context.Background())
+	if err := postMeeting.Start(postMeetingContext); err != nil {
+		cancelPostMeeting()
+		return nil, err
+	}
+	module.postMeetingCancel = cancelPostMeeting
 	runtime := meetingservice.NewRuntimeService(meetingservice.RuntimeDependencies{
 		Meetings: meetings, Repository: repository, Coordinator: coordinator,
 		Capture: module.capture, Clock: currentClock, IDs: ids, WorkspaceRoot: settings.ActivePath,
-		AvailableBytes:    filesystem.AvailableBytes,
-		MinimumFreeBytes:  uint64(module.recordingConfig.MinimumFreeSpaceGiB) << 30,
-		DeviceTestTimeout: time.Duration(module.recordingConfig.FirstFrameTimeoutSeconds) * time.Second,
-		Transcript:        transcriptRuntime,
+		AvailableBytes:     filesystem.AvailableBytes,
+		MinimumFreeBytes:   uint64(module.recordingConfig.MinimumFreeSpaceGiB) << 30,
+		DeviceTestTimeout:  time.Duration(module.recordingConfig.FirstFrameTimeoutSeconds) * time.Second,
+		Transcript:         transcriptRuntime,
+		RawRecord:          rawRecord,
+		LAN:                lanManager,
+		Agent:              agentOrchestrator,
+		AgentTurns:         agentTurns,
+		PostMeeting:        postMeeting,
+		FinalizationEvents: module.finalizationEvents,
 		PersistedPCMObserver: func(frame port.AudioFrame) {
 			_ = writeRollingFrame(rolling, frame)
 		},
@@ -303,7 +615,62 @@ func (module *MeetingModule) buildServices(reader *gorm.DB, transactions *databa
 		Repository: repository, WorkspaceRoot: settings.ActivePath, Clock: currentClock,
 		IDs: identity.NewUUIDGenerator(), CheckpointSamples: checkpointSamples, Transcript: transcriptRecovery,
 	})
-	return &MeetingServices{Meetings: meetings, Runtime: runtime, Recovery: recovery, TranscriptSettings: transcriptSettings, TranscriptRuntime: transcriptRuntime, TranscriptTimeline: transcriptTimeline}, nil
+	return &MeetingServices{
+		Meetings: meetings, Runtime: runtime, Recovery: recovery,
+		TranscriptSettings: transcriptSettings, TranscriptRuntime: transcriptRuntime, TranscriptTimeline: transcriptTimeline,
+		LAN: lanManager, LANRuntime: lanRuntime, GuestPresence: presence, GuestUploads: uploadCoordinator,
+		RecoverAttachments: recoverAttachments,
+		AgentSettings:      agentSettings, AgentWakeTest: agentWakeTest, AgentOrchestrator: agentOrchestrator,
+		AgentTurns: agentTurns, AgentRecoveryCommands: agentRecoveryCommands,
+		FinalSync: finalSync, PostMeeting: postMeeting, GapRunner: gapRunner, GapRepository: gapRepository,
+		GapConflicts: gapConflicts, GapResolution: gapResolution, GapClips: gapClips,
+		MinutesGeneration: minutesGeneration, MinutesVersions: minutesVersions,
+		MinutesRepository: minutesRepository, MinutesProjector: minutesProjector,
+	}, nil
+}
+
+// atomicHTTPHandler 在 LANRuntime 构造后、Start 前原子接入完整 Guest Engine。
+type atomicHTTPHandler struct {
+	target atomic.Value
+}
+
+// Store 设置后续 generation 共用的 Guest HTTP handler。
+func (handler *atomicHTTPHandler) Store(target http.Handler) {
+	if handler != nil && target != nil {
+		handler.target.Store(target)
+	}
+}
+
+// ServeHTTP 把请求转发给已完成装配的 Guest Engine。
+func (handler *atomicHTTPHandler) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
+	if handler == nil {
+		http.NotFound(writer, request)
+		return
+	}
+	target := handler.target.Load()
+	if target == nil {
+		http.NotFound(writer, request)
+		return
+	}
+	target.(http.Handler).ServeHTTP(writer, request)
+}
+
+// meetingDirectoryResolver 只从 SQLite 会议相对目录和已验证工作根构建绝对路径。
+type meetingDirectoryResolver struct {
+	repository    *meetingrepository.Repository
+	workspaceRoot string
+}
+
+// ResolveMeetingDirectory 返回指定会议的可信绝对目录。
+func (resolver *meetingDirectoryResolver) ResolveMeetingDirectory(ctx context.Context, meetingID string) (string, error) {
+	if resolver == nil || resolver.repository == nil || !filepath.IsAbs(resolver.workspaceRoot) {
+		return "", fmt.Errorf("会议目录解析器不可用")
+	}
+	meeting, err := resolver.repository.GetMeeting(ctx, meetingID)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(resolver.workspaceRoot, filepath.FromSlash(meeting.RelativeDir)), nil
 }
 
 // runSpeakerPool 以固定轮询补拉 SQLite 任务；取消时释放 ticker 和全部 worker。

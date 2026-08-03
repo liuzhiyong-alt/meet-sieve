@@ -8,17 +8,24 @@ import { useWorkspaceStore } from '../../stores/workspace'
 import { useVoiceModelStore } from '../../stores/voiceModel'
 import { useASRStore } from '../../stores/asr'
 import { useMeetingStore } from '../../stores/meeting'
+import { useAgentStore } from '../../stores/agent'
 
 const workspace = useWorkspaceStore()
 const voiceModel = useVoiceModelStore()
 const asr = useASRStore()
 const meeting = useMeetingStore()
+const agent = useAgentStore()
 const path = ref('')
 const appID = ref('')
 const accessToken = ref('')
 const confirmClearASR = ref(false)
-const activeSection = ref<'general' | 'asr' | 'voice-model'>('general')
+const codexPath = ref('')
+const wakeWord = ref('AI 助手')
+const activeSection = ref<'general' | 'asr' | 'codex' | 'voice-model'>(
+  'general',
+)
 let stopVoiceModelListener: (() => void) | undefined
+let stopWakeTestListener: (() => void) | undefined
 const modelStateText = computed(() => {
   if (voiceModel.model.usable) return '已安装并可用'
   if (voiceModel.model.state === 'initializing') return '正在初始化'
@@ -32,20 +39,43 @@ onMounted(async () => {
   stopVoiceModelListener = EventsOn('voice.model.changed', () => {
     void voiceModel.refresh()
   })
+  stopWakeTestListener = EventsOn(
+    'settings.wake_word_test.changed',
+    (event) => {
+      agent.applyWakeTestEvent(event)
+    },
+  )
   await Promise.all([
     workspace.loadSettings(),
     voiceModel.refresh(),
     asr.loadSettings(),
+    agent.loadSettings(),
   ])
   path.value = workspace.settings.savedPath
+  codexPath.value = agent.settings.codex_executable_path
+  wakeWord.value = agent.settings.wake_word
 })
 
-onBeforeUnmount(() => stopVoiceModelListener?.())
+onBeforeUnmount(() => {
+  stopVoiceModelListener?.()
+  stopWakeTestListener?.()
+  if (agent.wakeTest.state === 'running') void agent.stopWakeTest()
+})
 
 watch(
   () => workspace.settings.savedPath,
   (savedPath) => {
     if (!workspace.saving) path.value = savedPath
+  },
+)
+
+watch(
+  () => agent.settings.updated_at,
+  () => {
+    if (!agent.saving) {
+      codexPath.value = agent.settings.codex_executable_path
+      wakeWord.value = agent.settings.wake_word
+    }
   },
 )
 
@@ -76,6 +106,16 @@ async function clearASRCredentials(): Promise<void> {
   confirmClearASR.value = false
   await asr.clearLegacy()
 }
+
+/** saveAgentSettings 保存后继续由后端规范化值回填表单。 */
+async function saveAgentSettings(): Promise<void> {
+  await agent.saveSettings(wakeWord.value, codexPath.value)
+}
+
+/** startWakeTest 使用已保存 ASR 凭据和系统当前麦克风。 */
+async function startWakeTest(): Promise<void> {
+  await agent.startWakeTest()
+}
 </script>
 
 <template>
@@ -92,6 +132,12 @@ async function clearASRCredentials(): Promise<void> {
         @click="activeSection = 'asr'"
       >
         实时转写
+      </button>
+      <button
+        :class="{ 'is-current': activeSection === 'codex' }"
+        @click="activeSection = 'codex'"
+      >
+        Codex
       </button>
       <button
         :class="{ 'is-current': activeSection === 'voice-model' }"
@@ -342,6 +388,158 @@ async function clearASRCredentials(): Promise<void> {
           "
           @click="confirmClearASR = true"
           >清除已保存凭证</BaseButton
+        >
+      </div>
+    </section>
+    <section
+      v-else-if="activeSection === 'codex'"
+      class="ms-card ms-settings-card"
+      aria-labelledby="codex-settings-title"
+      :aria-busy="agent.loading || agent.saving || agent.probing"
+    >
+      <div class="ms-card-head">
+        <div>
+          <p class="ms-eyebrow">本机配置</p>
+          <h1 id="codex-settings-title">Codex</h1>
+        </div>
+        <span class="ms-status">{{ agent.settings.availability.message }}</span>
+      </div>
+      <p class="ms-lead">Codex 使用你本机已有的登录、工具与原生权限配置。</p>
+
+      <AppNotice
+        v-if="agent.notice"
+        variant="info"
+        title="已保存"
+        aria-live="polite"
+      >
+        {{ agent.notice }}
+      </AppNotice>
+      <AppNotice
+        v-if="agent.errorMessage"
+        variant="danger"
+        title="Codex 操作未完成"
+        role="alert"
+      >
+        {{ agent.errorMessage }}
+      </AppNotice>
+
+      <div class="ms-field">
+        <label for="codex-executable-path">可执行文件路径</label>
+        <input
+          id="codex-executable-path"
+          v-model="codexPath"
+          class="ms-input ms-input--mono"
+          autocomplete="off"
+          placeholder="codex"
+          :disabled="agent.saving"
+        />
+        <p class="ms-help">
+          留空时使用系统 PATH 中的 codex；不支持在这里附加命令参数。
+        </p>
+      </div>
+
+      <div class="ms-model-facts">
+        <p>
+          <span>登录状态</span
+          ><strong>{{
+            agent.settings.availability.account_state === 'logged_in'
+              ? '已登录，由 Codex 管理'
+              : agent.settings.availability.account_state === 'logged_out'
+                ? '尚未登录'
+                : '尚未检测'
+          }}</strong>
+        </p>
+        <p>
+          <span>协议状态</span
+          ><strong>{{
+            agent.settings.availability.protocol_state === 'compatible'
+              ? `兼容 ${agent.settings.availability.version || '当前版本'}`
+              : agent.settings.availability.protocol_state === 'incompatible'
+                ? '不兼容'
+                : '尚未检测'
+          }}</strong>
+        </p>
+        <p><span>工具能力</span><strong>MCP、Apps 与本机配置</strong></p>
+      </div>
+      <AppNotice variant="info" title="权限与审批">
+        MeetSieve 沿用 Codex 原生
+        sandbox、审批频率和工具权限。需要审批时，只在主持人桌面端显示本次请求。
+      </AppNotice>
+
+      <div class="ms-field">
+        <label for="agent-wake-word">AI 唤醒词</label>
+        <input
+          id="agent-wake-word"
+          v-model="wakeWord"
+          class="ms-input"
+          maxlength="16"
+          aria-describedby="wake-word-help"
+        />
+        <p id="wake-word-help" class="ms-help">
+          只在主持人机器的 ASR final 句首生效；建议使用 3 至 8 个中文字符。
+        </p>
+      </div>
+      <div class="ms-wake-test" aria-live="polite">
+        <div class="ms-card-head">
+          <strong>真实唤醒测试</strong>
+          <span class="ms-status"
+            >{{ agent.wakeTest.matched }}/{{ agent.wakeTest.required }}</span
+          >
+        </div>
+        <div
+          class="ms-wake-progress"
+          :aria-label="`三次唤醒测试已通过 ${agent.wakeTest.matched} 次`"
+        >
+          <span
+            v-for="index in 3"
+            :key="index"
+            :class="{ 'is-ok': index <= agent.wakeTest.matched }"
+            >第 {{ index }} 次{{
+              index <= agent.wakeTest.matched ? '通过' : '待测试'
+            }}</span
+          >
+        </div>
+        <p class="ms-help">
+          {{
+            agent.wakeTest.state === 'passed'
+              ? '唤醒词测试通过。'
+              : agent.wakeTest.state === 'running'
+                ? '请连续三次说出完整唤醒词；其他 final 会重新计数。'
+                : '测试会使用真实麦克风和已保存的实时转写凭据，不写入录音文件。'
+          }}
+        </p>
+      </div>
+      <div class="ms-actions">
+        <BaseButton
+          variant="primary"
+          :busy="agent.saving"
+          :disabled="agent.saving"
+          @click="saveAgentSettings"
+          >保存更改</BaseButton
+        >
+        <BaseButton
+          variant="quiet"
+          :busy="agent.probing"
+          :disabled="agent.probing"
+          @click="agent.probe()"
+          >重新检测</BaseButton
+        >
+        <BaseButton
+          v-if="agent.wakeTest.state !== 'running'"
+          variant="quiet"
+          :disabled="
+            Boolean(
+              meeting.current &&
+              !['ended', 'interrupted'].includes(
+                meeting.current.lifecycle_state,
+              ),
+            )
+          "
+          @click="startWakeTest"
+          >开始 3 次唤醒测试</BaseButton
+        >
+        <BaseButton v-else variant="quiet" @click="agent.stopWakeTest()"
+          >停止测试</BaseButton
         >
       </div>
     </section>

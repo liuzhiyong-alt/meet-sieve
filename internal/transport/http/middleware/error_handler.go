@@ -1,6 +1,8 @@
 package middleware
 
 import (
+	"strings"
+
 	"meet-sieve/internal/infra/apperr"
 	infraLogger "meet-sieve/internal/infra/logger"
 	"meet-sieve/internal/transport/http/response"
@@ -31,7 +33,11 @@ func ErrorHandler(appLogger *infraLogger.AppLogger) gin.HandlerFunc {
 			ctx.Abort()
 			return
 		}
-		response.Failure(ctx, RequestIDFrom(ctx), appErr)
+		if strings.HasPrefix(ctx.Request.URL.Path, "/api/v1/guest") {
+			response.GuestFailure(ctx, RequestIDFrom(ctx), appErr)
+		} else {
+			response.Failure(ctx, RequestIDFrom(ctx), appErr)
+		}
 		ctx.Abort()
 	}
 }

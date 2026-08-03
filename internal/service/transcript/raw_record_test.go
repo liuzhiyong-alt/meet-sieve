@@ -2,6 +2,7 @@ package transcript
 
 import (
 	"bytes"
+	"strings"
 	"testing"
 	"time"
 
@@ -54,5 +55,55 @@ func TestRenderRawRecord_AddsCorrectionNoteOnlyWhenNeeded(t *testing.T) {
 	}
 	if bytes.Count(content, []byte("本记录包含人工校对")) != 1 || !bytes.Contains(content, []byte("00:00:00 · 张三")) {
 		t.Fatalf("校对说明或当前 speaker 错误：%s", content)
+	}
+}
+
+// TestRenderRawRecord_MixesGuestContentBySeqWithoutFakeSamples 验证消息、链接和附件使用 occurred_at 且与转写按 seq 混排。
+func TestRenderRawRecord_MixesGuestContentBySeqWithoutFakeSamples(t *testing.T) {
+	startedAt := time.Date(2026, 8, 2, 9, 0, 0, 0, time.UTC)
+	content, err := RenderRawRecord(RawRecordInput{
+		Subject: "Guest", MeetingNo: "MS-20260802-0003", StartedAt: startedAt, RealtimeState: "进行中",
+		Entries: []RawRecordEntry{
+			{Seq: 1, Kind: "utterance.final", StartSample: 0, EndSample: 16000, Text: "开始", SessionOrder: 1},
+			{Seq: 2, Kind: "message.created", OccurredAt: startedAt.Add(2 * time.Second).UnixMilli(), DisplayName: "王_*", Text: "> 消息"},
+			{Seq: 3, Kind: "resource.link", OccurredAt: startedAt.Add(3 * time.Second).UnixMilli(), DisplayName: "访客", URL: "https://example.com/a_(b)"},
+			{Seq: 4, Kind: "resource.attachment", OccurredAt: startedAt.Add(4 * time.Second).UnixMilli(), DisplayName: "访客", OriginalName: "设计_[1].pdf", MediaType: "application/pdf", SizeBytes: 12, SHA256: strings.Repeat("a", 64), Description: "# 说明"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("渲染 Guest 原始记录失败：%v", err)
+	}
+	text := string(content)
+	ordered := []string{"00:00:00", "00:00:02 · 会议消息", "00:00:03 · 链接", "00:00:04 · 附件"}
+	last := -1
+	for _, marker := range ordered {
+		index := strings.Index(text, marker)
+		if index <= last {
+			t.Fatalf("原始记录未按 seq 混排：marker=%q\n%s", marker, text)
+		}
+		last = index
+	}
+	if strings.Contains(text, "meeting/") || !strings.Contains(text, `王\_\*`) || !strings.Contains(text, `\> 消息`) {
+		t.Fatalf("Guest 字段转义或敏感路径契约不正确：%s", text)
+	}
+}
+
+// TestRenderRawRecord_ProjectsAIWithoutPartialOrInternalPayload 验证 AI 事实标记来源且失败不含正文。
+func TestRenderRawRecord_ProjectsAIWithoutPartialOrInternalPayload(t *testing.T) {
+	startedAt := time.Date(2026, 8, 2, 9, 0, 0, 0, time.UTC)
+	content, err := RenderRawRecord(RawRecordInput{
+		Subject: "AI 记录", MeetingNo: "MS-20260802-0004", StartedAt: startedAt, RealtimeState: "进行中",
+		Entries: []RawRecordEntry{
+			{Seq: 1, Kind: "ai.question", OccurredAt: startedAt.UnixMilli(), Text: "比较方案"},
+			{Seq: 2, Kind: "ai.answer", OccurredAt: startedAt.Add(time.Second).UnixMilli(), Text: "这是 AI 建议"},
+			{Seq: 3, Kind: "ai.failed", OccurredAt: startedAt.Add(2 * time.Second).UnixMilli(), Text: "不得投影的 partial"},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(content)
+	if !strings.Contains(text, "主持人提问") || !strings.Contains(text, "AI 回答（未经人工确认）") || !strings.Contains(text, "AI 任务失败，未产生公开回答") || strings.Contains(text, "不得投影的 partial") {
+		t.Fatalf("AI 原始记录投影错误：%s", text)
 	}
 }

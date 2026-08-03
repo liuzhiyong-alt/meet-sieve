@@ -6,7 +6,10 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	"meet-sieve/internal/adapter/agent/codex"
 )
 
 type schemaMetadata struct {
@@ -28,8 +31,12 @@ func TestGeneratedSchema_HashesMatchMetadata(t *testing.T) {
 	if err := json.Unmarshal(data, &metadata); err != nil {
 		t.Fatalf("解析 Codex metadata 失败：%v", err)
 	}
-	if metadata.CodexVersion == "" || len(metadata.Methods) != 2 {
+	if metadata.CodexVersion == "" || len(metadata.Methods) < 8 {
 		t.Fatalf("Codex metadata 缺少版本或 method：%+v", metadata)
+	}
+	contract := codex.RequiredSchemaContract()
+	if metadata.CodexVersion != contract.Version || len(metadata.Files) != len(contract.Files) {
+		t.Fatalf("metadata 与运行时必要契约不一致：metadata=%d runtime=%d", len(metadata.Files), len(contract.Files))
 	}
 
 	for relativePath, expected := range metadata.Files {
@@ -41,6 +48,10 @@ func TestGeneratedSchema_HashesMatchMetadata(t *testing.T) {
 		actual := hex.EncodeToString(digest[:])
 		if actual != expected {
 			t.Fatalf("schema %s 哈希漂移：got %s, want %s", relativePath, actual, expected)
+		}
+		runtimeExpected, exists := contract.Files[filepath.ToSlash(strings.TrimPrefix(relativePath, "schema/"))]
+		if !exists || runtimeExpected != expected {
+			t.Fatalf("schema %s 未进入运行时必要契约或哈希不一致", relativePath)
 		}
 	}
 }

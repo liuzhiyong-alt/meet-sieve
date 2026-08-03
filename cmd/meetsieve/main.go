@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"embed"
+	"io/fs"
 	"time"
 
 	application "meet-sieve/internal/app"
@@ -15,9 +16,15 @@ import (
 	"meet-sieve/internal/infra/singleinstance"
 	"meet-sieve/internal/port"
 	peoplerepository "meet-sieve/internal/repository/people"
+	agentservice "meet-sieve/internal/service/agent"
+	gapservice "meet-sieve/internal/service/gap"
+	lanservice "meet-sieve/internal/service/lan"
 	meetingservice "meet-sieve/internal/service/meeting"
+	minutesservice "meet-sieve/internal/service/minutes"
 	peopleservice "meet-sieve/internal/service/people"
+	resourceservice "meet-sieve/internal/service/resource"
 	transcriptservice "meet-sieve/internal/service/transcript"
+	guesthttp "meet-sieve/internal/transport/http/guest"
 	wailstransport "meet-sieve/internal/transport/wails"
 
 	"github.com/google/uuid"
@@ -76,7 +83,12 @@ func run() error {
 		bootstrap.Dependencies.AudioEnumerator,
 		bootstrap.Config.Recording,
 		bootstrap.Config.ASR,
+		bootstrap.Logger,
+		bootstrap.Health,
 	)
+	if guestAssets, guestAssetsErr := fs.Sub(assets, "frontend/dist/guest"); guestAssetsErr == nil {
+		_ = meetingModule.SetGuestAssets(guestAssets)
+	}
 	_ = meetingModule.SetTranscriptPublishers(
 		func(event port.TranscriptionEvent) {
 			if wailsContext == nil {
@@ -108,6 +120,79 @@ func run() error {
 			wailstransport.SpeakerChangedEventDTO{MeetingID: meetingID, TrackID: trackID},
 		))
 	})
+	_ = meetingModule.SetAgentPublishers(
+		func(event port.AgentEvent) {
+			if wailsContext == nil {
+				return
+			}
+			if event.Type == port.AgentEventTimelineChanged {
+				name := "meeting.agent.timeline.changed"
+				runtime.EventsEmit(wailsContext, name, wailstransport.NewEvent(name, time.Now(), 0, wailstransport.MapAgentEventDTO(event)))
+				return
+			}
+			name := "meeting.agent.changed"
+			if event.Type == port.AgentEventAnswerDelta {
+				name = "meeting.agent.delta"
+			} else if event.Type == port.AgentEventApprovalRequested {
+				name = "meeting.agent.approval.requested"
+			}
+			runtime.EventsEmit(wailsContext, name, wailstransport.NewEvent(name, time.Now(), 0, wailstransport.MapAgentEventDTO(event)))
+		},
+		func(state agentservice.WakeWordTestState) {
+			if wailsContext != nil {
+				runtime.EventsEmit(wailsContext, "settings.wake_word_test.changed", wailstransport.NewEvent(
+					"settings.wake_word_test.changed", time.Now(), 0, wailstransport.MapWakeWordTestStateDTO(state),
+				))
+			}
+		},
+	)
+	_ = meetingModule.SetStep8Publishers(
+		meetingservice.FinalizationEventSinkFunc(func(state meetingservice.FinalizationSnapshot) {
+			emitStep8Event(wailsContext, "meeting.finalization.changed", wailstransport.Step8ChangedEventDTO{
+				MeetingID: state.MeetingID, State: state.State, Stage: string(state.Stage), ErrorCode: state.ErrorCode,
+				Revision: state.Revision, Retryable: state.State == "failed",
+			})
+		}),
+		gapservice.EventSinkFunc(func(meetingID string) {
+			if wailsContext == nil {
+				return
+			}
+			services, serviceErr := meetingModule.Current()
+			if serviceErr != nil {
+				return
+			}
+			state, stateErr := services.GapRepository.ReadState(context.Background(), meetingID)
+			if stateErr != nil {
+				return
+			}
+			completed := 0
+			var revision uint64
+			for _, item := range state.Gaps {
+				if item.State == "completed" {
+					completed++
+				}
+				if item.UpdatedAt > int64(revision) {
+					revision = uint64(item.UpdatedAt)
+				}
+			}
+			emitStep8Event(wailsContext, "meeting.gap.changed", wailstransport.Step8ChangedEventDTO{
+				MeetingID: meetingID, State: state.Aggregate, Revision: revision,
+				Completed: completed, Total: len(state.Gaps), Retryable: state.Aggregate == "failed" || state.Aggregate == "conflict",
+			})
+		}),
+		minutesservice.GenerationEventSinkFunc(func(meetingID string, state minutesservice.GenerationState) {
+			emitStep8Event(wailsContext, "meeting.minutes.changed", wailstransport.Step8ChangedEventDTO{
+				MeetingID: meetingID, State: state.State, ErrorCode: state.ErrorCode,
+				Revision: state.Revision, Retryable: state.State == "failed" || state.State == "timed_out" || state.State == "cancelled",
+			})
+		}),
+		agentservice.FinalSyncEventSinkFunc(func(state agentservice.FinalSyncState) {
+			emitStep8Event(wailsContext, "meeting.agent.final_sync.changed", wailstransport.Step8ChangedEventDTO{
+				MeetingID: state.MeetingID, State: state.State, ErrorCode: state.ErrorCode,
+				Revision: state.Revision, Retryable: state.State == "unsynced",
+			})
+		}),
+	)
 	desktopApp.AttachMeetingModule(meetingModule)
 	voiceModule, voiceModuleErr := application.NewVoiceModule()
 	if voiceModuleErr != nil {
@@ -192,6 +277,17 @@ func run() error {
 		func(ctx context.Context, name string, data any) { runtime.EventsEmit(ctx, name, data) },
 		boundary,
 	)
+	lanBinding := wailstransport.NewLANBinding(
+		func() (*lanservice.Manager, *guesthttp.Presence, *resourceservice.UploadCoordinator, *meetingservice.Service, error) {
+			services, serviceErr := meetingModule.Current()
+			if serviceErr != nil {
+				return nil, nil, nil, nil, serviceErr
+			}
+			return services.LAN, services.GuestPresence, services.GuestUploads, services.Meetings, nil
+		},
+		func() context.Context { return wailsContext },
+		boundary,
+	)
 	asrBinding := wailstransport.NewASRBinding(
 		func() (*transcriptservice.SettingsService, error) {
 			services, serviceErr := meetingModule.Current()
@@ -206,6 +302,48 @@ func run() error {
 				return nil, nil, serviceErr
 			}
 			return services.TranscriptTimeline, services.TranscriptRuntime, nil
+		},
+		func() context.Context { return wailsContext }, boundary,
+	)
+	agentBinding := wailstransport.NewAgentBinding(
+		func() (wailstransport.AgentServices, error) {
+			services, serviceErr := meetingModule.Current()
+			if serviceErr != nil {
+				return wailstransport.AgentServices{}, serviceErr
+			}
+			return wailstransport.AgentServices{
+				Settings: services.AgentSettings, WakeTest: services.AgentWakeTest, Session: services.AgentOrchestrator,
+				Turns: services.AgentTurns, Recovery: services.AgentRecoveryCommands,
+			}, nil
+		},
+		func() context.Context { return wailsContext }, boundary,
+	)
+	finalizationBinding := wailstransport.NewFinalizationBinding(
+		func() (wailstransport.FinalizationServices, error) {
+			services, serviceErr := meetingModule.Current()
+			if serviceErr != nil {
+				return wailstransport.FinalizationServices{}, serviceErr
+			}
+			return wailstransport.FinalizationServices{Runtime: services.Runtime, FinalSync: services.FinalSync}, nil
+		},
+		func() context.Context { return wailsContext }, boundary,
+	)
+	gapBinding := wailstransport.NewGapBinding(
+		func() (wailstransport.GapServices, error) {
+			services, serviceErr := meetingModule.Current()
+			if serviceErr != nil {
+				return wailstransport.GapServices{}, serviceErr
+			}
+			return wailstransport.GapServices{Repository: services.GapRepository, Processor: services.PostMeeting, Conflicts: services.GapConflicts, Resolution: services.GapResolution, Clips: services.GapClips}, nil
+		}, boundary,
+	)
+	minutesBinding := wailstransport.NewMinutesBinding(
+		func() (wailstransport.MinutesServices, error) {
+			services, serviceErr := meetingModule.Current()
+			if serviceErr != nil {
+				return wailstransport.MinutesServices{}, serviceErr
+			}
+			return wailstransport.MinutesServices{Repository: services.MinutesRepository, Generation: services.MinutesGeneration, Versions: services.MinutesVersions, Projector: services.MinutesProjector}, nil
 		},
 		func() context.Context { return wailsContext }, boundary,
 	)
@@ -224,7 +362,13 @@ func run() error {
 		MinWidth:  1024,
 		MinHeight: 720,
 		AssetServer: &assetserver.Options{
-			Assets: assets, Handler: wailstransport.NewAudioClipAssetHandler(correctionProvider),
+			Assets: assets, Handler: wailstransport.NewAudioClipAssetHandler(correctionProvider, func() (*gapservice.AudioClipService, error) {
+				services, serviceErr := meetingModule.Current()
+				if serviceErr != nil {
+					return nil, serviceErr
+				}
+				return services.GapClips, nil
+			}),
 		},
 		BackgroundColour: &options.RGBA{R: 27, G: 38, B: 54, A: 1},
 		OnStartup: func(ctx context.Context) {
@@ -245,7 +389,12 @@ func run() error {
 			voiceModelBinding,
 			voiceBinding,
 			meetingBinding,
+			lanBinding,
 			asrBinding,
+			agentBinding,
+			finalizationBinding,
+			gapBinding,
+			minutesBinding,
 			correctionBinding,
 		},
 	})
@@ -259,4 +408,12 @@ func run() error {
 		)
 	}
 	return err
+}
+
+// emitStep8Event 统一发布会后版本化 envelope；nil context 时安全忽略。
+func emitStep8Event(ctx context.Context, name string, data wailstransport.Step8ChangedEventDTO) {
+	if ctx == nil {
+		return
+	}
+	runtime.EventsEmit(ctx, name, wailstransport.NewEvent(name, time.Now(), data.Revision, data))
 }

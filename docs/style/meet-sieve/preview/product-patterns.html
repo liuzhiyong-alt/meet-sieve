@@ -9,7 +9,7 @@
   <body>
     <main class="preview">
       <header class="preview-head">
-        <p class="meta">MEETSIEVE DESIGN SYSTEM · V1.1.0</p>
+        <p class="meta">MEETSIEVE DESIGN SYSTEM · V1.4.0</p>
         <h1>Product Patterns</h1>
         <p>没有 UI 图时，先匹配成熟度，再使用现有组件表达业务状态。</p>
         <nav class="preview-nav" aria-label="设计系统预览">
@@ -119,7 +119,85 @@
           </div>
           <p class="muted">本地保存完成前不能把会议报告为已保存。</p>
         </div>
-        <p class="maturity">design-required</p>
+        <p class="maturity">
+          existing · step8-proposal/finalizing.html ·
+          step8-proposal/finalizing-failed.html
+        </p>
+      </section>
+
+      <section class="preview-section">
+        <h2>补转写冲突校对</h2>
+        <div class="grid grid-2">
+          <div class="card stack">
+            <div class="row-between">
+              <strong class="type-mono">00:37:14–00:37:31</strong>
+              <span class="status warning">有重叠</span>
+            </div>
+            <div class="notice warning">
+              <span>确认前，两份结果都不会覆盖对方。</span>
+            </div>
+            <p>实时转写：我们计划在八月十二日复验 Windows 真机。</p>
+            <p>文件补转写：我们计划在 8 月 12 日复验 Windows 真机。</p>
+          </div>
+          <div class="card stack">
+            <label class="choice">
+              <input type="radio" name="gap-resolution-preview" />
+              <span
+                ><strong>保留当前记录</strong><br /><span class="muted"
+                  >忽略重叠的文件文字</span
+                ></span
+              >
+            </label>
+            <label class="choice">
+              <input type="radio" name="gap-resolution-preview" checked />
+              <span
+                ><strong>使用文件补转写</strong><br /><span class="muted"
+                  >原始实时文字仍保留在修改历史中</span
+                ></span
+              >
+            </label>
+            <label class="choice">
+              <input type="radio" name="gap-resolution-preview" />
+              <span
+                ><strong>手动修改</strong><br /><span class="muted"
+                  >根据录音输入最终文字</span
+                ></span
+              >
+            </label>
+          </div>
+        </div>
+        <p class="maturity">existing · step8-proposal/gap-conflict.html</p>
+      </section>
+
+      <section class="preview-section">
+        <h2>会议纪要版本</h2>
+        <div class="grid grid-2">
+          <div class="card stack">
+            <div class="row-between">
+              <div>
+                <strong>当前版本 v3</strong>
+                <div class="meta">人工草稿 · 基于 AI 草稿 v2 修改</div>
+              </div>
+              <span class="status warning">有未保存修改</span>
+            </div>
+            <div class="notice warning">
+              <span>补转写失败范围未作为会议事实生成结论。</span>
+            </div>
+            <button class="btn btn-primary" disabled>确认当前版本</button>
+          </div>
+          <div class="card stack">
+            <div class="row-between">
+              <strong>历史版本 v1</strong>
+              <span class="status success">已确认</span>
+            </div>
+            <p class="muted">历史内容保持只读。恢复会复制出新的当前版本。</p>
+            <button class="btn btn-primary">恢复为新版本</button>
+          </div>
+        </div>
+        <p class="maturity">
+          existing · step8-proposal/minutes-workspace.html ·
+          step8-proposal/minutes-history.html
+        </p>
       </section>
 
       <section class="preview-section">
@@ -133,12 +211,34 @@
             <span class="meta">AI 回答 · 正在生成</span>
             <div class="notice info">
               <strong>AI 处理时间较长</strong>
-              <span>录音和本地保存不受影响。</span>
+              <span
+                >录音和本地保存不受影响。成功回答会公开到局域网访客页。</span
+              >
               <button class="btn btn-quiet">停止回答</button>
             </div>
           </article>
         </div>
-        <p class="maturity">derived</p>
+        <p class="maturity">existing · step7-proposal/live-agent-busy.html</p>
+      </section>
+
+      <section class="preview-section">
+        <h2>Codex 等待主持人审批</h2>
+        <div class="card stack">
+          <div class="row-between">
+            <strong>Codex 请求控制浏览器</strong>
+            <span class="status warning">等待主持人</span>
+          </div>
+          <div class="notice warning">
+            <span>局域网访客不能查看或处理审批，录音与实时转写继续运行。</span>
+          </div>
+          <div class="row">
+            <button class="btn">拒绝</button>
+            <button class="btn btn-primary">允许本次操作</button>
+          </div>
+        </div>
+        <p class="maturity">
+          existing · step7-proposal/live-agent-approval.html
+        </p>
       </section>
 
       <section class="preview-section">

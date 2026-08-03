@@ -517,6 +517,33 @@ a {
   font-size: var(--ms-text-xs);
 }
 
+.approval-summary {
+  display: grid;
+  gap: var(--ms-space-3);
+  margin: 0;
+}
+
+.approval-summary > div {
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr);
+  gap: var(--ms-space-4);
+}
+
+.approval-summary dt {
+  color: var(--ms-text-muted);
+  font-size: var(--ms-text-xs);
+  font-weight: 600;
+}
+
+.approval-summary dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.modal-actions-preview {
+  justify-content: flex-end;
+}
+
 @media (max-width: 760px) {
   .preview {
     padding: var(--ms-space-5) var(--ms-space-4);

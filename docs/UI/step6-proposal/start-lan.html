@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>创建会议 · 局域网提案 · MeetSieve</title>
+    <link rel="stylesheet" href="../../style/meet-sieve/tokens.css" />
+    <link rel="stylesheet" href="../assets/meetsieve.css" />
+    <link rel="stylesheet" href="step6-proposal.css" />
+    <script src="../assets/meetsieve.js" defer></script>
+  </head>
+  <body>
+    <div class="app">
+      <aside class="sidebar">
+        <a class="brand" href="../index.html"
+          ><span class="brand-mark">M</span><span>MeetSieve</span></a
+        >
+        <nav class="nav" aria-label="主导航">
+          <a class="active" aria-current="page" href="start-lan.html"
+            >开始会议</a
+          ><a href="../records.html">会议记录</a
+          ><a href="../people.html">常用小组</a
+          ><a href="../settings.html">设置</a>
+        </nav>
+        <div class="sidebar-foot">
+          <span class="status warn">请确认局域网</span>
+        </div>
+      </aside>
+      <main class="main">
+        <header class="titlebar">
+          <span class="meta">创建会议</span>
+          <div class="window-controls" aria-hidden="true">
+            <i></i><i></i><i></i>
+          </div>
+        </header>
+        <div class="content">
+          <section class="page-head">
+            <div>
+              <p class="eyebrow">快速开始</p>
+              <h1>谁会参加这场会议？</h1>
+              <p>
+                先确定参会人，并确认这次会议是否允许同一 Wi-Fi 的访客发送资料。
+              </p>
+            </div>
+            <a class="btn" href="../index.html">取消</a>
+          </section>
+          <section class="split">
+            <div class="card">
+              <div class="card-head">
+                <h2>参会人</h2>
+                <button class="btn btn-quiet" type="button">
+                  添加临时成员
+                </button>
+              </div>
+              <label class="label"
+                >常用小组<select class="select">
+                  <option>产品周会 · 5 人</option>
+                  <option>不使用小组</option>
+                </select></label
+              >
+              <div class="stack" style="margin-top: var(--ms-space-4)">
+                <label class="choice"
+                  ><input type="checkbox" checked /><span class="avatar"
+                    >刘</span
+                  ><span
+                    ><strong>刘毅</strong
+                    ><small class="help" style="display: block"
+                      >声纹可用</small
+                    ></span
+                  ></label
+                ><label class="choice"
+                  ><input type="checkbox" checked /><span class="avatar"
+                    >陈</span
+                  ><span
+                    ><strong>陈然</strong
+                    ><small class="help" style="display: block"
+                      >声纹可用</small
+                    ></span
+                  ></label
+                >
+              </div>
+              <button
+                class="btn"
+                data-advanced-toggle
+                type="button"
+                style="margin-top: var(--ms-space-5)"
+              >
+                收起高级设置
+              </button>
+              <div data-advanced-panel style="margin-top: var(--ms-space-5)">
+                <div class="grid grid-2">
+                  <label class="label"
+                    >会议主题（可选）<input
+                      class="field"
+                      value="AI 会议助手产品评审" /></label
+                  ><label class="label"
+                    >会议号<input
+                      class="field num"
+                      value="20260802-A7K2-04" /></label
+                  ><label class="label"
+                    >麦克风<select class="select">
+                      <option>MacBook Pro 麦克风</option>
+                    </select></label
+                  >
+                  <div class="label">
+                    <span>局域网访客页</span>
+                    <div class="row-between choice">
+                      <span>允许同一 Wi-Fi 发送资料</span
+                      ><button
+                        class="toggle on"
+                        type="button"
+                        role="switch"
+                        aria-checked="true"
+                        aria-label="允许局域网访客页"
+                      ></button>
+                    </div>
+                  </div>
+                </div>
+                <div class="card" style="margin-top: var(--ms-space-4)">
+                  <div class="card-head">
+                    <div class="lan-card-copy">
+                      <h3>局域网连接</h3>
+                      <p class="muted">已选择默认路由对应的私有网络。</p>
+                    </div>
+                    <span class="status warn">开始后启动</span>
+                  </div>
+                  <label class="label"
+                    >使用的网络<select class="select">
+                      <option>Wi-Fi · 192.168.1.18（推荐）</option>
+                      <option>USB 10/100/1000 LAN · 10.0.0.24</option>
+                    </select></label
+                  >
+                  <div
+                    class="notice warn"
+                    style="margin-top: var(--ms-space-4)"
+                  >
+                    <div>
+                      <strong>只在可信的私有网络使用</strong>
+                      <p class="muted">
+                        局域网页面使用 HTTP。公共 Wi-Fi
+                        中的其他设备可能观察网络流量。
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <aside class="card">
+              <p class="meta">开始前检查</p>
+              <ul class="list">
+                <li class="list-item">
+                  <span>工作目录</span><span class="status ok">可写</span>
+                </li>
+                <li class="list-item">
+                  <span>麦克风</span><span class="status ok">正常</span>
+                </li>
+                <li class="list-item">
+                  <span>实时转写</span><span class="status ok">已连接</span>
+                </li>
+                <li class="list-item">
+                  <span>Codex</span><span class="status ok">可用</span>
+                </li>
+                <li class="list-item">
+                  <span>局域网</span><span class="status warn">等待启动</span>
+                </li>
+              </ul>
+              <a
+                class="btn btn-primary"
+                href="live-lan.html"
+                style="width: 100%; margin-top: var(--ms-space-6)"
+                >开始会议</a
+              >
+            </aside>
+          </section>
+        </div>
+      </main>
+    </div>
+  </body>
+</html>

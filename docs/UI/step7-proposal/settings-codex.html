@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Codex 设置 · Step 7 提案 · MeetSieve</title>
+    <link rel="stylesheet" href="../assets/meetsieve.css" />
+    <link rel="stylesheet" href="step7-proposal.css" />
+    <script src="../assets/meetsieve.js" defer></script>
+  </head>
+  <body class="page-settings">
+    <div class="app">
+      <aside class="sidebar"><a class="brand" href="../index.html"><span class="brand-mark">M</span><span>MeetSieve</span></a><nav class="nav" aria-label="主导航"><a href="../start.html">开始会议</a><a href="../records.html">会议记录</a><a href="../people.html">常用小组</a><a class="active" aria-current="page" href="settings-codex.html">设置</a></nav><div class="sidebar-foot"><span class="status ok">配置已保存</span></div></aside>
+      <main class="main"><header class="titlebar"><span class="meta">设置</span><div class="window-controls" aria-hidden="true"><i></i><i></i><i></i></div></header><div class="content">
+        <section class="page-head"><div><p class="eyebrow">本机配置</p><h1>设置</h1><p>Codex 使用你本机已有的登录、工具与原生权限配置。</p></div><button class="btn btn-primary" type="button" data-action-feedback="设置已保存。">保存更改</button></section>
+        <section class="settings-layout">
+          <nav class="settings-nav" aria-label="设置分类"><a class="tab" href="../settings.html#general">通用</a><a class="tab" href="../settings.html#audio">录音</a><a class="tab" href="../settings.html#asr">实时转写</a><a class="tab active" aria-current="page" href="settings-codex.html">Codex</a><a class="tab" href="../settings.html#voice-model">声纹模型</a></nav>
+          <div class="settings-content">
+            <section class="card" aria-labelledby="codex-settings-title">
+              <div class="card-head"><h2 id="codex-settings-title">Codex</h2><span class="status ok">可以使用</span></div>
+              <div class="setting-section"><label class="label">可执行文件路径<input class="field num" value="/opt/homebrew/bin/codex" /></label><p class="help">每次会议使用一个独立的 Codex app-server。应用退出时会关闭对应进程。</p></div>
+              <div class="setting-section"><div class="setting-row"><div><h3>连接检测</h3><p class="help">只检测可执行文件、登录与协议兼容性，不读取或展示账号秘密。</p></div><button class="btn btn-quiet" type="button" data-action-feedback="Codex 检测完成，可以使用。">重新检测</button></div><ul class="list"><li class="list-item"><span>登录状态</span><strong>已登录，由 Codex 管理</strong></li><li class="list-item"><span>协议状态</span><strong>兼容 Codex 0.146.0</strong></li><li class="list-item"><span>工具能力</span><strong>MCP、Apps 与本机配置</strong></li></ul></div>
+              <div class="setting-section"><div class="permission-note"><h3>权限与审批</h3><p class="muted">MeetSieve 沿用 Codex 原生 sandbox、审批频率和工具权限，不增加第二套权限设置。</p></div><div class="notice" style="margin-top:12px"><span>需要审批时，只在主持人桌面端显示 Codex 原生请求。原生已允许的操作直接继续。</span></div></div>
+              <div class="setting-section"><label class="label">AI 唤醒词<input class="field" value="AI 助手" aria-describedby="wake-help" /></label><p class="help" id="wake-help">唤醒词只在主持人机器的语音转写句首生效。建议使用 3 至 8 个中文字符。</p><div class="setting-row" style="margin-top:12px"><button class="btn btn-quiet" type="button">继续 3 次唤醒测试</button><span class="status warn">已通过 2 次</span></div><div class="wake-progress" aria-label="三次唤醒测试已通过两次"><span class="wake-check ok">第 1 次通过</span><span class="wake-check ok">第 2 次通过</span><span class="wake-check">第 3 次待测试</span></div></div>
+            </section>
+          </div>
+        </section>
+      </div></main>
+    </div>
+  </body>
+</html>

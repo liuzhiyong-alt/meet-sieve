@@ -228,8 +228,14 @@ func convertRawRecordRows(rows []transcriptrepository.RawRecordRow, sessions []m
 	gapCount := 0
 	for _, row := range rows {
 		entry := RawRecordEntry{
-			Seq: row.Seq, Kind: row.Kind, StartSample: row.StartSample, EndSample: row.EndSample,
+			Seq: row.Seq, Kind: rawRecordKind(row), OccurredAt: row.OccurredAt,
+			StartSample: row.StartSample, EndSample: row.EndSample,
 			Text: row.CurrentText, Speaker: resolveRawRecordSpeaker(row), SessionOrder: sessionOrders[row.ASRSessionID],
+			DisplayName: row.GuestDisplayName, URL: row.SourceURL, OriginalName: row.OriginalName,
+			MediaType: row.MediaType, SizeBytes: row.SizeBytes, SHA256: row.SHA256, Description: row.Description,
+		}
+		if strings.HasPrefix(row.Kind, "ai.") {
+			entry.Text = row.AgentText
 		}
 		if row.Kind == "asr.gap" {
 			gapCount++
@@ -237,6 +243,20 @@ func convertRawRecordRows(rows []transcriptrepository.RawRecordRow, sessions []m
 		entries = append(entries, entry)
 	}
 	return entries, gapCount
+}
+
+// rawRecordKind 把 resource.created 根据已完成实体字段区分为链接或附件。
+func rawRecordKind(row transcriptrepository.RawRecordRow) string {
+	if row.Kind != "resource.created" {
+		return row.Kind
+	}
+	if row.SourceURL != "" {
+		return "resource.link"
+	}
+	if row.OriginalName != "" {
+		return "resource.attachment"
+	}
+	return "resource.incomplete"
 }
 
 // resolveRawRecordSpeaker 按当前 participant、unknown cluster、session fallback 的优先级返回展示名。
