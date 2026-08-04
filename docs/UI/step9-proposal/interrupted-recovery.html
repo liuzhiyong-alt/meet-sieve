@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>中断恢复 · Step 9 提案 · MeetSieve</title>
+    <link rel="stylesheet" href="../../style/meet-sieve/tokens.css" />
+    <link rel="stylesheet" href="../assets/meetsieve.css" />
+    <link rel="stylesheet" href="step9-proposal.css" />
+  </head>
+  <body>
+    <div class="app">
+      <aside class="sidebar">
+        <a class="brand" href="../index.html"
+          ><span class="brand-mark">M</span><span>MeetSieve</span></a
+        >
+        <nav class="nav" aria-label="主导航">
+          <a href="../start.html">开始会议</a
+          ><a class="active" aria-current="page" href="../records.html"
+            >会议记录</a
+          ><a href="../people.html">常用小组</a
+          ><a href="../settings.html">设置</a>
+        </nav>
+        <div class="sidebar-foot">
+          <span class="status bad">本地保存未完成</span>
+          <p class="meta num">20260803-A7K2-08</p>
+        </div>
+      </aside>
+      <main class="main">
+        <header class="titlebar">
+          <a href="../records.html">← 返回会议记录</a
+          ><button class="btn btn-quiet" type="button">导出本场诊断</button>
+        </header>
+        <div class="content">
+          <section class="page-head">
+            <div>
+              <p class="eyebrow">中断恢复 · 20260803-A7K2-08</p>
+              <h1>恢复已保存的会议数据</h1>
+              <p>
+                应用异常退出后，原会议不能继续录音。现有分片、事件和转写仍可整理为一场中断会议。
+              </p>
+            </div>
+            <span class="status bad">需要恢复</span>
+          </section>
+          <section class="recovery-layout">
+            <article class="card recovery-summary">
+              <div class="notice warn" role="status">
+                <strong>恢复不会重新开始原会议</strong
+                ><span
+                  >恢复完成后可查看已有内容；如需继续讨论，请基于本场创建新会议。</span
+                >
+              </div>
+              <div class="metric-grid">
+                <div class="metric">
+                  <span class="meta">录音分片</span><strong>12</strong
+                  ><span class="muted">42 分 18 秒</span>
+                </div>
+                <div class="metric">
+                  <span class="meta">会议事件</span><strong>286</strong
+                  ><span class="muted">已写入数据库</span>
+                </div>
+                <div class="metric">
+                  <span class="meta">待确认缺口</span><strong>2</strong
+                  ><span class="muted">共 1 分 24 秒</span>
+                </div>
+              </div>
+              <div class="stage-list" aria-label="恢复步骤">
+                <div class="stage-row">
+                  <div class="stage-copy">
+                    <strong>核对已关闭录音分片</strong
+                    ><span class="muted">检查范围、文件头与连续性</span>
+                  </div>
+                  <span class="status ok">可恢复</span>
+                </div>
+                <div class="stage-row">
+                  <div class="stage-copy">
+                    <strong>重建完整录音</strong
+                    ><span class="muted">尚未生成通过校验的 recording.wav</span>
+                  </div>
+                  <span class="status warn">等待</span>
+                </div>
+                <div class="stage-row">
+                  <div class="stage-copy">
+                    <strong>刷新原始记录</strong
+                    ><span class="muted">保留中断标记与转写缺口</span>
+                  </div>
+                  <span class="status">等待</span>
+                </div>
+              </div>
+              <div class="recovery-actions">
+                <button class="btn btn-primary" type="button">
+                  开始恢复已有数据</button
+                ><button class="btn btn-quiet" type="button">
+                  复制诊断编号
+                </button>
+              </div>
+              <p class="help num">诊断编号：MS-REC-20260803-0017</p>
+            </article>
+            <aside class="stack">
+              <article class="card">
+                <div class="card-head">
+                  <h3>中断位置</h3>
+                  <span class="status warn">录音中</span>
+                </div>
+                <ul class="list">
+                  <li class="list-item">
+                    <span>异常退出时间</span
+                    ><strong class="num">10:12:48</strong>
+                  </li>
+                  <li class="list-item">
+                    <span>最后录音分片</span
+                    ><strong class="num">00:42:18</strong>
+                  </li>
+                  <li class="list-item">
+                    <span>最后转写事件</span
+                    ><strong class="num">seq 286</strong>
+                  </li>
+                  <li class="list-item">
+                    <span>失败阶段</span><strong>未执行收尾</strong>
+                  </li>
+                </ul>
+              </article>
+              <button class="btn" type="button">基于本场创建新会议</button>
+            </aside>
+          </section>
+        </div>
+      </main>
+    </div>
+  </body>
+</html>

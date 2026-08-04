@@ -78,23 +78,26 @@ describe('asr store', () => {
     expect(store.timeline).toHaveLength(0)
   })
 
-  it('does not send saved masks back as credentials', async () => {
+  it('saves only APP Key changes and never sends the saved mask', async () => {
     bindings.SaveASRSettings.mockResolvedValue({
       code: 200,
       data: {
-        mode: 'legacy',
-        app_id_configured: true,
-        access_token_configured: true,
+        api_key_configured: true,
+        api_key_mask: '••••5678',
+        requires_api_key_upgrade: false,
       },
     })
     const store = useASRStore()
-    await store.saveLegacy('', '')
+    await store.saveAPIKey('')
 
     expect(bindings.SaveASRSettings).toHaveBeenCalledWith(
-      expect.objectContaining({
-        app_id: { action: 'keep', value: '' },
-        access_token: { action: 'keep', value: '' },
-      }),
+      expect.objectContaining({ api_key: { action: 'keep', value: '' } }),
+    )
+    expect(bindings.SaveASRSettings.mock.calls[0]?.[0]).not.toHaveProperty(
+      'mode',
+    )
+    expect(bindings.SaveASRSettings.mock.calls[0]?.[0]).not.toHaveProperty(
+      'app_id',
     )
   })
 })

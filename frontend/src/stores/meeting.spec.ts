@@ -68,4 +68,73 @@ describe('meeting store', () => {
     expect(store.members).toHaveLength(1)
     expect(store.microphones[0]?.id).toBe('device-1')
   })
+
+  it('loads the create screen projection only once while it remains current', async () => {
+    meetingBindings.GetCreateDraft.mockResolvedValue({
+      code: 200,
+      data: {
+        suggested_meeting_no: '20260801-ABCD-02',
+        default_subject: '未命名会议',
+      },
+    })
+    peopleBindings.GetMeetingPeopleOptions.mockResolvedValue({
+      code: 200,
+      data: { groups: [], members: [] },
+    })
+    voiceBindings.ListInputDevices.mockResolvedValue({
+      code: 200,
+      data: [],
+    })
+
+    const store = useMeetingStore()
+    await store.loadCreateScreen()
+    await store.loadCreateScreen()
+
+    expect(meetingBindings.GetCreateDraft).toHaveBeenCalledTimes(1)
+    expect(peopleBindings.GetMeetingPeopleOptions).toHaveBeenCalledTimes(1)
+    expect(voiceBindings.ListInputDevices).toHaveBeenCalledTimes(1)
+  })
+
+  it('only exposes record-only retry for registered realtime ASR start errors', async () => {
+    meetingBindings.StartMeeting.mockResolvedValue({
+      code: 403,
+      errorCode: 'ASR_AUTH_FAILED',
+      message: '实时转写凭据无效或服务未开通',
+    })
+    const store = useMeetingStore()
+
+    await store.startMeeting({
+      meetingNo: 'M-01',
+      suggestedMeetingNo: 'M-01',
+      subject: '产品评审',
+      memberIds: ['member-1'],
+      temporaryNames: [],
+      microphoneId: 'mic-1',
+      asrMode: 'realtime',
+      lanEnabled: false,
+      lanInterfaceId: '',
+    })
+
+    expect(store.errorCode).toBe('ASR_AUTH_FAILED')
+    expect(store.canRetryRecordOnly).toBe(true)
+
+    meetingBindings.StartMeeting.mockResolvedValue({
+      code: 500,
+      errorCode: 'WORKSPACE_UNAVAILABLE',
+      message: '工作目录不可用',
+    })
+    await store.startMeeting({
+      meetingNo: 'M-01',
+      suggestedMeetingNo: 'M-01',
+      subject: '产品评审',
+      memberIds: ['member-1'],
+      temporaryNames: [],
+      microphoneId: 'mic-1',
+      asrMode: 'realtime',
+      lanEnabled: false,
+      lanInterfaceId: '',
+    })
+
+    expect(store.canRetryRecordOnly).toBe(false)
+  })
 })

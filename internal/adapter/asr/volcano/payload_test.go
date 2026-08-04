@@ -11,18 +11,17 @@ import (
 	"meet-sieve/internal/port"
 )
 
-// TestBuildHeaders 验证实时协议只发送官方明确支持的 legacy Header。
+// TestBuildHeaders 验证实时协议只发送新版 APP Key Header，不再携带旧版凭据头。
 func TestBuildHeaders(t *testing.T) {
-	legacy, err := BuildHeaders(Credentials{Mode: transcriptdomain.AuthModeLegacy, AppID: "app-id", AccessToken: "access-token"}, DefaultResourceID, "connect-id")
+	headers, err := BuildHeaders(Credentials{Mode: transcriptdomain.AuthModeAPIKey, APIKey: "api-key"}, DefaultResourceID, "connect-id")
 	if err != nil {
-		t.Fatalf("构造 legacy Header 失败：%v", err)
+		t.Fatalf("构造 APP Key Header 失败：%v", err)
 	}
-	if legacy.Get("X-Api-App-Key") != "app-id" || legacy.Get("X-Api-Access-Key") != "access-token" || legacy.Get("X-Api-Key") != "" {
-		t.Fatalf("legacy Header 错误：%v", safeHeaderKeys(legacy))
+	if headers.Get("X-Api-Key") != "api-key" || headers.Get("X-Api-Resource-Id") != DefaultResourceID || headers.Get("X-Api-Connect-Id") != "connect-id" {
+		t.Fatalf("APP Key Header 错误：%v", safeHeaderKeys(headers))
 	}
-	apiKey, err := BuildHeaders(Credentials{Mode: transcriptdomain.AuthModeAPIKey, APIKey: "api-key"}, DefaultResourceID, "connect-id")
-	if err == nil || apiKey != nil {
-		t.Fatalf("未经官方实时协议证明的 API Key 不得构造握手 Header：%v", safeHeaderKeys(apiKey))
+	if headers.Get("X-Api-App-Key") != "" || headers.Get("X-Api-Access-Key") != "" {
+		t.Fatalf("新版连接不得携带旧版凭据 Header：%v", safeHeaderKeys(headers))
 	}
 }
 

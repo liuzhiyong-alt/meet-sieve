@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>存储与诊断 · Step 9 提案 · MeetSieve</title>
+    <link rel="stylesheet" href="../../style/meet-sieve/tokens.css" />
+    <link rel="stylesheet" href="../assets/meetsieve.css" />
+    <link rel="stylesheet" href="step9-proposal.css" />
+  </head>
+  <body class="page-settings">
+    <div class="app">
+      <aside class="sidebar">
+        <a class="brand" href="../index.html"
+          ><span class="brand-mark">M</span><span>MeetSieve</span></a
+        >
+        <nav class="nav" aria-label="主导航">
+          <a href="../start.html">开始会议</a
+          ><a href="../records.html">会议记录</a
+          ><a href="../people.html">常用小组</a
+          ><a class="active" aria-current="page" href="../settings.html"
+            >设置</a
+          >
+        </nav>
+        <div class="sidebar-foot">
+          <span class="status warn">下次启动切换目录</span>
+        </div>
+      </aside>
+      <main class="main">
+        <header class="titlebar">
+          <span class="meta">设置 / 通用</span
+          ><span class="status ok">配置已保存</span>
+        </header>
+        <div class="content">
+          <section class="page-head">
+            <div>
+              <p class="eyebrow">本机配置</p>
+              <h1>设置</h1>
+              <p>每个分类独立保存。工作目录和存储诊断位于“通用”。</p>
+            </div>
+          </section>
+          <section class="settings-layout">
+            <nav class="settings-nav" aria-label="设置分类">
+              <a class="tab active" href="#general">通用</a
+              ><a class="tab" href="#audio">录音</a
+              ><a class="tab" href="#asr">实时转写</a
+              ><a class="tab" href="#codex">Codex</a
+              ><a class="tab" href="#voice">声纹模型</a>
+            </nav>
+            <div class="settings-content stack">
+              <section class="card">
+                <div class="card-head">
+                  <h2>会议工作目录</h2>
+                  <span class="status warn">下次启动生效</span>
+                </div>
+                <div class="path-pair">
+                  <span class="meta">当前正在使用</span
+                  ><strong class="path-value">/Users/liu/MeetSieve</strong>
+                </div>
+                <hr class="rule" />
+                <div class="path-pair">
+                  <span class="meta">下次启动使用</span
+                  ><strong class="path-value"
+                    >/Volumes/Meetings/MeetSieve</strong
+                  >
+                </div>
+                <div class="notice warn">
+                  <span
+                    >MeetSieve
+                    不会复制、移动、合并或删除旧目录。退出应用并通过操作系统复制完整目录后，再启动
+                    MeetSieve。</span
+                  >
+                </div>
+                <div class="storage-actions">
+                  <button class="btn btn-quiet" type="button">
+                    选择其他目录</button
+                  ><button class="btn btn-primary" type="button" disabled>
+                    已保存
+                  </button>
+                </div>
+              </section>
+              <section class="card storage-summary">
+                <div class="card-head">
+                  <div>
+                    <p class="meta">存储与诊断</p>
+                    <h2>工作目录占用</h2>
+                  </div>
+                  <button class="btn btn-quiet" type="button">重新扫描</button>
+                </div>
+                <div class="metric-grid">
+                  <div class="metric">
+                    <span class="meta">可用空间</span><strong>186 GB</strong
+                    ><span class="muted">磁盘共 494 GB</span>
+                  </div>
+                  <div class="metric">
+                    <span class="meta">会议数据</span><strong>12.8 GB</strong
+                    ><span class="muted">工作目录</span>
+                  </div>
+                  <div class="metric">
+                    <span class="meta">会议数量</span><strong>48</strong
+                    ><span class="muted">不自动清理</span>
+                  </div>
+                </div>
+                <div class="storage-bar" aria-label="存储分类">
+                  <span style="--storage-width: 68%"></span
+                  ><span class="is-muted" style="--storage-width: 20%"></span
+                  ><span class="is-warn" style="--storage-width: 12%"></span>
+                </div>
+                <div class="storage-list">
+                  <div class="storage-row">
+                    <span>录音</span><strong class="num">9.6 GB</strong>
+                  </div>
+                  <div class="storage-row">
+                    <span>附件</span><strong class="num">2.4 GB</strong>
+                  </div>
+                  <div class="storage-row">
+                    <span>数据库与备份</span><strong class="num">620 MB</strong>
+                  </div>
+                  <div class="storage-row">
+                    <span>派生与临时文件</span
+                    ><strong class="num">180 MB</strong>
+                  </div>
+                  <div class="storage-row">
+                    <span>日志（单独统计）</span
+                    ><strong class="num">84 MB</strong>
+                  </div>
+                  <div class="storage-row">
+                    <span>声纹模型（单独统计）</span
+                    ><strong class="num">126 MB</strong>
+                  </div>
+                </div>
+                <div class="storage-actions">
+                  <button class="btn" type="button">查看占用最多的会议</button
+                  ><button class="btn btn-quiet" type="button">
+                    打开日志目录</button
+                  ><button class="btn btn-quiet" type="button">
+                    导出全局诊断
+                  </button>
+                </div>
+              </section>
+            </div>
+          </section>
+        </div>
+      </main>
+    </div>
+  </body>
+</html>

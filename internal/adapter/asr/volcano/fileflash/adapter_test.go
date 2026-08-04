@@ -33,8 +33,8 @@ func TestAdapter_UsesFixedProtocolAndNormalizesSegments(t *testing.T) {
 		if request.Header.Get("X-Api-Resource-Id") != ResourceID || request.Header.Get("X-Api-Request-Id") != "11111111-1111-4111-8111-111111111111" || request.Header.Get("X-Api-Sequence") != "-1" {
 			t.Errorf("固定 Header 错误：%v", request.Header)
 		}
-		if request.Header.Get("X-Api-App-Key") != "app" || request.Header.Get("X-Api-Access-Key") != "token" {
-			t.Error("legacy 鉴权 Header 缺失")
+		if request.Header.Get("X-Api-Key") != "api-key" || request.Header.Get("X-Api-App-Key") != "" || request.Header.Get("X-Api-Access-Key") != "" {
+			t.Error("APP Key 鉴权 Header 错误")
 		}
 		body, err := io.ReadAll(request.Body)
 		if err != nil {
@@ -69,7 +69,7 @@ func TestAdapter_UsesFixedProtocolAndNormalizesSegments(t *testing.T) {
 
 	client := server.Client()
 	client.Timeout = 5 * time.Second
-	adapter := newAdapter(transcriptdomain.Credentials{Mode: transcriptdomain.AuthModeLegacy, AppID: "app", AccessToken: "token"}, server.URL+"/api/v3/auc/bigmodel/recognize/flash", client)
+	adapter := newAdapter(transcriptdomain.Credentials{Mode: transcriptdomain.AuthModeAPIKey, APIKey: "api-key"}, server.URL+"/api/v3/auc/bigmodel/recognize/flash", client)
 	result, err := adapter.Transcribe(context.Background(), port.FileTranscriptionRequest{
 		MeetingID: "meeting", RequestID: "11111111-1111-4111-8111-111111111111", AudioPath: path,
 		AudioSHA256: digest, CoreStartSample: 0, CoreEndSample: 16000,
@@ -103,6 +103,30 @@ func TestAdapter_TreatsNoSpeechAsSuccessfulResult(t *testing.T) {
 	})
 	if err != nil || !result.NoSpeech || len(result.Segments) != 0 {
 		t.Fatalf("静音结果错误：result=%+v err=%v", result, err)
+	}
+}
+
+// TestAdapter_RejectsLegacyCredentials 验证文件补录不会回退到旧版鉴权 Header。
+func TestAdapter_RejectsLegacyCredentials(t *testing.T) {
+	_, path, digest := writeTestWAV(t, 1600)
+	serverCalled := false
+	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		serverCalled = true
+	}))
+	t.Cleanup(server.Close)
+	adapter := newAdapter(transcriptdomain.Credentials{Mode: transcriptdomain.AuthModeLegacy, APIKey: "legacy-placeholder"}, server.URL, server.Client())
+
+	_, err := adapter.Transcribe(context.Background(), port.FileTranscriptionRequest{
+		MeetingID: "meeting", RequestID: "33333333-3333-4333-8333-333333333333", AudioPath: path,
+		AudioSHA256: digest, CoreStartSample: 0, CoreEndSample: 1600,
+		AudioStartSample: 0, AudioEndSample: 1600, SampleRate: 16000,
+	})
+	var appError *apperr.AppError
+	if !errors.As(err, &appError) || appError.ErrorCode != apperr.CodeASRSettingsInvalid.ErrorCode {
+		t.Fatalf("旧版凭据应被拒绝：%v", err)
+	}
+	if serverCalled {
+		t.Fatal("拒绝旧版凭据后不得发送网络请求")
 	}
 }
 

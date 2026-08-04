@@ -11,8 +11,12 @@ func TestAuthModeAndRuntimeConfig(t *testing.T) {
 	if _, err := AuthMode("unknown").Transport(); err == nil {
 		t.Fatal("未知鉴权方式不得猜测 transport")
 	}
-	if _, err := AuthModeAPIKey.Transport(); err == nil {
-		t.Fatal("API Key 未获实时协议证明前不得套用 Seed transport")
+	transport, err := AuthModeAPIKey.Transport()
+	if err != nil || transport != TransportSeedV1 {
+		t.Fatalf("APP Key 应使用已验证的 Seed transport：transport=%s err=%v", transport, err)
+	}
+	if _, err = AuthModeLegacy.Transport(); err == nil {
+		t.Fatal("旧版鉴权不得继续进入实时转写运行时")
 	}
 }
 

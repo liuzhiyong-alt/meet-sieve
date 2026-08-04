@@ -175,5 +175,5 @@ func (session *wakeTestSession) stopCount() int {
 }
 
 func validWakeTestCredentials(context.Context) (transcriptdomain.Credentials, error) {
-	return transcriptdomain.Credentials{Mode: transcriptdomain.AuthModeLegacy, AppID: "app", AccessToken: "token"}, nil
+	return transcriptdomain.Credentials{Mode: transcriptdomain.AuthModeAPIKey, APIKey: "test-key"}, nil
 }

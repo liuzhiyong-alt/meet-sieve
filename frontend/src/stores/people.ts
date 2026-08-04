@@ -3,13 +3,11 @@ import { defineStore } from 'pinia'
 import {
   CreateGroup,
   CreateMember,
-  ArchiveMember,
   DeleteGroup,
   DeleteMember,
   ListGroups,
   ListMembers,
   UpdateGroup,
-  UpdateMember,
 } from '../../wailsjs/go/wails/PeopleBinding'
 
 export interface MemberProjection {
@@ -89,19 +87,7 @@ export const usePeopleStore = defineStore('people', {
       await this.refresh()
       return true
     },
-    /** updateMember 保存成员名称和备注。 */
-    async updateMember(
-      id: string,
-      name: string,
-      notes: string,
-    ): Promise<boolean> {
-      return this.mutate(UpdateMember(id, { name, notes }))
-    },
-    /** archiveMember 归档成员并保留历史会议引用。 */
-    async archiveMember(id: string): Promise<boolean> {
-      return this.mutate(ArchiveMember(id))
-    },
-    /** deleteMember 永久删除后端确认从未被历史引用的成员。 */
+    /** deleteMember 删除当前成员资料并保留不可改写的历史会议事实。 */
     async deleteMember(id: string): Promise<boolean> {
       return this.mutate(DeleteMember(id))
     },

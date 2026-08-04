@@ -45,13 +45,17 @@ func (repository *GroupRepository) Create(ctx context.Context, tx *gorm.DB, grou
 }
 
 // Update 更新小组基础资料并用提交顺序替换全部当前成员关系。
-func (repository *GroupRepository) Update(ctx context.Context, tx *gorm.DB, group models.Group, members []models.GroupMember) (models.Group, bool, error) {
+func (repository *GroupRepository) Update(ctx context.Context, tx *gorm.DB, group models.Group, members []models.GroupMember, expectedRevision int64) (models.Group, bool, error) {
 	if tx == nil {
 		return models.Group{}, false, fmt.Errorf("修改小组：事务不能为空")
 	}
-	result := tx.WithContext(ctx).
+	query := tx.WithContext(ctx).
 		Model(&models.Group{}).
-		Where("id = ? AND archived_at IS NULL", group.ID).
+		Where("id = ? AND archived_at IS NULL", group.ID)
+	if expectedRevision > 0 {
+		query = query.Where("updated_at = ?", expectedRevision)
+	}
+	result := query.
 		Updates(map[string]any{
 			"name":                group.Name,
 			"name_normalized":     group.NameNormalized,

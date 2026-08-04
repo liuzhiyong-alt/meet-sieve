@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>删除未完成 · Step 9 提案 · MeetSieve</title>
+    <link rel="stylesheet" href="../../style/meet-sieve/tokens.css" />
+    <link rel="stylesheet" href="../assets/meetsieve.css" />
+    <link rel="stylesheet" href="step9-proposal.css" />
+  </head>
+  <body>
+    <div class="app">
+      <aside class="sidebar">
+        <a class="brand" href="../index.html"
+          ><span class="brand-mark">M</span><span>MeetSieve</span></a
+        >
+        <nav class="nav" aria-label="主导航">
+          <a href="../start.html">开始会议</a
+          ><a class="active" aria-current="page" href="../records.html"
+            >会议记录</a
+          ><a href="../people.html">常用小组</a
+          ><a href="../settings.html">设置</a>
+        </nav>
+        <div class="sidebar-foot">
+          <span class="status bad">删除未完成</span>
+          <p class="meta num">20260729-A7K2-01</p>
+        </div>
+      </aside>
+      <main class="main">
+        <header class="titlebar">
+          <a href="../records.html">← 返回会议记录</a
+          ><button class="btn btn-quiet" type="button">导出本场诊断</button>
+        </header>
+        <div class="content">
+          <section class="page-head">
+            <div>
+              <p class="eyebrow">整场会议删除</p>
+              <h1>删除未完成</h1>
+              <p>
+                会议不会被报告为已删除。重试只处理原删除清单中尚未完成的项目。
+              </p>
+            </div>
+            <span class="status bad">需要手动重试</span>
+          </section>
+          <section class="recovery-layout">
+            <article class="card scan-result">
+              <div class="notice bad" role="alert">
+                <strong>有 2 个文件仍未删除</strong
+                ><span
+                  >上次退出前已安全保存剩余清单；已删除的内容不会回滚或重复处理。</span
+                >
+              </div>
+              <div class="metric-grid">
+                <div class="metric">
+                  <span class="meta">原始清单</span><strong>34</strong
+                  ><span class="muted">文件与数据库步骤</span>
+                </div>
+                <div class="metric">
+                  <span class="meta">已完成</span><strong>32</strong
+                  ><span class="muted">无需再次处理</span>
+                </div>
+                <div class="metric">
+                  <span class="meta">剩余</span><strong>2</strong
+                  ><span class="muted">18.6 MB</span>
+                </div>
+              </div>
+              <div class="audit-list">
+                <div class="audit-row">
+                  <div class="stage-copy">
+                    <strong class="num">resources/验收清单.docx</strong
+                    ><span class="muted">文件正被其他程序占用</span>
+                  </div>
+                  <span class="status bad">未删除</span>
+                </div>
+                <div class="audit-row">
+                  <div class="stage-copy">
+                    <strong class="num">resources/讨论截图.png</strong
+                    ><span class="muted">文件正被其他程序占用</span>
+                  </div>
+                  <span class="status bad">未删除</span>
+                </div>
+              </div>
+              <div class="recovery-actions">
+                <button class="btn btn-danger" type="button">
+                  重试删除剩余项目</button
+                ><button class="btn btn-quiet" type="button">
+                  复制诊断编号
+                </button>
+              </div>
+              <p class="help num">
+                任务：DEL-20260803-0042 · 上次尝试：今天 10:22
+              </p>
+            </article>
+            <aside class="card">
+              <div class="card-head">
+                <h3>重试前</h3>
+                <span class="status warn">维护锁生效</span>
+              </div>
+              <ul class="list">
+                <li class="list-item">
+                  <span>播放与补转写</span><strong>已停用</strong>
+                </li>
+                <li class="list-item">
+                  <span>纪要与 Codex 任务</span><strong>已停止</strong>
+                </li>
+                <li class="list-item">
+                  <span>数据库事实</span><strong>暂时保留</strong>
+                </li>
+              </ul>
+              <div class="notice">
+                <span
+                  >关闭占用文件的程序后再重试。只有文件全部删除成功，数据库中的会议事实才会移除。</span
+                >
+              </div>
+            </aside>
+          </section>
+        </div>
+      </main>
+    </div>
+  </body>
+</html>

@@ -44,6 +44,18 @@ func (binding *PeopleBinding) GetMember(memberID string) Result[MemberDTO] {
 	})
 }
 
+// GetMemberDetail 返回活动或归档成员的独立详情投影。
+func (binding *PeopleBinding) GetMemberDetail(memberID string) Result[MemberDetailDTO] {
+	return Invoke(binding.boundary, "wails.people.get_member_detail", func(_ string) (MemberDetailDTO, error) {
+		members, _, err := binding.services()
+		if err != nil {
+			return MemberDetailDTO{}, err
+		}
+		result, err := members.GetMemberDetail(context.Background(), memberID)
+		return mapMemberDetailDTO(result), err
+	})
+}
+
 // CreateMember 创建活动成员。
 func (binding *PeopleBinding) CreateMember(input CreateMemberDTO) Result[MemberDTO] {
 	return Invoke(binding.boundary, "wails.people.create_member", func(_ string) (MemberDTO, error) {
@@ -63,24 +75,28 @@ func (binding *PeopleBinding) UpdateMember(memberID string, input UpdateMemberDT
 		if err != nil {
 			return MemberDTO{}, err
 		}
-		result, err := members.UpdateMember(context.Background(), memberID, peopleservice.UpdateMemberInput{Name: input.Name, Notes: input.Notes})
+		revision := int64(0)
+		if input.Revision != nil {
+			revision = *input.Revision
+		}
+		result, err := members.UpdateMember(context.Background(), memberID, peopleservice.UpdateMemberInput{Name: input.Name, Notes: input.Notes, Revision: revision})
 		return mapMemberDTO(result), err
 	})
 }
 
-// ArchiveMember 归档成员并移除其当前小组关系。
-func (binding *PeopleBinding) ArchiveMember(memberID string) Result[bool] {
-	return Invoke(binding.boundary, "wails.people.archive_member", func(_ string) (bool, error) {
+// DeleteAllMemberVoiceSamples 删除显式声纹样本但保留成员和历史会议。
+func (binding *PeopleBinding) DeleteAllMemberVoiceSamples(memberID string) Result[bool] {
+	return Invoke(binding.boundary, "wails.people.delete_all_voice_samples", func(_ string) (bool, error) {
 		members, _, err := binding.services()
 		if err != nil {
 			return false, err
 		}
-		err = members.ArchiveMember(context.Background(), memberID)
+		err = members.DeleteAllVoiceSamples(context.Background(), memberID)
 		return err == nil, err
 	})
 }
 
-// DeleteMember 永久删除未被会议历史引用的成员。
+// DeleteMember 删除当前成员；后端根据历史引用决定墓碑或硬删除。
 func (binding *PeopleBinding) DeleteMember(memberID string) Result[bool] {
 	return Invoke(binding.boundary, "wails.people.delete_member", func(_ string) (bool, error) {
 		members, _, err := binding.services()
@@ -137,8 +153,12 @@ func (binding *PeopleBinding) UpdateGroup(groupID string, input UpdateGroupDTO) 
 		if err != nil {
 			return GroupDTO{}, err
 		}
+		revision := int64(0)
+		if input.Revision != nil {
+			revision = *input.Revision
+		}
 		result, err := groups.UpdateGroup(context.Background(), groupID, peopleservice.UpdateGroupInput{
-			Name: input.Name, DefaultLANEnabled: input.DefaultLANEnabled, MemberIDs: input.MemberIDs,
+			Name: input.Name, DefaultLANEnabled: input.DefaultLANEnabled, MemberIDs: input.MemberIDs, Revision: revision,
 		})
 		return mapGroupDTO(result), err
 	})

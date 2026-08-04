@@ -45,6 +45,14 @@ func TestPeopleBinding_CreateAndListMemberDTO(t *testing.T) {
 	if loaded.Code != 200 || loaded.Data == nil || loaded.Data.Name != created.Data.Name {
 		t.Fatalf("成员详情 DTO 不正确：%+v", loaded)
 	}
+	deleted := binding.DeleteMember(created.Data.ID)
+	if deleted.Code != 200 || deleted.Data == nil || !*deleted.Data {
+		t.Fatalf("成员删除 DTO 不正确：%+v", deleted)
+	}
+	repeated := binding.DeleteMember(created.Data.ID)
+	if repeated.Code == 200 || repeated.ErrorCode != "MEMBER_NOT_FOUND" {
+		t.Fatalf("重复删除错误语义不正确：%+v", repeated)
+	}
 }
 
 // openPeopleBindingDatabase 创建最新 schema 的 Wails 契约测试数据库。

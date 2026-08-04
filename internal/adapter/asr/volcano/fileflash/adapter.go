@@ -119,6 +119,9 @@ func (adapter *Adapter) validate(request port.FileTranscriptionRequest) error {
 	if err := adapter.credentials.Validate(); err != nil {
 		return apperr.Biz(apperr.CodeASRSettingsInvalid)
 	}
+	if adapter.credentials.Mode != transcriptdomain.AuthModeAPIKey {
+		return apperr.Biz(apperr.CodeASRSettingsInvalid)
+	}
 	if request.MeetingID == "" || len(request.RequestID) != 36 || !filepath.IsAbs(request.AudioPath) ||
 		len(request.AudioSHA256) != 64 || request.SampleRate != domainaudio.SampleRate ||
 		request.CoreStartSample < request.AudioStartSample || request.CoreEndSample <= request.CoreStartSample ||
@@ -166,18 +169,13 @@ func buildRequestBody(request port.FileTranscriptionRequest, wav []byte) ([]byte
 	return json.Marshal(payload)
 }
 
-// setHeaders 按控制台凭据模式构造请求 Header，不把凭据返回业务层。
+// setHeaders 使用统一 APP Key 构造请求 Header，不把凭据返回业务层。
 func setHeaders(request *http.Request, credentials transcriptdomain.Credentials, requestID string) {
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("X-Api-Resource-Id", ResourceID)
 	request.Header.Set("X-Api-Request-Id", requestID)
 	request.Header.Set("X-Api-Sequence", "-1")
-	if credentials.Mode == transcriptdomain.AuthModeAPIKey {
-		request.Header.Set("X-Api-Key", credentials.APIKey)
-		return
-	}
-	request.Header.Set("X-Api-App-Key", credentials.AppID)
-	request.Header.Set("X-Api-Access-Key", credentials.AccessToken)
+	request.Header.Set("X-Api-Key", credentials.APIKey)
 }
 
 type providerResponse struct {

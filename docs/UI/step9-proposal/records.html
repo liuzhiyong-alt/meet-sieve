@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>会议记录 · Step 9 提案 · MeetSieve</title>
+    <link rel="stylesheet" href="../../style/meet-sieve/tokens.css" />
+    <link rel="stylesheet" href="../assets/meetsieve.css" />
+    <link rel="stylesheet" href="step9-proposal.css" />
+  </head>
+  <body>
+    <div class="app">
+      <aside class="sidebar">
+        <a class="brand" href="../index.html"
+          ><span class="brand-mark">M</span><span>MeetSieve</span></a
+        >
+        <nav class="nav" aria-label="主导航">
+          <a href="../start.html">开始会议</a
+          ><a class="active" aria-current="page" href="records.html">会议记录</a
+          ><a href="../people.html">常用小组</a
+          ><a href="../settings.html">设置</a>
+        </nav>
+        <div class="sidebar-foot">
+          <span class="status ok">所有更改已保存</span>
+        </div>
+      </aside>
+      <main class="main">
+        <header class="titlebar">
+          <span class="meta">会议记录</span
+          ><span class="meta">按开始时间倒序</span>
+        </header>
+        <div class="content">
+          <section class="page-head">
+            <div>
+              <p class="eyebrow">本地会议</p>
+              <h1>会议记录</h1>
+              <p>
+                每页最多 50 场。搜索主题、会议号或参会人，状态筛选彼此独立。
+              </p>
+            </div>
+            <a class="btn btn-primary" href="../start.html">创建会议</a>
+          </section>
+          <section class="card">
+            <div class="grid grid-3">
+              <label class="label"
+                >搜索<input class="field" value="客户端" /></label
+              ><label class="label"
+                >处理状态<select class="select">
+                  <option>全部</option>
+                  <option selected>需要处理</option>
+                  <option>删除未完成</option>
+                </select></label
+              ><label class="label"
+                >纪要状态<select class="select">
+                  <option selected>全部</option>
+                  <option>草稿</option>
+                  <option>已确认</option>
+                </select></label
+              >
+            </div>
+          </section>
+          <section class="card section-offset">
+            <ul class="list">
+              <li class="list-item">
+                <div class="record-main">
+                  <a href="meeting-detail.html"
+                    ><strong>客户端 Alpha 评审</strong></a
+                  >
+                  <div class="meta num">
+                    20260803-A7K2-08 · 今天 09:30 · 中断于 10:12
+                  </div>
+                </div>
+                <div class="row">
+                  <span class="status bad">本地保存未完成</span
+                  ><a class="btn" href="interrupted-recovery.html">恢复</a>
+                </div>
+              </li>
+              <li class="list-item">
+                <div class="record-main">
+                  <strong>客户端删除策略讨论</strong>
+                  <div class="meta num">
+                    20260729-A7K2-01 · 7 月 29 日 14:00 · 26 分钟
+                  </div>
+                </div>
+                <div class="row">
+                  <span class="status bad">删除未完成</span
+                  ><a class="btn btn-danger" href="delete-recovery.html"
+                    >处理</a
+                  >
+                </div>
+              </li>
+              <li class="list-item">
+                <div class="record-main">
+                  <strong>客户端权限验收</strong>
+                  <div class="meta num">
+                    20260725-A7K2-44 · 7 月 25 日 16:10 · 31 分钟
+                  </div>
+                </div>
+                <div class="row">
+                  <span class="status warn">有转写缺口</span
+                  ><button class="btn" type="button">打开</button>
+                </div>
+              </li>
+            </ul>
+            <div class="pagination">
+              <button class="btn" type="button">← 上一页</button
+              ><span class="meta">第 2 页 · 当前 3 场</span
+              ><button class="btn" type="button">下一页 →</button>
+            </div>
+          </section>
+        </div>
+      </main>
+    </div>
+  </body>
+</html>

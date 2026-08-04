@@ -1,0 +1,365 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>会议记录反馈提案 · MeetSieve</title>
+    <link rel="stylesheet" href="../../style/meet-sieve/tokens.css" />
+    <link rel="stylesheet" href="../assets/meetsieve.css" />
+    <link rel="stylesheet" href="proposal.css" />
+    <script src="proposal.js" defer></script>
+  </head>
+  <body class="page-records-proposal">
+    <div class="app">
+      <aside class="sidebar">
+        <a class="brand" href="home.html"
+          ><span class="brand-mark">M</span><span>MeetSieve</span></a
+        >
+        <nav class="nav" aria-label="主导航">
+          <a href="home.html">首页</a><a href="start.html">开始会议</a
+          ><a class="active" aria-current="page" href="records.html">会议记录</a
+          ><a href="people.html">常用小组</a><a href="settings.html">设置</a>
+        </nav>
+        <div class="sidebar-foot">
+          <span class="status ok">所有更改已保存</span>
+        </div>
+      </aside>
+      <main class="main">
+        <header class="titlebar">
+          <nav class="proposal-breadcrumb" aria-label="面包屑">
+            <span aria-current="page">会议记录</span>
+          </nav>
+          <span class="meta">按开始时间倒序</span>
+        </header>
+        <div class="content">
+          <section class="page-head">
+            <div>
+              <p class="eyebrow">本地会议</p>
+              <h1>会议记录</h1>
+              <p>搜索主题、会议号或参会人，并按当前最高处理状态筛选。</p>
+            </div>
+            <a class="btn btn-primary" href="start.html">创建会议</a>
+          </section>
+
+          <section class="card proposal-filter-card">
+            <form class="proposal-records-toolbar" data-records-form>
+              <label class="label"
+                >搜索<input
+                  class="field"
+                  name="search"
+                  placeholder="主题、会议号或参会人"
+              /></label>
+              <label class="label"
+                >状态<select class="select" name="status">
+                  <option value="">全部状态</option>
+                  <option value="recovery_required">需要恢复</option>
+                  <option value="gap_conflict">缺口冲突</option>
+                  <option value="gap_pending">补转写处理中</option>
+                  <option value="minute_candidate">纪要待确认</option>
+                  <option value="agent_unsynced">Codex 未同步</option>
+                  <option value="minute_confirmed">纪要已确认</option>
+                  <option value="saved">本地已保存</option>
+                  <option value="deleting">删除处理中</option>
+                </select></label
+              >
+              <button class="btn btn-quiet" type="submit">查询</button>
+            </form>
+          </section>
+
+          <section class="card section-offset proposal-records-card">
+            <ul
+              class="list proposal-records-list"
+              aria-label="会议记录列表，每页 10 场"
+              aria-live="polite"
+              tabindex="0"
+            >
+              <li
+                class="list-item proposal-record"
+                data-record
+                data-search="客户端 Alpha 评审 20260803-A7K2-12 刘毅 陈然"
+                data-status="recovery_required"
+              >
+                <div>
+                  <strong>客户端 Alpha 评审</strong>
+                  <div class="meta num">
+                    20260803-A7K2-12 · 今天 16:20 · 中断于 17:02
+                  </div>
+                </div>
+                <div class="row">
+                  <span class="status bad">需要恢复</span
+                  ><button
+                    class="btn"
+                    type="button"
+                    data-prototype-feedback="原型：进入中断恢复"
+                  >
+                    恢复
+                  </button>
+                </div>
+              </li>
+              <li
+                class="list-item proposal-record"
+                data-record
+                data-search="AI 会议助手产品评审 20260803-A7K2-11 刘毅 王珂"
+                data-status="gap_conflict"
+              >
+                <div>
+                  <strong>AI 会议助手产品评审</strong>
+                  <div class="meta num">
+                    20260803-A7K2-11 · 今天 14:30 · 48 分钟
+                  </div>
+                </div>
+                <div class="row">
+                  <span class="status warn">缺口冲突</span
+                  ><button
+                    class="btn"
+                    type="button"
+                    data-prototype-feedback="原型：进入缺口处理"
+                  >
+                    处理缺口
+                  </button>
+                </div>
+              </li>
+              <li
+                class="list-item proposal-record"
+                data-record
+                data-search="声纹模型验收 20260803-A7K2-10 孙扬 周明"
+                data-status="gap_pending"
+              >
+                <div>
+                  <strong>声纹模型验收</strong>
+                  <div class="meta num">
+                    20260803-A7K2-10 · 今天 11:00 · 42 分钟
+                  </div>
+                </div>
+                <div class="row">
+                  <span class="status warn">补转写处理中</span
+                  ><button
+                    class="btn"
+                    type="button"
+                    data-prototype-feedback="原型：打开会议详情"
+                  >
+                    打开
+                  </button>
+                </div>
+              </li>
+              <li
+                class="list-item proposal-record"
+                data-record
+                data-search="局域网访客页评审 20260803-A7K2-09 陈然 吴珊"
+                data-status="minute_candidate"
+              >
+                <div>
+                  <strong>局域网访客页评审</strong>
+                  <div class="meta num">
+                    20260803-A7K2-09 · 今天 09:30 · 35 分钟
+                  </div>
+                </div>
+                <div class="row">
+                  <span class="status warn">纪要待确认</span
+                  ><button
+                    class="btn"
+                    type="button"
+                    data-prototype-feedback="原型：打开会议纪要"
+                  >
+                    确认纪要
+                  </button>
+                </div>
+              </li>
+              <li
+                class="list-item proposal-record"
+                data-record
+                data-search="Codex 权限走查 20260802-A7K2-08 刘毅 林舟"
+                data-status="agent_unsynced"
+              >
+                <div>
+                  <strong>Codex 权限走查</strong>
+                  <div class="meta num">
+                    20260802-A7K2-08 · 昨天 17:10 · 31 分钟
+                  </div>
+                </div>
+                <div class="row">
+                  <span class="status warn">Codex 未同步</span
+                  ><button
+                    class="btn"
+                    type="button"
+                    data-prototype-feedback="原型：打开会议详情"
+                  >
+                    打开
+                  </button>
+                </div>
+              </li>
+              <li
+                class="list-item proposal-record"
+                data-record
+                data-search="存储诊断评审 20260802-A7K2-07 王珂"
+                data-status="minute_confirmed"
+              >
+                <div>
+                  <strong>存储诊断评审</strong>
+                  <div class="meta num">
+                    20260802-A7K2-07 · 昨天 15:40 · 28 分钟
+                  </div>
+                </div>
+                <div class="row">
+                  <span class="status ok">纪要已确认</span
+                  ><button
+                    class="btn"
+                    type="button"
+                    data-prototype-feedback="原型：打开会议详情"
+                  >
+                    打开
+                  </button>
+                </div>
+              </li>
+              <li
+                class="list-item proposal-record"
+                data-record
+                data-search="桌面端布局复核 20260802-A7K2-06 王珂 陈然"
+                data-status="saved"
+              >
+                <div>
+                  <strong>桌面端布局复核</strong>
+                  <div class="meta num">
+                    20260802-A7K2-06 · 昨天 13:20 · 26 分钟
+                  </div>
+                </div>
+                <div class="row">
+                  <span class="status ok">本地已保存</span
+                  ><button
+                    class="btn"
+                    type="button"
+                    data-prototype-feedback="原型：打开会议详情"
+                  >
+                    打开
+                  </button>
+                </div>
+              </li>
+              <li
+                class="list-item proposal-record"
+                data-record
+                data-search="删除恢复验证 20260802-A7K2-05 周明"
+                data-status="deleting"
+              >
+                <div>
+                  <strong>删除恢复验证</strong>
+                  <div class="meta num">
+                    20260802-A7K2-05 · 昨天 10:00 · 19 分钟
+                  </div>
+                </div>
+                <div class="row">
+                  <span class="status bad">删除处理中</span
+                  ><button
+                    class="btn btn-danger"
+                    type="button"
+                    data-prototype-feedback="原型：进入删除恢复"
+                  >
+                    查看进度
+                  </button>
+                </div>
+              </li>
+              <li
+                class="list-item proposal-record"
+                data-record
+                data-search="转写凭证联调 20260801-A7K2-04 刘毅"
+                data-status="saved"
+              >
+                <div>
+                  <strong>转写凭证联调</strong>
+                  <div class="meta num">
+                    20260801-A7K2-04 · 8 月 1 日 16:30 · 22 分钟
+                  </div>
+                </div>
+                <div class="row">
+                  <span class="status ok">本地已保存</span
+                  ><button
+                    class="btn"
+                    type="button"
+                    data-prototype-feedback="原型：打开会议详情"
+                  >
+                    打开
+                  </button>
+                </div>
+              </li>
+              <li
+                class="list-item proposal-record"
+                data-record
+                data-search="产品周会 20260801-A7K2-03 刘毅 陈然 王珂 林舟"
+                data-status="minute_confirmed"
+              >
+                <div>
+                  <strong>产品周会</strong>
+                  <div class="meta num">
+                    20260801-A7K2-03 · 8 月 1 日 09:30 · 51 分钟
+                  </div>
+                </div>
+                <div class="row">
+                  <span class="status ok">纪要已确认</span
+                  ><button
+                    class="btn"
+                    type="button"
+                    data-prototype-feedback="原型：打开会议详情"
+                  >
+                    打开
+                  </button>
+                </div>
+              </li>
+              <li
+                class="list-item proposal-record"
+                data-record
+                data-search="技术评审 20260731-A7K2-02 陈然 周明 孙扬"
+                data-status="saved"
+              >
+                <div>
+                  <strong>技术评审</strong>
+                  <div class="meta num">
+                    20260731-A7K2-02 · 7 月 31 日 14:00 · 46 分钟
+                  </div>
+                </div>
+                <div class="row">
+                  <span class="status ok">本地已保存</span
+                  ><button
+                    class="btn"
+                    type="button"
+                    data-prototype-feedback="原型：打开会议详情"
+                  >
+                    打开
+                  </button>
+                </div>
+              </li>
+              <li
+                class="list-item proposal-record"
+                data-record
+                data-search="会议记录筛选验收 20260731-A7K2-01 王珂"
+                data-status="minute_candidate"
+              >
+                <div>
+                  <strong>会议记录筛选验收</strong>
+                  <div class="meta num">
+                    20260731-A7K2-01 · 7 月 31 日 10:20 · 33 分钟
+                  </div>
+                </div>
+                <div class="row">
+                  <span class="status warn">纪要待确认</span
+                  ><button
+                    class="btn"
+                    type="button"
+                    data-prototype-feedback="原型：打开会议纪要"
+                  >
+                    确认纪要
+                  </button>
+                </div>
+              </li>
+            </ul>
+            <div class="proposal-pagination">
+              <button class="btn" type="button" data-page-previous>
+                上一页
+              </button>
+              <span class="meta" data-page-label>第 1 页 · 当前 10 场</span>
+              <button class="btn" type="button" data-page-next>下一页</button>
+            </div>
+          </section>
+        </div>
+      </main>
+    </div>
+  </body>
+</html>

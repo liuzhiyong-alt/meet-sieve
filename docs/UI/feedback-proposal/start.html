@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>开始会议反馈提案 · MeetSieve</title>
+    <link rel="stylesheet" href="../../style/meet-sieve/tokens.css" />
+    <link rel="stylesheet" href="../assets/meetsieve.css" />
+    <link rel="stylesheet" href="proposal.css" />
+    <script src="proposal.js" defer></script>
+  </head>
+  <body>
+    <div class="app">
+      <aside class="sidebar">
+        <a class="brand" href="home.html"
+          ><span class="brand-mark">M</span><span>MeetSieve</span></a
+        >
+        <nav class="nav" aria-label="主导航">
+          <a href="home.html">首页</a
+          ><a class="active" aria-current="page" href="start.html">开始会议</a
+          ><a href="records.html">会议记录</a><a href="people.html">常用小组</a
+          ><a href="settings.html">设置</a>
+        </nav>
+        <div class="sidebar-foot">
+          <span class="status ok">可以开始会议</span>
+        </div>
+      </aside>
+      <main class="main">
+        <header class="titlebar">
+          <nav class="proposal-breadcrumb" aria-label="面包屑">
+            <span aria-current="page">开始会议</span>
+          </nav>
+          <span class="meta">创建会议</span>
+        </header>
+        <div class="content">
+          <section class="page-head">
+            <div>
+              <p class="eyebrow">快速开始</p>
+              <h1>谁会参加这场会议？</h1>
+              <p>先确定参会人，其他设置沿用上次选择。</p>
+            </div>
+            <a class="btn" href="home.html">取消</a>
+          </section>
+
+          <section class="split proposal-start-layout">
+            <div class="card">
+              <div class="card-head">
+                <h2>参会人</h2>
+                <button
+                  class="btn btn-quiet"
+                  type="button"
+                  data-open="temporary-member"
+                >
+                  添加临时成员
+                </button>
+              </div>
+              <label class="label"
+                >常用小组
+                <select class="select" data-group-select>
+                  <option data-members="">不使用小组</option>
+                  <option data-members="liu,chen,wang,lin,zhao" selected>
+                    产品周会 · 5 人
+                  </option>
+                  <option data-members="chen,wang,zhou,sun,wu,xu,gao">
+                    技术评审 · 7 人
+                  </option>
+                </select>
+              </label>
+
+              <fieldset class="proposal-participant-fieldset">
+                <legend class="meta">选择本场参会成员</legend>
+                <div class="stack proposal-participants">
+                  <label class="choice">
+                    <input
+                      data-member-choice
+                      type="checkbox"
+                      value="liu"
+                      checked
+                    />
+                    <span class="avatar">刘</span
+                    ><span
+                      ><strong>刘毅</strong
+                      ><small class="help">声纹可用</small></span
+                    >
+                  </label>
+                  <label class="choice">
+                    <input
+                      data-member-choice
+                      type="checkbox"
+                      value="chen"
+                      checked
+                    />
+                    <span class="avatar">陈</span
+                    ><span
+                      ><strong>陈然</strong
+                      ><small class="help">声纹可用</small></span
+                    >
+                  </label>
+                  <label class="choice">
+                    <input
+                      data-member-choice
+                      type="checkbox"
+                      value="wang"
+                      checked
+                    />
+                    <span class="avatar">王</span
+                    ><span
+                      ><strong>王珂</strong
+                      ><small class="help">未录入声纹，仍可参会</small></span
+                    >
+                  </label>
+                  <label class="choice">
+                    <input
+                      data-member-choice
+                      type="checkbox"
+                      value="lin"
+                      checked
+                    />
+                    <span class="avatar">林</span
+                    ><span
+                      ><strong>林舟</strong
+                      ><small class="help">声纹可用</small></span
+                    >
+                  </label>
+                  <label class="choice">
+                    <input
+                      data-member-choice
+                      type="checkbox"
+                      value="zhao"
+                      checked
+                    />
+                    <span class="avatar">赵</span
+                    ><span
+                      ><strong>赵一宁</strong
+                      ><small class="help">未录入声纹，仍可参会</small></span
+                    >
+                  </label>
+                  <label class="choice">
+                    <input data-member-choice type="checkbox" value="zhou" />
+                    <span class="avatar">周</span
+                    ><span
+                      ><strong>周明</strong
+                      ><small class="help">声纹可用</small></span
+                    >
+                  </label>
+                  <label class="choice">
+                    <input data-member-choice type="checkbox" value="sun" />
+                    <span class="avatar">孙</span
+                    ><span
+                      ><strong>孙扬</strong
+                      ><small class="help">声纹可用</small></span
+                    >
+                  </label>
+                  <label class="choice">
+                    <input data-member-choice type="checkbox" value="wu" />
+                    <span class="avatar">吴</span
+                    ><span
+                      ><strong>吴珊</strong
+                      ><small class="help">声纹可用</small></span
+                    >
+                  </label>
+                </div>
+              </fieldset>
+
+              <ul
+                class="proposal-temp-list"
+                data-temporary-list
+                aria-label="临时参会成员"
+              ></ul>
+
+              <button
+                class="btn"
+                type="button"
+                data-advanced-toggle
+                aria-expanded="false"
+              >
+                展开高级设置
+              </button>
+              <div class="proposal-advanced" data-advanced-panel hidden>
+                <div class="proposal-advanced-grid">
+                  <label class="label"
+                    >会议主题（可选）
+                    <input class="field" value="AI 会议助手产品评审" />
+                  </label>
+                  <label class="label"
+                    >会议号
+                    <input class="field num" value="20260803-A7K2-03" />
+                  </label>
+                  <label class="label"
+                    >麦克风
+                    <select class="select">
+                      <option>MacBook Pro 麦克风</option>
+                      <option>外接 USB 麦克风</option>
+                    </select>
+                  </label>
+                  <div class="proposal-switch-field">
+                    <span>局域网访客页</span>
+                    <div class="proposal-switch-control">
+                      <span>允许同一私有网络访问</span>
+                      <button
+                        class="toggle on"
+                        type="button"
+                        aria-label="允许局域网访客页"
+                        aria-pressed="true"
+                        data-toggle
+                      ></button>
+                    </div>
+                    <p class="help proposal-network-help">
+                      开启后，同一局域网内的设备可以访问访客页。仅在可信的私有网络使用。
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <aside class="card proposal-preflight">
+              <p class="meta">开始前检查</p>
+              <ul class="list">
+                <li class="list-item">
+                  <span>工作目录</span
+                  ><span class="status">开始时检查可写</span>
+                </li>
+                <li class="list-item">
+                  <span>麦克风</span><span class="status ok">已选择</span>
+                </li>
+                <li class="list-item">
+                  <span>本地录音</span><span class="status">安全分片保存</span>
+                </li>
+                <li class="list-item">
+                  <span>实时转写</span
+                  ><span class="status ok">会议中实时生成</span>
+                </li>
+                <li class="list-item">
+                  <span>Codex</span><span class="status">本步骤未启用</span>
+                </li>
+                <li class="list-item">
+                  <span>局域网</span><span class="status warn">开始后启动</span>
+                </li>
+              </ul>
+              <button
+                class="btn btn-primary proposal-full-action"
+                type="button"
+                data-prototype-feedback="原型：已提交开始会议操作"
+              >
+                开始会议
+              </button>
+            </aside>
+          </section>
+        </div>
+      </main>
+    </div>
+
+    <div class="modal-backdrop" id="temporary-member">
+      <form
+        class="modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="temporary-member-title"
+        data-temporary-form
+      >
+        <h2 id="temporary-member-title">添加临时成员</h2>
+        <p class="proposal-modal-copy">
+          临时成员只用于本场会议，不会保存到成员库，也不会冒充正式成员身份。
+        </p>
+        <label class="label proposal-modal-form"
+          >临时成员姓名
+          <input
+            class="field"
+            maxlength="80"
+            placeholder="例如：外部顾问陈老师"
+          />
+        </label>
+        <div class="modal-actions">
+          <button class="btn" type="button" data-close>取消</button>
+          <button class="btn btn-primary" type="submit">添加成员</button>
+        </div>
+      </form>
+    </div>
+  </body>
+</html>

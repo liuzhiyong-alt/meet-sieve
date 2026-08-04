@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>未保存更改 · Step 9 提案 · MeetSieve</title>
+    <link rel="stylesheet" href="../../style/meet-sieve/tokens.css" />
+    <link rel="stylesheet" href="../assets/meetsieve.css" />
+    <link rel="stylesheet" href="step9-proposal.css" />
+  </head>
+  <body>
+    <div class="app">
+      <aside class="sidebar">
+        <a class="brand" href="../index.html"
+          ><span class="brand-mark">M</span><span>MeetSieve</span></a
+        >
+        <nav class="nav" aria-label="主导航">
+          <a href="../start.html">开始会议</a
+          ><a class="active" aria-current="page" href="../records.html"
+            >会议记录</a
+          ><a href="../people.html">常用小组</a
+          ><a href="../settings.html">设置</a>
+        </nav>
+        <div class="sidebar-foot">
+          <span class="status warn">纪要有未保存更改</span>
+        </div>
+      </aside>
+      <main class="main">
+        <header class="titlebar">
+          <a href="records.html">← 返回会议记录</a
+          ><span class="status warn">尚未保存</span>
+        </header>
+        <div class="content">
+          <section class="page-head">
+            <div>
+              <p class="eyebrow">20260731-A7K2-03 · 会议纪要</p>
+              <h1>AI 会议助手产品评审</h1>
+              <p>
+                后台补转写与同步任务会继续运行；这里只保护本机尚未保存的编辑内容。
+              </p>
+            </div>
+          </section>
+          <section class="card">
+            <div class="card-head">
+              <h2>会议纪要草稿</h2>
+              <span class="status warn">有本地更改</span>
+            </div>
+            <textarea class="textarea" rows="12">
+## 结论
+
+首期保持单会议、单进程运行，并完成完整数据生命周期收口。</textarea>
+          </section>
+        </div>
+      </main>
+    </div>
+    <div class="modal-backdrop is-visible" role="presentation">
+      <section
+        class="modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="leave-title"
+      >
+        <h2 id="leave-title">离开前保存更改？</h2>
+        <p class="muted">
+          会议纪要中有尚未保存的编辑。后台补转写、纪要生成和同步任务不会因离开页面而停止。
+        </p>
+        <div class="modal-actions">
+          <button class="btn" type="button">继续编辑</button
+          ><button class="btn btn-quiet" type="button">放弃未保存更改</button
+          ><button class="btn btn-primary" type="button">保存并离开</button>
+        </div>
+      </section>
+    </div>
+  </body>
+</html>

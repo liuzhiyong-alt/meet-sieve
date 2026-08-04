@@ -13,12 +13,14 @@ import (
 type SelectionReason string
 
 const (
-	// SelectionReasonRecommended 表示找到明确的私网默认路由。
-	SelectionReasonRecommended SelectionReason = "recommended"
-	// SelectionReasonManualRequired 表示有私网候选，但需要主持人手动确认。
-	SelectionReasonManualRequired SelectionReason = "manual_required"
-	// SelectionReasonUnavailable 表示没有可安全绑定的私有 IPv4。
-	SelectionReasonUnavailable SelectionReason = "unavailable"
+	// SelectionReasonDefaultRoute 表示找到明确的私网默认路由。
+	SelectionReasonDefaultRoute SelectionReason = "default_route"
+	// SelectionReasonUniqueCandidate 表示无默认路由时只有一个安全私网候选。
+	SelectionReasonUniqueCandidate SelectionReason = "unique_candidate"
+	// SelectionReasonAmbiguous 表示有多个安全候选但无法确定默认路由。
+	SelectionReasonAmbiguous SelectionReason = "ambiguous"
+	// SelectionReasonNotFound 表示没有可安全绑定的私有 IPv4。
+	SelectionReasonNotFound SelectionReason = "not_found"
 )
 
 // NetworkInterface 是系统网卡的最小安全领域投影。
@@ -63,15 +65,19 @@ func SelectPrivateInterfaces(interfaces []NetworkInterface) InterfaceSelection {
 		return choices[i].Address < choices[j].Address
 	})
 
-	selection := InterfaceSelection{Choices: choices, Reason: SelectionReasonUnavailable}
+	selection := InterfaceSelection{Choices: choices, Reason: SelectionReasonNotFound}
 	if len(choices) == 0 {
 		return selection
 	}
-	selection.Reason = SelectionReasonManualRequired
+	selection.Reason = SelectionReasonAmbiguous
 	if choices[0].DefaultRoute {
 		recommended := choices[0]
 		selection.Recommended = &recommended
-		selection.Reason = SelectionReasonRecommended
+		selection.Reason = SelectionReasonDefaultRoute
+	} else if len(choices) == 1 {
+		recommended := choices[0]
+		selection.Recommended = &recommended
+		selection.Reason = SelectionReasonUniqueCandidate
 	}
 	return selection
 }

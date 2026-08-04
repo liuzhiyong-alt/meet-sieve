@@ -1,0 +1,471 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>设置反馈提案 · MeetSieve</title>
+    <link rel="stylesheet" href="../../style/meet-sieve/tokens.css" />
+    <link rel="stylesheet" href="../assets/meetsieve.css" />
+    <link rel="stylesheet" href="proposal.css" />
+    <script src="proposal.js" defer></script>
+  </head>
+  <body class="page-settings">
+    <div class="app">
+      <aside class="sidebar">
+        <a class="brand" href="home.html"
+          ><span class="brand-mark">M</span><span>MeetSieve</span></a
+        >
+        <nav class="nav" aria-label="主导航">
+          <a href="home.html">首页</a><a href="start.html">开始会议</a
+          ><a href="records.html">会议记录</a><a href="people.html">常用小组</a
+          ><a class="active" aria-current="page" href="settings.html">设置</a>
+        </nav>
+        <div class="sidebar-foot">
+          <span class="status ok">配置已保存</span>
+        </div>
+      </aside>
+      <main class="main">
+        <header class="titlebar">
+          <nav class="proposal-breadcrumb" aria-label="面包屑">
+            <a href="settings.html">设置</a><i aria-hidden="true">/</i
+            ><span id="settings-breadcrumb-current" aria-current="page"
+              >通用</span
+            >
+          </nav>
+          <span class="status ok">配置已保存</span>
+        </header>
+        <div class="content">
+          <section class="page-head">
+            <div>
+              <p class="eyebrow">本机配置</p>
+              <h1>设置</h1>
+              <p>每个分类独立保存。配置内容与当前客户端保持一致。</p>
+            </div>
+          </section>
+
+          <section class="settings-layout">
+            <nav
+              class="settings-nav"
+              aria-label="设置分类"
+              data-tabs="settings"
+            >
+              <button
+                class="tab active"
+                type="button"
+                aria-selected="true"
+                data-tab="general"
+              >
+                通用
+              </button>
+              <button
+                class="tab"
+                type="button"
+                aria-selected="false"
+                data-tab="audio"
+              >
+                录音
+              </button>
+              <button
+                class="tab"
+                type="button"
+                aria-selected="false"
+                data-tab="asr"
+              >
+                实时转写
+              </button>
+              <button
+                class="tab"
+                type="button"
+                aria-selected="false"
+                data-tab="codex"
+              >
+                Codex
+              </button>
+              <button
+                class="tab"
+                type="button"
+                aria-selected="false"
+                data-tab="voice-model"
+              >
+                声纹模型
+              </button>
+            </nav>
+
+            <div class="settings-content proposal-settings-content">
+              <div id="general" data-tab-panel="settings">
+                <section class="card">
+                  <div class="card-head">
+                    <div>
+                      <p class="meta">通用设置</p>
+                      <h2>会议工作目录</h2>
+                    </div>
+                    <span class="status ok" id="workspace-card-status"
+                      >目录可写</span
+                    >
+                  </div>
+                  <p class="muted">修改后的目录将在下次启动时使用。</p>
+                  <label class="label section-offset"
+                    >会议工作目录
+                    <div class="row">
+                      <input
+                        class="field num"
+                        value="/Users/liu/develop/meetsieve"
+                      /><button
+                        class="btn btn-quiet proposal-directory-picker"
+                        type="button"
+                        data-prototype-feedback="原型：打开系统目录选择器"
+                      >
+                        选择…
+                      </button>
+                    </div></label
+                  >
+                  <p class="help">
+                    如需搬移会议数据，请先退出
+                    MeetSieve，复制完整工作目录后再选择新目录。
+                  </p>
+                  <div class="proposal-workspace-actions">
+                    <button
+                      class="btn btn-primary"
+                      type="button"
+                      data-prototype-feedback="工作目录设置已保存，重启后生效"
+                      data-status-target="#workspace-card-status"
+                      data-status-text="重启后生效"
+                    >
+                      保存
+                    </button>
+                  </div>
+                </section>
+
+                <section class="card proposal-section-card">
+                  <div class="card-head">
+                    <div>
+                      <p class="meta">存储与诊断</p>
+                      <h2>工作目录占用</h2>
+                      <p class="muted">
+                        扫描只统计真实占用，不会删除或修复文件。
+                      </p>
+                    </div>
+                    <span class="status ok">扫描完成</span>
+                  </div>
+                  <div class="proposal-storage-grid">
+                    <div>
+                      <span class="meta">工作目录</span
+                      ><strong>878.2 KB</strong>
+                    </div>
+                    <div>
+                      <span class="meta">录音</span><strong>0.0 KB</strong>
+                    </div>
+                    <div>
+                      <span class="meta">附件</span><strong>0.0 KB</strong>
+                    </div>
+                    <div>
+                      <span class="meta">可用磁盘</span
+                      ><strong>475.7 GB</strong>
+                    </div>
+                  </div>
+                  <div class="storage-actions section-offset">
+                    <button
+                      class="btn"
+                      type="button"
+                      data-prototype-feedback="原型：重新扫描存储占用"
+                    >
+                      扫描存储占用
+                    </button>
+                    <button
+                      class="btn btn-quiet"
+                      type="button"
+                      data-prototype-feedback="原型：导出诊断包"
+                    >
+                      导出诊断包
+                    </button>
+                    <button
+                      class="btn btn-quiet"
+                      type="button"
+                      data-prototype-feedback="原型：打开日志目录"
+                    >
+                      打开日志目录
+                    </button>
+                  </div>
+                </section>
+              </div>
+
+              <section
+                id="audio"
+                class="card proposal-settings-panel"
+                data-tab-panel="settings"
+                hidden
+              >
+                <div class="card-head">
+                  <div>
+                    <p class="meta">本机配置</p>
+                    <h2>录音</h2>
+                  </div>
+                  <span class="status ok">输入正常</span>
+                </div>
+                <p class="muted">默认麦克风独立保存；测试结果不会修改设置。</p>
+                <label class="label section-offset"
+                  >默认麦克风<select class="select">
+                    <option>MacBook Pro 麦克风 · 2 声道</option>
+                    <option>外接 USB 麦克风 · 1 声道</option>
+                  </select></label
+                >
+                <p class="help">
+                  设置版本 12。活动会议、收尾或删除期间不能修改。
+                </p>
+                <div class="proposal-workspace-actions">
+                  <button
+                    class="btn btn-primary"
+                    type="button"
+                    data-prototype-feedback="默认麦克风已保存"
+                  >
+                    保存录音设置
+                  </button>
+                  <button
+                    class="btn btn-quiet"
+                    type="button"
+                    data-prototype-feedback="麦克风测试通过"
+                  >
+                    测试麦克风
+                  </button>
+                </div>
+              </section>
+
+              <section
+                id="asr"
+                class="card proposal-settings-panel"
+                data-tab-panel="settings"
+                hidden
+              >
+                <div class="card-head">
+                  <div>
+                    <p class="meta">本机配置</p>
+                    <h2>火山引擎实时转写</h2>
+                  </div>
+                  <span class="status ok">凭证已保存</span>
+                </div>
+                <p class="muted">
+                  凭证保存在会议工作目录的数据库中，不会写入日志或原始记录。
+                </p>
+                <fieldset class="proposal-auth-options section-offset">
+                  <legend>鉴权方式</legend>
+                  <label class="choice"
+                    ><input type="radio" name="asr-auth" checked /><span
+                      ><strong>App ID + Access Token</strong
+                      ><small class="help">已支持实时转写</small></span
+                    ></label
+                  >
+                  <label class="choice"
+                    ><input type="radio" name="asr-auth" disabled /><span
+                      ><strong>API Key</strong
+                      ><small class="help">当前实时协议暂不支持</small></span
+                    ></label
+                  >
+                </fieldset>
+                <div class="grid grid-2 section-offset">
+                  <label class="label"
+                    >App ID<input
+                      class="field num"
+                      type="password"
+                      placeholder="ms_••••••32"
+                  /></label>
+                  <label class="label"
+                    >Access Token<input
+                      class="field num"
+                      type="password"
+                      placeholder="••••••••••••••••"
+                  /></label>
+                </div>
+                <div class="notice section-offset">
+                  <div>
+                    <strong>连接测试不发送真实音频</strong>
+                    <p class="muted">
+                      只验证 WebSocket 连接和初始化；真实转写仍需在会议中验证。
+                    </p>
+                  </div>
+                </div>
+                <div class="proposal-workspace-actions">
+                  <button
+                    class="btn btn-primary"
+                    type="button"
+                    data-prototype-feedback="实时转写凭证已保存"
+                  >
+                    保存更改
+                  </button>
+                  <button
+                    class="btn btn-quiet"
+                    type="button"
+                    data-prototype-feedback="连接测试完成，耗时 186 ms"
+                  >
+                    测试连接
+                  </button>
+                  <button
+                    class="btn btn-quiet"
+                    type="button"
+                    data-open="clear-asr"
+                  >
+                    清除已保存凭证
+                  </button>
+                </div>
+              </section>
+
+              <section
+                id="codex"
+                class="card proposal-settings-panel"
+                data-tab-panel="settings"
+                hidden
+              >
+                <div class="card-head">
+                  <div>
+                    <p class="meta">本机配置</p>
+                    <h2>Codex</h2>
+                  </div>
+                  <span class="status ok">协议兼容</span>
+                </div>
+                <p class="muted">
+                  Codex 使用你本机已有的登录、工具与原生权限配置。
+                </p>
+                <label class="label section-offset"
+                  >可执行文件路径<input
+                    class="field num"
+                    value="/opt/homebrew/bin/codex"
+                /></label>
+                <div class="proposal-model-facts section-offset">
+                  <p>
+                    <span>登录状态</span><strong>已登录，由 Codex 管理</strong>
+                  </p>
+                  <p><span>协议状态</span><strong>兼容当前版本</strong></p>
+                  <p>
+                    <span>工具能力</span><strong>MCP、Apps 与本机配置</strong>
+                  </p>
+                </div>
+                <div class="notice section-offset">
+                  <div>
+                    <strong>权限与审批</strong>
+                    <p class="muted">
+                      沿用 Codex 原生 sandbox、审批频率和工具权限。
+                    </p>
+                  </div>
+                </div>
+                <label class="label section-offset"
+                  >AI 唤醒词<input class="field" maxlength="16" value="AI 助手"
+                /></label>
+                <div class="proposal-wake-test section-offset">
+                  <div class="row-between">
+                    <strong>真实唤醒测试</strong><span class="meta">0/3</span>
+                  </div>
+                  <div class="proposal-wake-progress">
+                    <span>第 1 次待测试</span><span>第 2 次待测试</span
+                    ><span>第 3 次待测试</span>
+                  </div>
+                  <p class="help">
+                    测试使用真实麦克风和已保存的实时转写凭证，不写入录音文件。
+                  </p>
+                </div>
+                <div class="proposal-workspace-actions">
+                  <button
+                    class="btn btn-primary"
+                    type="button"
+                    data-prototype-feedback="Codex 设置已保存"
+                  >
+                    保存更改
+                  </button>
+                  <button
+                    class="btn btn-quiet"
+                    type="button"
+                    data-prototype-feedback="Codex 检测完成，协议兼容"
+                  >
+                    重新检测
+                  </button>
+                  <button
+                    class="btn btn-quiet"
+                    type="button"
+                    data-prototype-feedback="原型：开始 3 次真实唤醒测试"
+                  >
+                    开始 3 次唤醒测试
+                  </button>
+                </div>
+              </section>
+
+              <section
+                id="voice-model"
+                class="card proposal-settings-panel"
+                data-tab-panel="settings"
+                hidden
+              >
+                <div class="card-head">
+                  <div>
+                    <p class="meta">本机配置</p>
+                    <h2>声纹模型</h2>
+                  </div>
+                  <span class="status">未安装</span>
+                </div>
+                <div class="notice">
+                  <div>
+                    <strong>安装模型后才能录入声纹</strong>
+                    <p class="muted">
+                      成员和小组仍可正常管理。模型只在本机离线运行，会议中不会下载模型。
+                    </p>
+                  </div>
+                </div>
+                <div class="proposal-model-facts section-offset">
+                  <p><span>模型</span><strong>CAM++ 中文通用</strong></p>
+                  <p>
+                    <span>模型来源</span
+                    ><strong>MeetSieve GitHub Releases</strong>
+                  </p>
+                  <p><span>版本</span><strong>—</strong></p>
+                  <p><span>安装位置</span><strong>本机应用数据目录</strong></p>
+                  <p><span>完整性校验</span><strong>版本与 SHA-256</strong></p>
+                </div>
+                <p class="help">
+                  下载和离线导入接受同一个官方模型包。校验失败的文件不会被安装。
+                </p>
+                <div class="proposal-workspace-actions">
+                  <button
+                    class="btn btn-primary"
+                    type="button"
+                    data-prototype-feedback="原型：开始下载官方模型"
+                  >
+                    下载官方模型
+                  </button>
+                  <button
+                    class="btn btn-quiet"
+                    type="button"
+                    data-prototype-feedback="原型：打开离线模型包选择器"
+                  >
+                    导入离线模型包
+                  </button>
+                </div>
+              </section>
+            </div>
+          </section>
+        </div>
+      </main>
+    </div>
+
+    <div class="modal-backdrop" id="clear-asr">
+      <div
+        class="modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="clear-asr-title"
+      >
+        <h2 id="clear-asr-title">清除实时转写凭证？</h2>
+        <p class="proposal-modal-copy">
+          清除后仍可仅录音，但新会议不能使用实时转写，直到重新保存凭证。
+        </p>
+        <div class="modal-actions">
+          <button class="btn" type="button" data-close>取消</button
+          ><button
+            class="btn btn-danger"
+            type="button"
+            data-close
+            data-prototype-feedback="实时转写凭证已清除"
+          >
+            清除凭证
+          </button>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

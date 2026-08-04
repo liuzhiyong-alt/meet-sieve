@@ -9,7 +9,7 @@
   <body>
     <main class="preview">
       <header class="preview-head">
-        <p class="meta">MEETSIEVE DESIGN SYSTEM · V1.4.0</p>
+        <p class="meta">MEETSIEVE DESIGN SYSTEM · V1.5.0</p>
         <h1>Product Patterns</h1>
         <p>没有 UI 图时，先匹配成熟度，再使用现有组件表达业务状态。</p>
         <nav class="preview-nav" aria-label="设计系统预览">
@@ -277,6 +277,54 @@
           </div>
         </div>
         <p class="maturity">derived · platform-native boundary</p>
+      </section>
+
+      <section class="preview-section">
+        <h2>中断与删除恢复</h2>
+        <div class="grid grid-2">
+          <div class="card stack">
+            <div class="row-between">
+              <strong>恢复已保存的会议数据</strong>
+              <span class="status warning">需要恢复</span>
+            </div>
+            <div class="notice warning">
+              <strong>不能继续原会议录音</strong>
+              <span>核对分片、重建完整录音并保留中断缺口。</span>
+            </div>
+            <button class="btn btn-primary">开始恢复已有数据</button>
+          </div>
+          <div class="card stack">
+            <div class="row-between">
+              <strong>删除未完成</strong>
+              <span class="status danger">剩余 2 项</span>
+            </div>
+            <p class="muted">重试只处理原删除清单中尚未完成的项目。</p>
+            <button class="btn btn-danger">重试删除剩余项目</button>
+          </div>
+        </div>
+        <p class="maturity">existing · step9-proposal recovery pages</p>
+      </section>
+
+      <section class="preview-section">
+        <h2>文件完整性与未保存编辑</h2>
+        <div class="grid grid-2">
+          <div class="card stack">
+            <div class="row-between">
+              <strong>上线检查表.xlsx</strong>
+              <span class="status danger">文件已变化</span>
+            </div>
+            <p class="muted">SHA-256 与登记值不一致，已经阻止打开。</p>
+          </div>
+          <div class="card stack">
+            <strong>离开前保存更改？</strong>
+            <p class="muted">后台任务继续运行，只保护当前本地编辑。</p>
+            <div class="row">
+              <button class="btn">继续编辑</button>
+              <button class="btn btn-primary">保存并离开</button>
+            </div>
+          </div>
+        </div>
+        <p class="maturity">existing · step9-proposal detail states</p>
       </section>
     </main>
   </body>

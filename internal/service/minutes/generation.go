@@ -211,6 +211,20 @@ func (service *GenerationService) Stop(ctx context.Context, meetingID string, tu
 	return service.provider.InterruptTurn(ctx, port.InterruptAgentTurnRequest{SessionID: job.sessionID, TurnID: providerTurnID})
 }
 
+// StopMeeting 幂等停止指定会议当前纪要生成，无需调用方持有 turn ID。
+func (service *GenerationService) StopMeeting(ctx context.Context, meetingID string) error {
+	if service == nil || meetingID == "" {
+		return nil
+	}
+	service.mu.Lock()
+	job := service.active
+	service.mu.Unlock()
+	if job == nil || job.meetingID != meetingID {
+		return nil
+	}
+	return service.Stop(ctx, meetingID, job.turnID)
+}
+
 // State 返回内存 partial 的安全副本。
 func (service *GenerationService) State() GenerationState {
 	service.mu.Lock()

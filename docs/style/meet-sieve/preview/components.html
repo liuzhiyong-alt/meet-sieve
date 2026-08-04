@@ -9,7 +9,7 @@
   <body>
     <main class="preview">
       <header class="preview-head">
-        <p class="meta">MEETSIEVE DESIGN SYSTEM · V1.4.0</p>
+        <p class="meta">MEETSIEVE DESIGN SYSTEM · V1.5.0</p>
         <h1>Components</h1>
         <p>组件从当前 UI 反向提取。预览展示视觉契约，不替代 Vue 实现。</p>
         <nav class="preview-nav" aria-label="设计系统预览">
@@ -236,6 +236,33 @@
           <div class="row modal-actions-preview">
             <button class="btn">拒绝</button>
             <button class="btn btn-primary">允许本次操作</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="preview-section">
+        <h2>Cursor Pagination &amp; Danger Zone</h2>
+        <div class="grid grid-2">
+          <div class="card stack">
+            <ul class="list">
+              <li class="list-item">
+                <span>客户端 Alpha 评审</span>
+                <span class="status warning">有转写缺口</span>
+              </li>
+            </ul>
+            <div class="row-between">
+              <button class="btn">上一页</button>
+              <span class="meta">第 2 页</span>
+              <button class="btn">下一页</button>
+            </div>
+          </div>
+          <div class="card stack">
+            <strong>危险操作</strong>
+            <p class="muted">删除录音与删除整场会议分别说明后果。</p>
+            <div class="row">
+              <button class="btn btn-danger">删除录音</button>
+              <button class="btn btn-danger">删除整场会议</button>
+            </div>
           </div>
         </div>
       </section>

@@ -137,6 +137,7 @@ func TestSchema_DevelopmentDownRestoresStep1Foundation(t *testing.T) {
 	rollbackLatestMigration(t, path)
 	rollbackLatestMigration(t, path)
 	rollbackLatestMigration(t, path)
+	rollbackLatestMigration(t, path)
 
 	db, err := sql.Open("sqlite3", path)
 	if err != nil {

@@ -59,7 +59,7 @@ test-contract:
 # test-asr-real 显式使用真实火山凭据和默认麦克风；缺少开关或凭据时必须失败。
 test-asr-real:
 	test "$$MEETSIEVE_ASR_REAL" = "1"
-	test -n "$$MEETSIEVE_VOLC_AUTH_MODE"
+	test -n "$$MEETSIEVE_VOLC_API_KEY"
 	mise exec -- go test -tags=asrreal -v ./tests/e2e/asr -count=1
 
 # build 生成当前 macOS arm64 的 Wails production 应用包。

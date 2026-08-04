@@ -33,7 +33,7 @@ func TestRealtimeCoordinatorPersistsFinalAndStopsSession(t *testing.T) {
 	})
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	if err := coordinator.Start(ctx, testMeetingID, 0, transcriptdomain.Credentials{Mode: transcriptdomain.AuthModeLegacy, AppID: "test-app", AccessToken: "test-token"}); err != nil {
+	if err := coordinator.Start(ctx, testMeetingID, 0, transcriptdomain.Credentials{Mode: transcriptdomain.AuthModeAPIKey, APIKey: "test-key"}); err != nil {
 		t.Fatalf("启动 realtime coordinator 失败：%v", err)
 	}
 	if !coordinator.TryAcceptFrame(port.AudioFrame{StartSample: 0, PCM: make([]byte, 32000)}) {

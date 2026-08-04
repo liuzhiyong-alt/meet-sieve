@@ -57,13 +57,17 @@ func (repository *MemberRepository) Create(ctx context.Context, tx *gorm.DB, mem
 }
 
 // Update 修改活动成员允许编辑的字段，并返回更新后的持久化记录。
-func (repository *MemberRepository) Update(ctx context.Context, tx *gorm.DB, memberID string, name string, normalized string, notes *string, updatedAt int64) (models.Member, bool, error) {
+func (repository *MemberRepository) Update(ctx context.Context, tx *gorm.DB, memberID string, name string, normalized string, notes *string, expectedRevision int64, updatedAt int64) (models.Member, bool, error) {
 	if tx == nil {
 		return models.Member{}, false, fmt.Errorf("修改成员：事务不能为空")
 	}
-	result := tx.WithContext(ctx).
+	query := tx.WithContext(ctx).
 		Model(&models.Member{}).
-		Where("id = ? AND archived_at IS NULL", memberID).
+		Where("id = ? AND archived_at IS NULL", memberID)
+	if expectedRevision > 0 {
+		query = query.Where("updated_at = ?", expectedRevision)
+	}
+	result := query.
 		Updates(map[string]any{
 			"name":            name,
 			"name_normalized": normalized,
@@ -118,6 +122,53 @@ func (repository *MemberRepository) GetActiveByID(ctx context.Context, memberID 
 		return models.Member{}, false, fmt.Errorf("查询活动成员失败: %w", err)
 	}
 	return member, true, nil
+}
+
+// GetByID 读取活动或归档成员，供独立详情路由恢复状态。
+func (repository *MemberRepository) GetByID(ctx context.Context, memberID string) (models.Member, bool, error) {
+	if repository == nil || repository.reader == nil || memberID == "" {
+		return models.Member{}, false, fmt.Errorf("查询成员详情：参数无效")
+	}
+	var member models.Member
+	err := repository.reader.WithContext(ctx).Select(memberColumns()).Where("id = ?", memberID).Take(&member).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return models.Member{}, false, nil
+	}
+	if err != nil {
+		return models.Member{}, false, fmt.Errorf("查询成员详情失败: %w", err)
+	}
+	return member, true, nil
+}
+
+// CountReferences 返回当前小组关系数和不可变历史会议引用数。
+func (repository *MemberRepository) CountReferences(ctx context.Context, memberID string) (int64, int64, error) {
+	if repository == nil || repository.reader == nil || memberID == "" {
+		return 0, 0, fmt.Errorf("统计成员引用：参数无效")
+	}
+	var groupCount, meetingCount int64
+	if err := repository.reader.WithContext(ctx).Table("group_members").Where("member_id = ?", memberID).Count(&groupCount).Error; err != nil {
+		return 0, 0, fmt.Errorf("统计成员小组失败: %w", err)
+	}
+	if err := repository.reader.WithContext(ctx).Table("meeting_participants").Where("member_id = ?", memberID).Distinct("meeting_id").Count(&meetingCount).Error; err != nil {
+		return 0, 0, fmt.Errorf("统计成员历史会议失败: %w", err)
+	}
+	return groupCount, meetingCount, nil
+}
+
+// Restore 把归档成员恢复为活动状态；活动名称唯一约束仍由数据库执行。
+func (repository *MemberRepository) Restore(ctx context.Context, tx *gorm.DB, memberID string, updatedAt int64) (bool, error) {
+	if tx == nil {
+		return false, fmt.Errorf("恢复成员：事务不能为空")
+	}
+	result := tx.WithContext(ctx).Model(&models.Member{}).Where("id = ? AND archived_at IS NOT NULL", memberID).
+		Updates(map[string]any{"archived_at": nil, "updated_at": updatedAt})
+	if result.Error != nil {
+		if isMemberNameConflict(result.Error) {
+			return false, ErrMemberNameConflict
+		}
+		return false, fmt.Errorf("恢复成员记录失败: %w", result.Error)
+	}
+	return result.RowsAffected == 1, nil
 }
 
 // ListVoiceSummaries 聚合指定活动成员的样本状态，不读取音频或 embedding 正文。

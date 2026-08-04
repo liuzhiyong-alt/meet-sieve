@@ -17,8 +17,8 @@ const (
 // TestStep8Schema_ReachesVersionNineAndCreatesGapAttempts 验证 Step 8 migration 与核心新表存在。
 func TestStep8Schema_ReachesVersionNineAndCreatesGapAttempts(t *testing.T) {
 	db := openMigratedDatabase(t)
-	if database.CurrentSchemaVersion != 9 {
-		t.Fatalf("当前 schema 版本错误：got %d, want 9", database.CurrentSchemaVersion)
+	if database.CurrentSchemaVersion < 9 {
+		t.Fatalf("当前 schema 版本不得低于 Step 8：got %d", database.CurrentSchemaVersion)
 	}
 	for _, table := range []string{"gap_transcription_attempts", "gap_transcription_attempt_items"} {
 		var count int64

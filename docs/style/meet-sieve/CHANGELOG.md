@@ -2,6 +2,24 @@
 
 <!-- markdownlint-disable MD024 -->
 
+## 1.5.0 - 2026-08-03
+
+### Added
+
+- 登记中断恢复和整场会议删除失败恢复页面级金标；
+- 登记会议记录游标分页、会议详情危险区、附件完整性和未保存离开状态；
+- 登记设置“通用”中的工作目录待重启、存储占用和脱敏诊断；
+- 登记小组详情、成员详情和独立声纹生命周期页面级金标；
+- 新增 `CursorPagination`、`DangerZone`、`RecoverySummary`、
+  `StorageBreakdown` 和 `FileIntegrityState` 组件契约。
+
+### Changed
+
+- `interrupted`、删除录音和工作目录待重启成熟度调整为 `existing`；
+- 会议记录 Alpha 删除批量选择，只保留搜索、独立筛选和单场处理；
+- 工作目录改为下次启动切换，不再使用迁移步骤、复制或合并语义；
+- 明确部分删除不回滚、只重试原 manifest 剩余项，且不能报告完整成功。
+
 ## 1.4.0 - 2026-08-03
 
 ### Added

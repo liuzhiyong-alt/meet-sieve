@@ -135,6 +135,28 @@ func (processor *PostMeetingProcessor) StopMeeting(meetingID string) bool {
 	return true
 }
 
+// StopMeetingAndWait 取消指定会议 owner，并等待它到达持久安全终点。
+func (processor *PostMeetingProcessor) StopMeetingAndWait(ctx context.Context, meetingID string) error {
+	if processor == nil || meetingID == "" {
+		return nil
+	}
+	processor.mu.Lock()
+	owner := processor.owners[meetingID]
+	if owner != nil {
+		owner.cancel()
+	}
+	processor.mu.Unlock()
+	if owner == nil {
+		return nil
+	}
+	select {
+	case <-owner.done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
 // Stop 取消全部后台请求并等待 goroutine 退出。
 func (processor *PostMeetingProcessor) Stop(ctx context.Context) error {
 	if processor == nil {

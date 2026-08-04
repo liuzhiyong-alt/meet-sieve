@@ -101,6 +101,16 @@ func (service *WorkspaceService) AdoptActiveWorkspace(path string) {
 	service.mu.Unlock()
 }
 
+// SetChangeBlocker 接入会议、收尾和删除中的运行时安全门。
+func (service *WorkspaceService) SetChangeBlocker(blocker MeetingInProgress) {
+	if service == nil {
+		return
+	}
+	service.mu.Lock()
+	service.meetingInProgress = blocker
+	service.mu.Unlock()
+}
+
 // prepareUsableCandidate 只初始化 missing/empty，接入合法当前 schema，并拒绝其他所有状态。
 func (service *WorkspaceService) prepareUsableCandidate(path string) (domainworkspace.WorkspaceCandidate, error) {
 	if service == nil || service.inspector == nil || service.initializer == nil || service.locatorStore == nil {

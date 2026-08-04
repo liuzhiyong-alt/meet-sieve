@@ -1,0 +1,218 @@
+/* Step 9 提案补充数据生命周期、恢复与独立成员详情，不改变基础视觉 token。 */
+.step9-layout,
+.recovery-layout,
+.person-layout,
+.danger-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: var(--space-5);
+  align-items: start;
+}
+
+.recovery-summary,
+.storage-summary,
+.danger-zone,
+.scan-result {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.recovery-summary h1,
+.recovery-summary p,
+.storage-summary p,
+.danger-zone p,
+.scan-result p {
+  margin: 0;
+}
+
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.metric {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-4);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  background: var(--surface-warm);
+}
+
+.metric strong {
+  font-family: var(--font-mono);
+  font-size: var(--text-lg);
+}
+
+.stage-list,
+.storage-list,
+.audit-list {
+  display: grid;
+}
+
+.stage-row,
+.storage-row,
+.audit-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  min-height: 62px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.stage-row:first-child,
+.storage-row:first-child,
+.audit-row:first-child {
+  border-top: 0;
+}
+
+.stage-copy,
+.path-pair,
+.person-summary {
+  min-width: 0;
+  display: grid;
+  gap: var(--space-1);
+}
+
+.path-value {
+  overflow-wrap: anywhere;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+}
+
+.storage-bar {
+  height: 10px;
+  overflow: hidden;
+  display: flex;
+  border-radius: var(--radius-pill);
+  background: var(--surface-warm);
+}
+
+.storage-bar span {
+  width: var(--storage-width);
+  background: var(--storage-color, var(--accent));
+}
+
+.storage-bar .is-muted {
+  --storage-color: var(--muted);
+}
+
+.storage-bar .is-warn {
+  --storage-color: var(--warn);
+}
+
+.storage-actions,
+.recovery-actions,
+.danger-actions,
+.pagination,
+.person-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.pagination {
+  justify-content: space-between;
+  margin-top: var(--space-4);
+}
+
+.record-main {
+  min-width: 0;
+}
+
+.record-main a {
+  display: inline-block;
+}
+
+.danger-zone {
+  margin-top: var(--space-6);
+  padding: var(--space-5);
+  border: 1px solid color-mix(in oklab, var(--danger), transparent 55%);
+  border-radius: var(--radius-lg);
+  background: color-mix(in oklab, var(--danger), transparent 96%);
+}
+
+.danger-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-4);
+  align-items: center;
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border-soft);
+}
+
+.danger-item:first-of-type {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.file-state {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-3);
+  align-items: center;
+  padding: var(--space-4);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  background: var(--surface-warm);
+}
+
+.member-list {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.member-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-3);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+}
+
+.modal-backdrop.is-visible {
+  display: flex;
+}
+
+.section-offset,
+.field-offset {
+  margin-top: var(--space-4);
+}
+
+.modal-summary {
+  display: grid;
+  gap: var(--space-2);
+  margin: var(--space-4) 0;
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--surface-warm);
+}
+
+.modal-summary p {
+  margin: 0;
+}
+
+@media (max-width: 1024px) {
+  .step9-layout,
+  .recovery-layout,
+  .person-layout,
+  .danger-layout {
+    grid-template-columns: minmax(0, 1fr) 280px;
+    gap: var(--space-4);
+  }
+}
+
+@media (max-width: 760px) {
+  .step9-layout,
+  .recovery-layout,
+  .person-layout,
+  .danger-layout,
+  .metric-grid {
+    grid-template-columns: 1fr;
+  }
+}

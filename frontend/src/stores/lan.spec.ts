@@ -46,6 +46,36 @@ describe('lan store', () => {
     expect(store.selectedInterfaceID).toBe('wifi')
   })
 
+  it('clears an old selection when backend cannot choose safely', async () => {
+    bindings.ListLANInterfaces.mockResolvedValue({
+      code: 200,
+      data: {
+        interfaces: [
+          {
+            id: 'wifi',
+            name: 'Wi-Fi',
+            address: '192.168.1.8',
+            default_route: false,
+          },
+          {
+            id: 'usb',
+            name: 'USB LAN',
+            address: '10.0.0.2',
+            default_route: false,
+          },
+        ],
+        recommended_id: '',
+        reason: 'ambiguous',
+      },
+    })
+    const store = useLANStore()
+    store.selectedInterfaceID = 'wifi'
+
+    await store.loadInterfaces()
+    expect(store.selectedInterfaceID).toBe('')
+    expect(store.selectionReason).toBe('ambiguous')
+  })
+
   it('restores active uploads from backend status instead of frontend memory', async () => {
     bindings.GetLANStatus.mockResolvedValue({
       code: 200,

@@ -4,6 +4,7 @@ import { EventsOn } from '../../../wailsjs/runtime/runtime'
 
 import { useCorrectionStore } from '../../stores/correction'
 import type { CorrectionEntry } from '../../stores/correction'
+import { dirtyEditRegistry } from '../../router/dirty'
 
 const props = defineProps<{
   meetingId: string
@@ -25,10 +26,18 @@ const clusterTab = ref<HTMLButtonElement>()
 let modalReturnFocus: HTMLElement | null = null
 let stopCorrectionListener: (() => void) | undefined
 let stopSpeakerListener: (() => void) | undefined
+let unregisterDirty: (() => void) | undefined
 
 const selected = computed(() => correction.selected)
 const canOpenCluster = computed(
   () => !!selected.value?.speaker_cluster_id && !!selected.value.cluster_count,
+)
+const singleDirty = computed(() =>
+  Boolean(
+    selected.value &&
+    (textDraft.value.trim() !== selected.value.current_text ||
+      participantDraft.value !== (selected.value.current_participant_id ?? '')),
+  ),
 )
 
 watch(
@@ -65,11 +74,20 @@ onMounted(async () => {
     if (event?.data?.meeting_id === props.meetingId)
       void correction.load(props.meetingId)
   })
+  unregisterDirty = dirtyEditRegistry.register({
+    id: `correction-${props.meetingId}`,
+    label: '原始记录校对',
+    isDirty: () => singleDirty.value,
+    canSave: () => Boolean(selected.value && textDraft.value.trim()),
+    save: saveSingle,
+    discard: resetSingleDraft,
+  })
 })
 
 onBeforeUnmount(() => {
   stopCorrectionListener?.()
   stopSpeakerListener?.()
+  unregisterDirty?.()
   void correction.revokeClip()
 })
 
@@ -85,11 +103,11 @@ function sampleTime(sample: number): string {
 }
 
 /** saveSingle 分别保存发生变化的文字和说话人，任一步冲突均保留草稿。 */
-async function saveSingle(): Promise<void> {
+async function saveSingle(): Promise<boolean> {
   const entry = selected.value
-  if (!entry || correction.saving) return
+  if (!entry || correction.saving) return false
   if (textDraft.value.trim() !== entry.current_text) {
-    if (!(await correction.saveText(entry, textDraft.value))) return
+    if (!(await correction.saveText(entry, textDraft.value))) return false
   }
   const refreshed = correction.selected
   if (
@@ -97,8 +115,16 @@ async function saveSingle(): Promise<void> {
     participantDraft.value &&
     participantDraft.value !== refreshed.current_participant_id
   ) {
-    await correction.saveSpeaker(refreshed, participantDraft.value)
+    if (!(await correction.saveSpeaker(refreshed, participantDraft.value)))
+      return false
   }
+  return true
+}
+
+/** resetSingleDraft 放弃当前片段未保存的文字和说话人草稿。 */
+function resetSingleDraft(): void {
+  textDraft.value = selected.value?.current_text ?? ''
+  participantDraft.value = selected.value?.current_participant_id ?? ''
 }
 
 /** playSelected 创建短期 clip 并交给原生 audio 控件播放。 */

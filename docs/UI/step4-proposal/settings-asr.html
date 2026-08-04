@@ -7,11 +7,10 @@
       <section class="page-head"><div><p class="eyebrow">本机配置</p><h1>设置</h1><p>凭证保存在会议工作目录的数据库中，不会写入日志或原始记录。</p></div><button class="btn btn-primary" type="button">保存更改</button></section>
       <section class="settings-layout"><nav class="settings-nav" aria-label="设置分类"><button class="tab">通用</button><button class="tab">录音</button><button class="tab active">实时转写</button><button class="tab">Codex</button><button class="tab">声纹模型</button></nav>
         <div class="settings-content"><section class="card"><div class="card-head"><h2>火山引擎实时转写</h2><span class="status ok">连接已建立</span></div>
-          <p class="muted">当前实时协议使用 App ID 与 Access Token。切换或清除凭证都需要明确操作。</p>
-          <div class="grid grid-2" style="margin-top:20px"><label class="choice"><input type="radio" name="auth" checked><span><strong>App ID + Access Token</strong><small class="help" style="display:block">已支持实时转写</small></span></label><label class="choice"><input type="radio" name="auth" disabled><span><strong>API Key</strong><small class="help" style="display:block">实时协议暂未开放</small></span></label></div>
-          <hr class="rule"><label class="label">App ID<input class="field num" type="password" value="••••1234"></label><label class="label" style="margin-top:16px">Access Token<input class="field num" type="password" value="••••9876" aria-describedby="access-token-help"></label><p class="help" id="access-token-help">已保存。保留当前内容，或输入新值替换；清空需要使用“清除已保存凭证”。</p>
-          <div class="row" style="margin-top:20px"><button class="btn btn-quiet" type="button">测试连接</button><button class="btn" type="button">清除已保存凭证</button></div>
-          <div class="notice" style="margin-top:20px"><strong>连接测试不发送真实音频</strong><p class="muted">本次已完成 WebSocket 连接和初始化。真实音频转写需要在会议中验证；API Key 不能用于当前实时协议。</p></div>
+          <p class="muted">一个 APP Key 同时用于实时转写与缺口补录。替换或清除凭证都需要明确操作。</p>
+          <hr class="rule"><label class="label">APP Key<input class="field num" type="password" value="••••5678" aria-describedby="app-key-help"></label><p class="help" id="app-key-help">已保存。留空会保留当前值；输入新值会替换，清空需要使用“清除已保存 APP Key”。</p>
+          <div class="row" style="margin-top:20px"><button class="btn btn-primary" type="button">保存更改</button><button class="btn btn-quiet" type="button">测试连接</button><button class="btn" type="button">清除已保存 APP Key</button></div>
+          <div class="notice" style="margin-top:20px"><strong>连接测试不发送真实音频</strong><p class="muted">测试只验证实时转写 WebSocket 连接和初始化。真实音频转写需要在会议中验证。</p></div>
         </section></div>
       </section>
     </div></main>

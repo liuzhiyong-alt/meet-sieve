@@ -40,7 +40,11 @@ textarea:focus-visible {
   min-height: 100vh;
 }
 .ms-sidebar {
+  position: sticky;
+  top: 0;
   display: flex;
+  height: 100vh;
+  align-self: start;
   flex-direction: column;
   justify-content: space-between;
   padding: var(--ms-space-6) var(--ms-space-4);
@@ -48,11 +52,25 @@ textarea:focus-visible {
   border-right: var(--ms-border-width) solid var(--ms-border-soft);
 }
 .ms-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--ms-space-3);
   margin: 0 0 var(--ms-space-8);
   font-family: var(--ms-font-display);
   font-size: var(--ms-text-title);
   font-weight: 700;
   letter-spacing: var(--ms-tracking-display);
+}
+.ms-brand-mark {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border-radius: var(--ms-radius-sm);
+  background: var(--ms-bg-emphasis);
+  color: var(--ms-text-on-emphasis);
+  font-family: var(--ms-font-mono);
+  font-size: var(--ms-text-sm);
 }
 .ms-nav {
   display: grid;
@@ -71,9 +89,8 @@ textarea:focus-visible {
   text-align: left;
 }
 .ms-nav__item.is-current {
-  background: var(--ms-bg-canvas);
-  box-shadow: var(--ms-elevation-ring);
-  color: var(--ms-text-primary);
+  background: var(--ms-bg-emphasis);
+  color: var(--ms-text-on-emphasis);
   font-weight: 600;
 }
 .ms-sidebar__foot {
@@ -98,6 +115,22 @@ textarea:focus-visible {
   display: flex;
   align-items: center;
   gap: var(--ms-space-2);
+}
+.ms-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: var(--ms-space-2);
+  font-size: var(--ms-text-xs);
+}
+.ms-breadcrumb a {
+  color: var(--ms-text-secondary);
+  text-decoration: none;
+}
+.ms-breadcrumb a:hover {
+  color: var(--ms-text-primary);
+}
+.ms-breadcrumb [aria-current='page'] {
+  color: var(--ms-text-primary);
 }
 .ms-content {
   width: min(100%, var(--ms-content-max-width));
@@ -131,6 +164,7 @@ textarea:focus-visible {
   color: var(--ms-text-primary);
   cursor: pointer;
   font-weight: 600;
+  text-decoration: none;
   transition:
     background var(--ms-motion-fast) var(--ms-ease-standard),
     transform var(--ms-motion-fast) var(--ms-ease-standard);
@@ -158,11 +192,12 @@ textarea:focus-visible {
   border-color: var(--ms-border-default);
 }
 .ms-button--danger {
-  background: var(--ms-status-danger);
-  color: var(--ms-action-on-primary);
+  border-color: var(--ms-status-danger);
+  background: var(--ms-bg-canvas);
+  color: var(--ms-status-danger);
 }
 .ms-button--danger:hover:not(:disabled) {
-  background: var(--ms-status-danger);
+  background: var(--ms-status-danger-bg);
 }
 .ms-notice {
   display: flex;
@@ -204,6 +239,7 @@ textarea:focus-visible {
 }
 .ms-input {
   width: 100%;
+  height: var(--ms-control-height-md);
   min-width: 0;
   min-height: var(--ms-control-height-md);
   padding: 0 var(--ms-space-3);
@@ -292,6 +328,19 @@ code {
   gap: var(--ms-space-6);
   align-items: start;
 }
+.ms-settings-page-head {
+  margin-bottom: var(--ms-space-6);
+}
+.ms-settings-page-head h1 {
+  margin: 0;
+  font-family: var(--ms-font-display);
+  font-size: clamp(var(--ms-text-page-min), 4vw, var(--ms-text-page-max));
+  line-height: var(--ms-leading-page);
+  letter-spacing: var(--ms-tracking-display);
+}
+.ms-settings-content {
+  min-width: 0;
+}
 .ms-settings-nav {
   position: sticky;
   top: var(--ms-space-6);
@@ -366,22 +415,32 @@ code {
 .ms-field--compact {
   margin: var(--ms-space-4) 0;
 }
+.ms-participant-fieldset {
+  margin: var(--ms-space-4) 0;
+  padding: 0;
+  border: 0;
+}
+.ms-participant-fieldset > legend {
+  margin-bottom: var(--ms-space-2);
+  color: var(--ms-text-meta);
+  font-size: var(--ms-text-xs);
+}
 .ms-choice-list {
   display: grid;
   gap: var(--ms-space-2);
-  max-height: 280px;
-  margin: var(--ms-space-4) 0;
-  padding: 0;
-  overflow: auto;
-  border: 0;
+  max-height: clamp(276px, 44vh, 348px);
+  padding-right: var(--ms-space-1);
+  overflow-y: auto;
+  scrollbar-gutter: stable;
 }
 .ms-choice {
   display: grid;
   grid-template-columns: auto auto minmax(0, 1fr);
   align-items: center;
   gap: var(--ms-space-3);
-  min-height: var(--ms-control-height-lg);
+  min-height: calc(var(--ms-control-height-lg) + var(--ms-space-2));
   padding: var(--ms-space-2);
+  border: var(--ms-border-width) solid var(--ms-border-soft);
   border-radius: var(--ms-radius-md);
   cursor: pointer;
 }
@@ -430,37 +489,104 @@ code {
   color: var(--ms-text-muted);
   cursor: pointer;
 }
+.ms-advanced-panel {
+  margin-top: var(--ms-space-4);
+  padding-top: var(--ms-space-4);
+  border-top: var(--ms-border-width) solid var(--ms-border-soft);
+}
 .ms-advanced-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0 var(--ms-space-4);
-  margin-top: var(--ms-space-2);
+  align-items: start;
+  gap: var(--ms-space-4);
 }
-.ms-advanced-grid .ms-field:last-child {
-  grid-column: 1 / -1;
+.ms-advanced-field {
+  gap: 7px;
+  margin: 0;
+  color: var(--ms-text-secondary);
+  font-size: var(--ms-text-xs);
+  font-weight: 600;
+}
+.ms-advanced-field > select.ms-input {
+  height: var(--ms-control-height-lg);
+  min-height: var(--ms-control-height-lg);
 }
 .ms-lan-config {
-  grid-column: 1 / -1;
-  padding: var(--ms-space-4);
-  border: var(--ms-border-width) solid var(--ms-border-soft);
+  display: grid;
+  align-content: start;
+  gap: var(--ms-space-2);
+  margin: 0;
+  color: var(--ms-text-secondary);
+  font-size: var(--ms-text-xs);
+  font-weight: 600;
+}
+.ms-lan-switch-control {
+  display: flex;
+  min-height: var(--ms-control-height-lg);
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ms-space-3);
+  padding: var(--ms-space-2) var(--ms-space-3);
+  border: var(--ms-border-width) solid var(--ms-border-default);
   border-radius: var(--ms-radius-md);
-  background: var(--ms-bg-sidebar);
+  background: var(--ms-bg-canvas);
+  color: var(--ms-text-primary);
+  font-size: var(--ms-text-sm);
+  font-weight: 400;
 }
 .ms-lan-config .ms-help,
 .ms-lan-live-card .ms-help {
   margin: var(--ms-space-1) 0 0;
 }
 .ms-switch-label {
-  display: flex;
+  position: relative;
+  display: inline-flex;
+  width: var(--ms-toggle-width);
+  height: var(--ms-toggle-height);
+  flex: 0 0 auto;
   align-items: center;
-  gap: var(--ms-space-2);
-  color: var(--ms-text-secondary);
-  font-weight: 600;
+  cursor: pointer;
 }
-.ms-switch-label input {
-  width: 42px;
-  height: 24px;
-  accent-color: var(--ms-action-primary);
+.ms-switch-input {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  margin: 0;
+  cursor: pointer;
+  opacity: 0;
+}
+.ms-switch-input:focus-visible {
+  box-shadow: none;
+}
+.ms-switch-track {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: var(--ms-radius-pill);
+  background: var(--ms-border-default);
+  pointer-events: none;
+  transition: background var(--ms-motion-fast) var(--ms-ease-standard);
+}
+.ms-switch-track::after {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--ms-bg-canvas);
+  content: '';
+  transition: transform var(--ms-motion-fast) var(--ms-ease-standard);
+}
+.ms-switch-input:checked + .ms-switch-track {
+  background: var(--ms-bg-emphasis);
+}
+.ms-switch-input:checked + .ms-switch-track::after {
+  transform: translateX(18px);
+}
+.ms-switch-input:focus-visible + .ms-switch-track {
+  box-shadow: var(--ms-focus-ring);
 }
 .ms-status-list {
   margin: 0;
@@ -489,6 +615,17 @@ code {
 }
 .ms-preflight-card .ms-help {
   margin-bottom: 0;
+}
+.ms-preflight-card {
+  position: sticky;
+  top: calc(var(--ms-titlebar-height) + var(--ms-space-5));
+}
+.ms-inline-actions,
+.ms-modal-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--ms-space-2);
 }
 .ms-live-stage {
   display: flex;
@@ -858,7 +995,16 @@ code {
 .ms-people-card,
 .ms-empty-state {
   padding: var(--ms-space-6);
+}
+.ms-people-grid > .ms-empty-state {
   grid-column: 1 / -1;
+}
+.ms-people-card-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--ms-space-2);
 }
 .ms-card-head h2,
 .ms-empty-state h2,
@@ -1008,12 +1154,260 @@ code {
   border-bottom: var(--ms-border-width) solid var(--ms-border-soft);
 }
 
+/* Step 9：正式路由页面只组合既有 token 和已登记基础组件。 */
+.ms-nav__item {
+  text-decoration: none;
+}
+.ms-nav__item--active {
+  color: var(--ms-status-recording);
+}
+.ms-settings-card {
+  min-height: 0;
+  margin-top: 0;
+}
+.ms-settings-section-card + .ms-settings-section-card {
+  margin-top: var(--ms-space-5);
+}
+.ms-workspace-choose {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+.ms-home-head h1 {
+  margin: 0;
+  font-family: var(--ms-font-display);
+  font-size: clamp(var(--ms-text-page-min), 4vw, var(--ms-text-page-max));
+  line-height: var(--ms-leading-page);
+  letter-spacing: var(--ms-tracking-display);
+}
+.ms-home-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--ms-space-4);
+  margin-top: var(--ms-space-6);
+}
+.ms-home-action-card,
+.ms-home-recent {
+  min-height: 0;
+}
+.ms-home-action-card h2,
+.ms-home-recent h2 {
+  margin: 0;
+  font-size: var(--ms-text-title);
+}
+.ms-home-action-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ms-space-4);
+  margin-top: var(--ms-space-6);
+}
+.ms-home-empty-action {
+  margin-top: var(--ms-space-4);
+}
+.ms-home-recent {
+  margin-top: var(--ms-space-4);
+}
+.ms-home-recent-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ms-home-recent-list li {
+  display: flex;
+  min-height: var(--ms-control-height-lg);
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ms-space-4);
+  padding: var(--ms-space-3) 0;
+  border-bottom: var(--ms-border-width) solid var(--ms-border-soft);
+}
+.ms-home-recent-list a {
+  display: grid;
+  gap: var(--ms-space-1);
+  color: var(--ms-text-primary);
+  text-decoration: none;
+}
+.ms-records-toolbar {
+  display: grid;
+  min-height: 0;
+  grid-template-columns: minmax(280px, 1fr) minmax(220px, 280px) auto;
+  gap: var(--ms-space-3);
+  align-items: end;
+  margin-top: var(--ms-space-5);
+  padding: var(--ms-space-5);
+}
+.ms-records-filter-field {
+  gap: 7px;
+  margin: 0;
+  color: var(--ms-text-secondary);
+  font-size: var(--ms-text-xs);
+  font-weight: 600;
+}
+.ms-records-filter-submit {
+  min-width: 76px;
+}
+.ms-records-page {
+  display: flex;
+  height: calc(
+    100vh - var(--ms-titlebar-height) - var(--ms-space-8) - var(--ms-space-8)
+  );
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+}
+.ms-records-card {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  margin-top: var(--ms-space-4);
+  padding: var(--ms-space-5);
+  overflow: hidden;
+}
+.ms-records-viewport {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  overflow: hidden;
+}
+.ms-records-viewport > .ms-empty-state {
+  flex: 1 1 auto;
+}
+.ms-records-list {
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  flex: 1 1 auto;
+  overflow-y: auto;
+  list-style: none;
+  scrollbar-gutter: stable;
+}
+.ms-records-list:focus-visible {
+  outline: none;
+  box-shadow: var(--ms-focus-ring);
+}
+.ms-record-row {
+  display: grid;
+  min-height: 64px;
+  grid-template-columns: minmax(0, 1fr) 136px 104px;
+  align-items: center;
+  gap: var(--ms-space-3);
+  border-bottom: var(--ms-border-width) solid var(--ms-border-soft);
+}
+.ms-record-main {
+  display: grid;
+  min-width: 0;
+  gap: var(--ms-space-1);
+}
+.ms-record-main strong,
+.ms-record-main span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ms-record-status,
+.ms-record-action {
+  justify-self: center;
+  white-space: nowrap;
+}
+.ms-records-pagination {
+  display: grid;
+  flex: 0 0 auto;
+  grid-template-columns: 1fr 136px 1fr;
+  align-items: center;
+  gap: var(--ms-space-3);
+  margin-top: var(--ms-space-4);
+  padding-top: var(--ms-space-4);
+  border-top: var(--ms-border-width) solid var(--ms-border-soft);
+}
+.ms-records-pagination .ms-button:first-child {
+  justify-self: end;
+}
+.ms-records-pagination .ms-button:last-child {
+  justify-self: start;
+}
+.ms-records-pagination .ms-meta {
+  margin: 0;
+  text-align: center;
+}
 @media (max-width: 1100px) {
-  .ms-people-grid {
-    grid-template-columns: 1fr;
+  .ms-records-toolbar {
+    grid-template-columns: minmax(220px, 1fr) minmax(180px, 220px) auto;
   }
 }
-
+@media (max-width: 1024px) {
+  .ms-lan-switch-control {
+    gap: var(--ms-space-2);
+    padding-inline: var(--ms-space-2);
+  }
+  .ms-lan-switch-control > span {
+    white-space: nowrap;
+  }
+  .ms-records-toolbar {
+    grid-template-columns: minmax(0, 1fr) minmax(180px, 220px) auto;
+  }
+}
+.ms-list-item {
+  color: var(--ms-text-primary);
+  text-decoration: none;
+}
+.ms-list-item > span {
+  display: grid;
+  gap: var(--ms-space-1);
+}
+.ms-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--ms-space-5);
+  margin-top: var(--ms-space-5);
+}
+.ms-detail-grid > :only-child,
+.ms-danger-zone {
+  grid-column: 1 / -1;
+}
+.ms-fact-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--ms-space-3);
+  margin: var(--ms-space-5) 0;
+}
+.ms-fact-grid div {
+  padding: var(--ms-space-3);
+  border-radius: var(--ms-radius-md);
+  background: var(--ms-bg-subtle);
+}
+.ms-fact-grid dt {
+  color: var(--ms-text-muted);
+  font-size: var(--ms-text-xs);
+}
+.ms-fact-grid dd {
+  margin: var(--ms-space-1) 0 0;
+  font-weight: 700;
+}
+.ms-danger-zone {
+  border-color: var(--ms-status-danger);
+}
+.ms-transcript-list .ms-list-item {
+  align-items: flex-start;
+}
+.ms-transcript-list .ms-list-item p {
+  width: min(70%, 70ch);
+  margin: 0;
+}
+.ms-divider {
+  margin: var(--ms-space-7) 0;
+  border: 0;
+  border-top: var(--ms-border-width) solid var(--ms-border-soft);
+}
+@media (max-width: 1100px) {
+  .ms-detail-grid {
+    grid-template-columns: 1fr;
+  }
+  .ms-danger-zone {
+    grid-column: auto;
+  }
+}
 /* Step 8：严格复用 MeetSieve token 的会议收尾、冲突与纪要版本金标。 */
 .ms-finalization-stage {
   display: grid;

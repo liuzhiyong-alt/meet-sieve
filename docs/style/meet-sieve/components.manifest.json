@@ -1,8 +1,8 @@
 {
   "schemaVersion": "meet-sieve-components/v1",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "source": {
-    "css": "docs/UI/assets/meetsieve.css",
+    "css": "docs/UI/assets/meetsieve.css + docs/UI/step*-proposal/*.css",
     "html": "docs/UI/*.html",
     "spec": "docs/spec/技术方案.md"
   },
@@ -276,6 +276,51 @@
         "unsaved",
         "generation-failed"
       ]
+    },
+    {
+      "id": "cursor-pagination",
+      "name": "CursorPagination",
+      "maturity": "existing",
+      "evidence": ["step9-proposal/records.html", ".pagination"],
+      "states": ["first-page", "middle-page", "last-page", "loading"]
+    },
+    {
+      "id": "danger-zone",
+      "name": "DangerZone",
+      "maturity": "existing",
+      "evidence": ["step9-proposal/meeting-detail.html", ".danger-zone"],
+      "variants": ["recording", "meeting", "group", "voice-samples"],
+      "states": ["ready", "stopping-jobs", "deleting", "failed", "completed"]
+    },
+    {
+      "id": "recovery-summary",
+      "name": "RecoverySummary",
+      "maturity": "existing",
+      "evidence": [
+        "step9-proposal/interrupted-recovery.html",
+        "step9-proposal/delete-recovery.html",
+        ".recovery-summary"
+      ],
+      "variants": ["interrupted-meeting", "deletion"],
+      "states": ["ready", "running", "failed", "completed"]
+    },
+    {
+      "id": "storage-breakdown",
+      "name": "StorageBreakdown",
+      "maturity": "existing",
+      "evidence": [
+        "step9-proposal/settings-storage-diagnostics.html",
+        ".storage-summary",
+        ".storage-bar"
+      ],
+      "states": ["idle", "scanning", "ready", "failed"]
+    },
+    {
+      "id": "file-integrity-state",
+      "name": "FileIntegrityState",
+      "maturity": "existing",
+      "evidence": ["step9-proposal/attachment-error.html", ".file-state"],
+      "states": ["verified", "missing", "changed", "outside-workspace"]
     }
   ]
 }

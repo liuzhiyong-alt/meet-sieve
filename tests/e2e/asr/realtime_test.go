@@ -68,7 +68,7 @@ func TestRealVolcanoASRWithDefaultMicrophone(t *testing.T) {
 // realCredentials 从环境读取当前测试模式所需凭据，不打印值。
 func realCredentials(t *testing.T) transcriptdomain.Credentials {
 	t.Helper()
-	credentials := transcriptdomain.Credentials{Mode: transcriptdomain.AuthMode(os.Getenv("MEETSIEVE_VOLC_AUTH_MODE")), AppID: os.Getenv("MEETSIEVE_VOLC_APP_ID"), AccessToken: os.Getenv("MEETSIEVE_VOLC_ACCESS_TOKEN"), APIKey: os.Getenv("MEETSIEVE_VOLC_API_KEY")}
+	credentials := transcriptdomain.Credentials{Mode: transcriptdomain.AuthModeAPIKey, APIKey: os.Getenv("MEETSIEVE_VOLC_API_KEY")}
 	if err := credentials.Validate(); err != nil {
 		t.Fatalf("真实火山凭据环境变量不完整：%v", err)
 	}

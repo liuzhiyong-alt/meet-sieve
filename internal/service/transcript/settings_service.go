@@ -2,6 +2,7 @@ package transcript
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -38,40 +39,24 @@ type CredentialChange struct {
 
 // SaveASRSettingsInput 是 ASR 设置事务允许修改的字段。
 type SaveASRSettingsInput struct {
-	// Mode 是保存后的当前鉴权方式。
-	Mode transcriptdomain.AuthMode
-	// AppID 描述 App ID 的显式修改动作。
-	AppID CredentialChange
-	// AccessToken 描述 Access Token 的显式修改动作。
-	AccessToken CredentialChange
-	// APIKey 描述新控制台 API Key 的显式修改动作。
+	// APIKey 描述 APP Key 的显式修改动作。
 	APIKey CredentialChange
 }
 
 // ASRSettingsView 是可安全返回给 Wails 的掩码设置投影。
 type ASRSettingsView struct {
-	// Mode 是当前鉴权方式。
-	Mode transcriptdomain.AuthMode
-	// AppIDConfigured 表示已保存 App ID。
-	AppIDConfigured bool
-	// AppIDMask 只展示固定掩码和末四位。
-	AppIDMask string
-	// AccessTokenConfigured 表示已保存 Access Token。
-	AccessTokenConfigured bool
-	// AccessTokenMask 只展示固定掩码和末四位。
-	AccessTokenMask string
-	// APIKeyConfigured 表示已保存 API Key。
+	// APIKeyConfigured 表示已保存 APP Key。
 	APIKeyConfigured bool
 	// APIKeyMask 只展示固定掩码和末四位。
 	APIKeyMask string
+	// RequiresAPIKeyUpgrade 表示数据库仅保存了已停用的旧版凭据。
+	RequiresAPIKeyUpgrade bool
 	// UpdatedAt 是设置最后更新时间的 Unix 毫秒值。
 	UpdatedAt int64
 }
 
 // ConnectionProbeResult 明确区分“连接已建立”和“真实音频转写已验证”。
 type ConnectionProbeResult struct {
-	// Mode 是本次探测使用的鉴权方式。
-	Mode transcriptdomain.AuthMode
 	// ConnectionEstablished 表示 WebSocket 握手和初始化帧成功。
 	ConnectionEstablished bool
 	// RealAudioVerified 明确表示本连接探测没有发送真实音频。
@@ -141,7 +126,7 @@ func (service *SettingsService) SaveSettings(ctx context.Context, input SaveASRS
 	if service == nil || service.repository == nil || service.transactions == nil || service.clock == nil {
 		return ASRSettingsView{}, fmt.Errorf("ASR 设置服务未初始化")
 	}
-	if !input.Mode.IsValid() || !isValidCredentialChange(input.AppID) || !isValidCredentialChange(input.AccessToken) || !isValidCredentialChange(input.APIKey) {
+	if !isValidCredentialChange(input.APIKey) {
 		return ASRSettingsView{}, apperr.Biz(apperr.CodeASRSettingsInvalid, apperr.WithOp("transcript.settings.validate"))
 	}
 	var updated models.Settings
@@ -187,7 +172,7 @@ func (service *SettingsService) TestConnection(ctx context.Context, credentials 
 	}
 	session, err := transcriber.Start(ctx, port.RealtimeTranscriptionRequest{MeetingID: "connection-probe", Format: port.AudioFormat{SampleRate: 16000, BitsPerSample: 16, Channels: 1}, StartSample: 0})
 	if err != nil {
-		return ConnectionProbeResult{}, err
+		return ConnectionProbeResult{}, mapConnectionProbeError(err)
 	}
 	if err = session.Stop(ctx); err != nil {
 		return ConnectionProbeResult{}, err
@@ -196,15 +181,31 @@ func (service *SettingsService) TestConnection(ctx context.Context, credentials 
 	if latency < 0 {
 		latency = 0
 	}
-	return ConnectionProbeResult{Mode: credentials.Mode, ConnectionEstablished: true, RealAudioVerified: false, LatencyMS: latency}, nil
+	return ConnectionProbeResult{ConnectionEstablished: true, RealAudioVerified: false, LatencyMS: latency}, nil
+}
+
+// mapConnectionProbeError 避免把会议运行时的“正在重试”状态误用于一次性设置探测。
+func mapConnectionProbeError(err error) error {
+	var appErr *apperr.AppError
+	if !errors.As(err, &appErr) {
+		return err
+	}
+	if appErr.ErrorCode == apperr.CodeASRServiceBusy.ErrorCode || appErr.ErrorCode == apperr.CodeASRStreamInterrupted.ErrorCode {
+		return apperr.Dependency(apperr.CodeASRConnectionTestFailed, err, apperr.WithOp("transcript.settings.probe_start"))
+	}
+	return err
 }
 
 // applySettingsChanges 把显式字段动作应用到当前值；允许用户明确清空凭据，连接时再校验完整性。
 func applySettingsChanges(current models.Settings, input SaveASRSettingsInput, updatedAt int64) (models.Settings, error) {
-	mode := string(input.Mode)
+	if input.APIKey.Action == CredentialKeep && !hasCredential(current.VolcAPIKey) {
+		return models.Settings{}, apperr.Biz(apperr.CodeASRSettingsInvalid, apperr.WithOp("transcript.settings.keep_missing"))
+	}
+	mode := string(transcriptdomain.AuthModeAPIKey)
 	current.VolcAuthMode = &mode
-	current.VolcAPIAppKey = applyCredentialChange(current.VolcAPIAppKey, input.AppID)
-	current.VolcAPIAccessKey = applyCredentialChange(current.VolcAPIAccessKey, input.AccessToken)
+	// 新版凭据保存成功后立即清理旧字段，避免后续运行时误回退到 legacy 鉴权。
+	current.VolcAPIAppKey = nil
+	current.VolcAPIAccessKey = nil
 	current.VolcAPIKey = applyCredentialChange(current.VolcAPIKey, input.APIKey)
 	current.UpdatedAt = updatedAt
 	return current, nil
@@ -237,13 +238,19 @@ func isValidCredentialChange(change CredentialChange) bool {
 
 // credentialsFromSettings 仅在 Go 服务内部恢复当前模式需要的明文凭据。
 func credentialsFromSettings(settings models.Settings) transcriptdomain.Credentials {
-	credentials := transcriptdomain.Credentials{Mode: transcriptdomain.AuthMode(valueOrEmpty(settings.VolcAuthMode)), AppID: valueOrEmpty(settings.VolcAPIAppKey), AccessToken: valueOrEmpty(settings.VolcAPIAccessKey), APIKey: valueOrEmpty(settings.VolcAPIKey)}
+	credentials := transcriptdomain.Credentials{Mode: transcriptdomain.AuthModeAPIKey, APIKey: valueOrEmpty(settings.VolcAPIKey)}
 	return credentials
 }
 
 // mapSettingsView 只暴露是否配置和末四位掩码。
 func mapSettingsView(settings models.Settings) ASRSettingsView {
-	return ASRSettingsView{Mode: transcriptdomain.AuthMode(valueOrEmpty(settings.VolcAuthMode)), AppIDConfigured: settings.VolcAPIAppKey != nil, AppIDMask: maskCredential(settings.VolcAPIAppKey), AccessTokenConfigured: settings.VolcAPIAccessKey != nil, AccessTokenMask: maskCredential(settings.VolcAPIAccessKey), APIKeyConfigured: settings.VolcAPIKey != nil, APIKeyMask: maskCredential(settings.VolcAPIKey), UpdatedAt: settings.UpdatedAt}
+	apiKeyConfigured := hasCredential(settings.VolcAPIKey)
+	return ASRSettingsView{APIKeyConfigured: apiKeyConfigured, APIKeyMask: maskCredential(settings.VolcAPIKey), RequiresAPIKeyUpgrade: !apiKeyConfigured && (hasCredential(settings.VolcAPIAppKey) || hasCredential(settings.VolcAPIAccessKey)), UpdatedAt: settings.UpdatedAt}
+}
+
+// hasCredential 判断可空设置是否包含可用的非空凭据。
+func hasCredential(value *string) bool {
+	return value != nil && strings.TrimSpace(*value) != ""
 }
 
 // maskCredential 只保留末四位；短凭据只显示固定掩码，避免等价暴露。

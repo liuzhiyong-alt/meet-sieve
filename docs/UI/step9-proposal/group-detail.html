@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>小组详情 · Step 9 提案 · MeetSieve</title>
+    <link rel="stylesheet" href="../../style/meet-sieve/tokens.css" />
+    <link rel="stylesheet" href="../assets/meetsieve.css" />
+    <link rel="stylesheet" href="step9-proposal.css" />
+  </head>
+  <body>
+    <div class="app">
+      <aside class="sidebar">
+        <a class="brand" href="../index.html"
+          ><span class="brand-mark">M</span><span>MeetSieve</span></a
+        >
+        <nav class="nav" aria-label="主导航">
+          <a href="../start.html">开始会议</a
+          ><a href="../records.html">会议记录</a
+          ><a class="active" aria-current="page" href="../people.html"
+            >常用小组</a
+          ><a href="../settings.html">设置</a>
+        </nav>
+        <div class="sidebar-foot">成员与声纹仅保存在本机</div>
+      </aside>
+      <main class="main">
+        <header class="titlebar">
+          <a href="../people.html">← 返回小组与成员</a
+          ><span class="status ok">已保存</span>
+        </header>
+        <div class="content">
+          <section class="page-head">
+            <div>
+              <p class="eyebrow">小组详情</p>
+              <h1>产品周会</h1>
+              <p>小组只保存会前选择偏好；历史会议保留各自的参会者快照。</p>
+            </div>
+            <button class="btn btn-primary" type="button">保存小组</button>
+          </section>
+          <section class="person-layout">
+            <article class="card">
+              <div class="card-head">
+                <h2>基本信息</h2>
+                <span class="status">5 位成员</span>
+              </div>
+              <label class="label"
+                >小组名称<input class="field" value="产品周会"
+              /></label>
+              <hr class="rule" />
+              <div class="row-between">
+                <div>
+                  <strong>默认开启访客页</strong>
+                  <p class="muted">创建会议时仍可单独调整。</p>
+                </div>
+                <button
+                  class="toggle on"
+                  type="button"
+                  aria-pressed="true"
+                ></button>
+              </div>
+              <hr class="rule" />
+              <div class="card-head">
+                <div>
+                  <h2>成员</h2>
+                  <p class="muted">归档成员不会出现在默认候选中。</p>
+                </div>
+                <button class="btn btn-quiet" type="button">添加成员</button>
+              </div>
+              <div class="member-list">
+                <div class="member-row">
+                  <div class="row">
+                    <span class="avatar">刘</span>
+                    <div>
+                      <strong>刘毅</strong>
+                      <div class="meta">2 个声纹样本</div>
+                    </div>
+                  </div>
+                  <button class="btn btn-quiet" type="button">移出小组</button>
+                </div>
+                <div class="member-row">
+                  <div class="row">
+                    <span class="avatar">王</span>
+                    <div>
+                      <strong>王珂</strong>
+                      <div class="meta">未录入声纹</div>
+                    </div>
+                  </div>
+                  <button class="btn btn-quiet" type="button">移出小组</button>
+                </div>
+                <div class="member-row">
+                  <div class="row">
+                    <span class="avatar">陈</span>
+                    <div>
+                      <strong>陈然</strong>
+                      <div class="meta">1 个声纹样本</div>
+                    </div>
+                  </div>
+                  <button class="btn btn-quiet" type="button">移出小组</button>
+                </div>
+              </div>
+            </article>
+            <aside class="card danger-zone">
+              <div>
+                <p class="eyebrow">永久操作</p>
+                <h2>删除小组</h2>
+              </div>
+              <p class="muted">
+                只删除小组及成员关系，不删除成员、声纹或历史会议。
+              </p>
+              <button class="btn btn-danger" type="button">删除小组</button>
+            </aside>
+          </section>
+        </div>
+      </main>
+    </div>
+  </body>
+</html>

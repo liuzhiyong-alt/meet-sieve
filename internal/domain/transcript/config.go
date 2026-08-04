@@ -9,9 +9,9 @@ import (
 type AuthMode string
 
 const (
-	// AuthModeLegacy 使用 App ID 与 Access Token 的 Seed 二进制协议。
+	// AuthModeLegacy 仅用于识别数据库中的历史 App ID 与 Access Token 配置。
 	AuthModeLegacy AuthMode = "legacy"
-	// AuthModeAPIKey 仅保存新控制台凭据；当前官方实时协议未证明该模式可用。
+	// AuthModeAPIKey 使用新版 APP Key 建立 Seed 二进制协议连接。
 	AuthModeAPIKey AuthMode = "api_key"
 )
 
@@ -26,25 +26,17 @@ const (
 // Credentials 保存当前模式建立实时 ASR 所需的明文凭据。
 // 该值只允许在 Go 内存和受控 SQLite settings 中流转，不得进入 DTO、日志或错误正文。
 type Credentials struct {
-	Mode        AuthMode
-	AppID       string
-	AccessToken string
-	APIKey      string
+	Mode   AuthMode
+	APIKey string
 }
 
-// Validate 严格校验当前鉴权模式的必填字段，另一模式凭据不参与当前连接。
+// Validate 只接受新版 APP Key；legacy 仅保留为数据库历史状态。
 func (credentials Credentials) Validate() error {
-	switch credentials.Mode {
-	case AuthModeLegacy:
-		if strings.TrimSpace(credentials.AppID) == "" || strings.TrimSpace(credentials.AccessToken) == "" {
-			return fmt.Errorf("legacy 实时转写凭据不完整")
-		}
-	case AuthModeAPIKey:
-		if strings.TrimSpace(credentials.APIKey) == "" {
-			return fmt.Errorf("API Key 实时转写凭据不完整")
-		}
-	default:
-		return fmt.Errorf("实时转写鉴权方式无效")
+	if credentials.Mode != AuthModeAPIKey {
+		return fmt.Errorf("旧版实时转写凭据已停止使用，请配置 APP Key")
+	}
+	if strings.TrimSpace(credentials.APIKey) == "" {
+		return fmt.Errorf("APP Key 实时转写凭据不完整")
 	}
 	return nil
 }
@@ -80,13 +72,13 @@ func (config RuntimeConfig) Validate() error {
 // IsValid 返回鉴权方式是否在本 Step 冻结枚举中。
 func (mode AuthMode) IsValid() bool { return mode == AuthModeLegacy || mode == AuthModeAPIKey }
 
-// Transport 返回已获官方协议证明的 transport；未确认模式不得猜测或套用其他 API 的 Header。
+// Transport 返回当前运行时允许使用的 transport；历史鉴权方式不得继续建立连接。
 func (mode AuthMode) Transport() (TransportMode, error) {
 	switch mode {
-	case AuthModeLegacy:
-		return TransportSeedV1, nil
 	case AuthModeAPIKey:
-		return "", fmt.Errorf("API Key 尚无已确认的火山实时 WebSocket 鉴权协议")
+		return TransportSeedV1, nil
+	case AuthModeLegacy:
+		return "", fmt.Errorf("旧版实时转写凭据已停止使用，请配置 APP Key")
 	default:
 		return "", fmt.Errorf("未知实时转写鉴权方式")
 	}

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"sync"
+	"time"
 
 	application "meet-sieve/internal/app"
 	appbootstrap "meet-sieve/internal/app/bootstrap"
@@ -177,7 +178,18 @@ func (app *App) beforeClose(ctx context.Context) bool {
 		return true
 	}
 	if !active {
-		return false
+		deletionContext, cancelDeletion := context.WithTimeout(ctx, 5*time.Second)
+		deletionSafe := app.meeting.PrepareDeletionExit(deletionContext)
+		cancelDeletion()
+		if deletionSafe {
+			return false
+		}
+		app.logger.LogError(
+			"删除任务尚未安全持久化，已阻止退出", "deletion-before-close",
+			apperr.Biz(apperr.CodeMeetingMaintenanceLocked, apperr.WithOp("app.deletion.before_close")),
+			zap.String("component", "deletion"),
+		)
+		return true
 	}
 	runtime.EventsEmit(ctx, "meeting.close.requested")
 	return true

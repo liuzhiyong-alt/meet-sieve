@@ -22,24 +22,27 @@ func TestSelectPrivateInterfaces(t *testing.T) {
 	if selection.Recommended == nil || selection.Recommended.ID != "wifi" {
 		t.Fatalf("默认路由私网接口未被推荐：%#v", selection)
 	}
+	if selection.Reason != SelectionReasonDefaultRoute {
+		t.Fatalf("默认路由推荐原因错误：%#v", selection)
+	}
 	if len(selection.Choices) != 2 || selection.Choices[0].ID != "wifi" || selection.Choices[1].ID != "wired" {
 		t.Fatalf("私网候选过滤或排序不正确：%#v", selection.Choices)
 	}
 }
 
-// TestSelectPrivateInterfaces_DoesNotGuessWithoutPrivateDefault 验证无私网默认路由时不静默推荐第一项。
-func TestSelectPrivateInterfaces_DoesNotGuessWithoutPrivateDefault(t *testing.T) {
+// TestSelectPrivateInterfaces_RecommendsUniquePrivateCandidate 验证无默认路由时可自动使用唯一安全私网。
+func TestSelectPrivateInterfaces_RecommendsUniquePrivateCandidate(t *testing.T) {
 	t.Parallel()
 
 	selection := SelectPrivateInterfaces([]NetworkInterface{
 		{ID: "public-default", Name: "en0", Address: "203.0.113.2", Up: true, DefaultRoute: true},
 		{ID: "private", Name: "en1", Address: "192.168.2.3", Up: true},
 	})
-	if selection.Recommended != nil {
-		t.Fatalf("无私网默认路由时不应自动推荐：%#v", selection.Recommended)
+	if selection.Recommended == nil || selection.Recommended.ID != "private" {
+		t.Fatalf("唯一安全私网应自动推荐：%#v", selection.Recommended)
 	}
-	if len(selection.Choices) != 1 || selection.Reason != SelectionReasonManualRequired {
-		t.Fatalf("应保留手动选择并给出原因：%#v", selection)
+	if len(selection.Choices) != 1 || selection.Reason != SelectionReasonUniqueCandidate {
+		t.Fatalf("唯一候选推荐原因错误：%#v", selection)
 	}
 }
 
@@ -50,8 +53,20 @@ func TestSelectPrivateInterfaces_ReportsUnavailable(t *testing.T) {
 	selection := SelectPrivateInterfaces([]NetworkInterface{{
 		ID: "public", Name: "en0", Address: "198.51.100.10", Up: true, DefaultRoute: true,
 	}})
-	if selection.Recommended != nil || len(selection.Choices) != 0 || selection.Reason != SelectionReasonUnavailable {
+	if selection.Recommended != nil || len(selection.Choices) != 0 || selection.Reason != SelectionReasonNotFound {
 		t.Fatalf("无安全候选的结果不正确：%#v", selection)
+	}
+}
+
+// TestSelectPrivateInterfaces_ReportsAmbiguous 验证多个安全候选且无默认路由时不猜测。
+func TestSelectPrivateInterfaces_ReportsAmbiguous(t *testing.T) {
+	t.Parallel()
+	selection := SelectPrivateInterfaces([]NetworkInterface{
+		{ID: "wifi", Name: "en0", Address: "192.168.1.20", Up: true},
+		{ID: "wired", Name: "en1", Address: "10.0.0.8", Up: true},
+	})
+	if selection.Recommended != nil || len(selection.Choices) != 2 || selection.Reason != SelectionReasonAmbiguous {
+		t.Fatalf("多候选冲突结果错误：%#v", selection)
 	}
 }
 

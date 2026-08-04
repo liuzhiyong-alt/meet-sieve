@@ -64,7 +64,7 @@ func TestGroupService_CreateRejectsArchivedMember(t *testing.T) {
 	if err := memberService.ArchiveMember(context.Background(), createdMemberID); err != nil {
 		t.Fatalf("归档成员失败：%v", err)
 	}
-	service := newGroupService(db, transactions, createdGroupID, "88888888-8888-4888-8888-888888888888")
+	service := newGroupService(db, transactions, createdGroupID, "88888888-8888-4888-8888-888888888888", "99999999-9999-4999-8999-999999999999")
 
 	_, err := service.CreateGroup(context.Background(), peopleservice.CreateGroupInput{Name: "测试小组", MemberIDs: []string{createdMemberID}})
 	if got := apperr.Normalize(err); got.ErrorCode != "GROUP_MEMBER_INVALID" || got.Kind != apperr.KindBusiness {
@@ -80,7 +80,7 @@ func TestGroupService_DeleteKeepsMembers(t *testing.T) {
 	if _, err := memberService.CreateMember(context.Background(), peopleservice.CreateMemberInput{Name: "保留成员"}); err != nil {
 		t.Fatalf("准备成员失败：%v", err)
 	}
-	service := newGroupService(db, transactions, createdGroupID, "88888888-8888-4888-8888-888888888888")
+	service := newGroupService(db, transactions, createdGroupID, "88888888-8888-4888-8888-888888888888", "99999999-9999-4999-8999-999999999999")
 	if _, err := service.CreateGroup(context.Background(), peopleservice.CreateGroupInput{Name: "待删除小组", MemberIDs: []string{createdMemberID}}); err != nil {
 		t.Fatalf("准备小组失败：%v", err)
 	}
@@ -142,6 +142,32 @@ func TestGroupService_UpdateReplacesMembersInSubmittedOrder(t *testing.T) {
 	}
 	if updated.Members[0].MemberID != duplicateMemberID || updated.Members[0].SortOrder != 0 || updated.Members[1].MemberID != createdMemberID || updated.Members[1].SortOrder != 1 {
 		t.Fatalf("修改后成员顺序不正确：%+v", updated.Members)
+	}
+}
+
+// TestGroupService_UpdateRejectsStaleRevision 验证小组详情不会覆盖并发变化。
+func TestGroupService_UpdateRejectsStaleRevision(t *testing.T) {
+	db := openPeopleDatabase(t)
+	transactions := database.NewTransactionManager(db)
+	memberService := newMemberService(db, transactions, createdMemberID)
+	if _, err := memberService.CreateMember(context.Background(), peopleservice.CreateMemberInput{Name: "成员"}); err != nil {
+		t.Fatal(err)
+	}
+	service := newGroupService(
+		db, transactions, createdGroupID,
+		"88888888-8888-4888-8888-888888888888",
+		"99999999-9999-4999-8999-999999999999",
+	)
+	created, err := service.CreateGroup(context.Background(), peopleservice.CreateGroupInput{Name: "初始小组", MemberIDs: []string{createdMemberID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Table("groups").Where("id = ?", createdGroupID).Update("updated_at", created.UpdatedAt+1).Error; err != nil {
+		t.Fatal(err)
+	}
+	_, err = service.UpdateGroup(context.Background(), createdGroupID, peopleservice.UpdateGroupInput{Name: "覆盖小组", MemberIDs: []string{createdMemberID}, Revision: created.UpdatedAt})
+	if got := apperr.Normalize(err); got.ErrorCode != apperr.CodePeopleRevisionConflict.ErrorCode {
+		t.Fatalf("旧 revision 必须返回人员冲突：err=%v normalized=%+v", err, got)
 	}
 }
 

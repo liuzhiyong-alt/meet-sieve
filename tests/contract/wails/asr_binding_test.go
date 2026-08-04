@@ -19,8 +19,8 @@ import (
 	"meet-sieve/models"
 )
 
-// TestASRBindingMasksSecretsAndPreservesExplicitActions 验证 Wails 契约不回传明文，并保留显式凭据动作语义。
-func TestASRBindingMasksSecretsAndPreservesExplicitActions(t *testing.T) {
+// TestASRBindingUsesAPIKeyOnlyContract 验证 Wails 只接受 APP Key 动作且不返回旧鉴权字段。
+func TestASRBindingUsesAPIKeyOnlyContract(t *testing.T) {
 	service := newASRBindingService(t)
 	binding := wailstransport.NewASRBinding(
 		func() (*transcriptservice.SettingsService, error) { return service, nil },
@@ -29,10 +29,7 @@ func TestASRBindingMasksSecretsAndPreservesExplicitActions(t *testing.T) {
 		wailstransport.NewBoundary(infraLogger.NewNop()),
 	)
 	result := binding.SaveASRSettings(wailstransport.SaveASRSettingsDTO{
-		Mode:        "api_key",
-		AppID:       wailstransport.CredentialChangeDTO{Action: "keep"},
-		AccessToken: wailstransport.CredentialChangeDTO{Action: "keep"},
-		APIKey:      wailstransport.CredentialChangeDTO{Action: "replace", Value: "draft-secret-5678"},
+		APIKey: wailstransport.CredentialChangeDTO{Action: "replace", Value: "draft-secret-5678"},
 	})
 	if result.Code != 200 || result.Data == nil || result.Data.APIKeyMask != "••••5678" {
 		t.Fatalf("ASR 保存契约错误：%+v", result)
@@ -43,6 +40,11 @@ func TestASRBindingMasksSecretsAndPreservesExplicitActions(t *testing.T) {
 	}
 	if strings.Contains(string(encoded), "draft-secret-5678") || strings.Contains(string(encoded), "legacy-token-9876") {
 		t.Fatalf("ASR 设置契约泄漏凭证明文：%s", encoded)
+	}
+	for _, legacyField := range []string{"\"mode\"", "app_id", "access_token"} {
+		if strings.Contains(string(encoded), legacyField) {
+			t.Fatalf("ASR 设置响应仍包含旧鉴权字段 %s：%s", legacyField, encoded)
+		}
 	}
 }
 
@@ -55,14 +57,14 @@ func TestASRBindingConnectionProbeDoesNotClaimRealAudio(t *testing.T) {
 		func() context.Context { return context.Background() },
 		wailstransport.NewBoundary(infraLogger.NewNop()),
 	)
-	result := binding.TestASRConnection(wailstransport.TestASRConnectionDTO{Mode: "legacy", AppID: "probe-app", AccessToken: "probe-token"})
+	result := binding.TestASRConnection(wailstransport.TestASRConnectionDTO{APIKey: "probe-key"})
 	if result.Code != 200 || result.Data == nil || !result.Data.ConnectionEstablished || result.Data.RealAudioVerified {
 		t.Fatalf("ASR 连接探测契约错误：%+v", result)
 	}
 }
 
-// TestASRBindingRejectsUnprovenAPIKeyProbe 验证边界不会把 API Key 文件接口鉴权误报为实时连接成功。
-func TestASRBindingRejectsUnprovenAPIKeyProbe(t *testing.T) {
+// TestASRBindingRejectsEmptyAPIKeyProbe 验证边界拒绝空 APP Key。
+func TestASRBindingRejectsEmptyAPIKeyProbe(t *testing.T) {
 	service := newASRBindingService(t)
 	binding := wailstransport.NewASRBinding(
 		func() (*transcriptservice.SettingsService, error) { return service, nil },
@@ -70,9 +72,9 @@ func TestASRBindingRejectsUnprovenAPIKeyProbe(t *testing.T) {
 		func() context.Context { return context.Background() },
 		wailstransport.NewBoundary(infraLogger.NewNop()),
 	)
-	result := binding.TestASRConnection(wailstransport.TestASRConnectionDTO{Mode: "api_key", APIKey: "probe-secret"})
-	if result.Code == 200 || result.ErrorCode != "ASR_PROTOCOL_INCOMPATIBLE" {
-		t.Fatalf("API Key 实时探测应返回稳定协议错误：%+v", result)
+	result := binding.TestASRConnection(wailstransport.TestASRConnectionDTO{})
+	if result.Code == 200 || result.ErrorCode != "ASR_SETTINGS_INVALID" {
+		t.Fatalf("空 APP Key 探测应返回稳定设置错误：%+v", result)
 	}
 }
 

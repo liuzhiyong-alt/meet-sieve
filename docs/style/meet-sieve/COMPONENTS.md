@@ -12,34 +12,39 @@
 
 ## 2. 组件清单
 
-| 组件             | 当前 CSS / 页面证据                        | 成熟度                 |
-| ---------------- | ------------------------------------------ | ---------------------- |
-| AppShell         | `.app`、`.main`                            | existing               |
-| Sidebar          | `.sidebar`、`.nav`、`.sidebar-foot`        | existing               |
-| Titlebar         | `.titlebar`                                | existing               |
-| PageHeader       | `.page-head`、`.eyebrow`                   | existing               |
-| Button           | `.btn` 及变体                              | existing               |
-| IconButton       | `.btn-square`                              | existing，图标体系待选 |
-| Status           | `.status` 及语义变体                       | existing               |
-| Card             | `.card`、`.card-head`                      | existing               |
-| FormField        | `.field`、`.select`、`.textarea`、`.label` | existing               |
-| Choice           | `.choice`                                  | existing               |
-| Switch           | `.toggle`                                  | existing               |
-| Tabs             | `.tabs`、`.tab`、`.tab-panel`              | existing               |
-| List             | `.list`、`.list-item`                      | existing               |
-| Progress         | `.progress`                                | existing               |
-| Timeline         | `.timeline`、`.event`                      | existing               |
-| AudioMeter       | `.audio-bar`                               | existing               |
-| Notice           | `.notice`                                  | existing               |
-| EmptyState       | `.empty`                                   | existing               |
-| Modal            | `.modal-backdrop`、`.modal`                | existing               |
-| Toast            | `.toast`                                   | existing               |
-| Avatar           | `.avatar`、`.avatar-group`                 | existing               |
-| LiveStage        | `.live-stage`、`.recording-line`           | existing               |
-| OperationSteps   | Step 8 会议收尾与失败页面                  | existing               |
-| UploadItem       | Step 6 访客附件与结束会议提案              | existing               |
-| TranscriptEditor | `transcript-editor.html`                   | existing               |
-| MinuteVersion    | Step 8 纪要当前与历史版本页                | existing               |
+| 组件               | 当前 CSS / 页面证据                        | 成熟度                 |
+| ------------------ | ------------------------------------------ | ---------------------- |
+| AppShell           | `.app`、`.main`                            | existing               |
+| Sidebar            | `.sidebar`、`.nav`、`.sidebar-foot`        | existing               |
+| Titlebar           | `.titlebar`                                | existing               |
+| PageHeader         | `.page-head`、`.eyebrow`                   | existing               |
+| Button             | `.btn` 及变体                              | existing               |
+| IconButton         | `.btn-square`                              | existing，图标体系待选 |
+| Status             | `.status` 及语义变体                       | existing               |
+| Card               | `.card`、`.card-head`                      | existing               |
+| FormField          | `.field`、`.select`、`.textarea`、`.label` | existing               |
+| Choice             | `.choice`                                  | existing               |
+| Switch             | `.toggle`                                  | existing               |
+| Tabs               | `.tabs`、`.tab`、`.tab-panel`              | existing               |
+| List               | `.list`、`.list-item`                      | existing               |
+| Progress           | `.progress`                                | existing               |
+| Timeline           | `.timeline`、`.event`                      | existing               |
+| AudioMeter         | `.audio-bar`                               | existing               |
+| Notice             | `.notice`                                  | existing               |
+| EmptyState         | `.empty`                                   | existing               |
+| Modal              | `.modal-backdrop`、`.modal`                | existing               |
+| Toast              | `.toast`                                   | existing               |
+| Avatar             | `.avatar`、`.avatar-group`                 | existing               |
+| LiveStage          | `.live-stage`、`.recording-line`           | existing               |
+| OperationSteps     | Step 8 会议收尾与失败页面                  | existing               |
+| UploadItem         | Step 6 访客附件与结束会议提案              | existing               |
+| TranscriptEditor   | `transcript-editor.html`                   | existing               |
+| MinuteVersion      | Step 8 纪要当前与历史版本页                | existing               |
+| CursorPagination   | Step 9 会议记录                            | existing               |
+| DangerZone         | Step 9 会议、小组与成员详情                | existing               |
+| RecoverySummary    | Step 9 中断与删除恢复                      | existing               |
+| StorageBreakdown   | Step 9 通用设置                            | existing               |
+| FileIntegrityState | Step 9 附件异常                            | existing               |
 
 ## 3. AppShell
 
@@ -191,7 +196,7 @@ Error（按需）
 - 主内容在左，状态和动作在右；
 - 一行通常只有一个直接操作；
 - 长标题省略时必须提供完整访问方式；
-- 批量选择使用可见 Checkbox，批量操作区域随选择状态出现。
+- 会议记录 Alpha 不提供批量选择；需要批量能力的其他列表必须先登记业务模式。
 
 ## 13. Progress 与 OperationSteps
 
@@ -204,11 +209,11 @@ Error（按需）
 
 ### OperationSteps
 
-用于工作目录迁移、会议收尾和恢复：
+用于会议收尾、崩溃恢复和删除恢复：
 
 - 展示当前步骤、已完成步骤和等待步骤；
 - 失败发生在哪一步必须明确；
-- 切换事实源前说明旧目录仍然有效；
+- 工作目录切换是下次启动生效的单次设置，不使用 OperationSteps 伪装迁移流程；
 - 多阶段长流程优先页面或大面板，简单三步可使用 Modal。
 - 收尾流程不提供取消或跳过本地保存；失败后只允许安全重试或复制诊断编号；
 - 会议核心保存与补转写、Codex 同步分别表达，不能合并为一个总进度。
@@ -387,3 +392,58 @@ MinuteVersion
 
 页面级金标为 `docs/UI/step8-proposal/minutes-workspace.html` 与
 `docs/UI/step8-proposal/minutes-history.html`，已于 2026-08-03 经用户确认。
+
+## 24. CursorPagination
+
+用于会议记录和会议详情长列表的游标分页：
+
+- 只显示上一页、下一页和当前页信息，不查询或伪造总条数；
+- 会议记录固定每页 50 场，按 `started_at DESC, meeting_no DESC`；
+- 原始记录固定每页 200 条，会议消息固定每页 100 条，均按 `seq` 游标；
+- 修改搜索或任一筛选后回到第一页；
+- 加载期间禁用重复翻页，失败后保留当前页并允许重试；
+- 不使用无限滚动替代可恢复的路由与分页位置。
+
+## 25. DangerZone
+
+危险区固定在详情页正文底部，不放在 Titlebar：
+
+- 每个危险动作分别说明对象、保留内容和不可逆后果；
+- 删除录音与删除整场会议是两个独立动作，不合并为“删除”；
+- 删除录音使用明确 Danger Modal，无需输入会议号；
+- 删除整场会议必须先扫描目录，并输入会议号确认；
+- 停止后台任务或删除期间禁用同场新任务；
+- 部分删除持续显示失败事实、剩余项目和原清单重试入口，不能显示完整成功。
+
+## 26. RecoverySummary
+
+用于中断会议和删除失败的独立恢复页：
+
+- 先说明已经保留、已经完成和仍需处理的事实；
+- 中断恢复不得提供继续原会议录音，只能恢复已有数据或基于本场创建新会议；
+- 删除恢复只处理原 manifest 中的剩余项，不重新扫描扩大范围；
+- 使用真实阶段或数量，不使用虚假百分比；
+- 提供脱敏诊断编号和导出本场诊断入口。
+
+## 27. StorageBreakdown
+
+设置“通用”中的存储占用组件：
+
+- 同时展示工作目录总占用、磁盘总量和可用空间；
+- 工作目录内区分录音、附件、数据库与备份、派生与临时文件；
+- 日志和声纹模型单独统计，不混入会议数据；
+- 扫描只遍历规范目录，不跟随符号链接；
+- 扫描是阶段状态，不伪造文件级百分比；
+- 不提供自动清理或文件管理器式批量删除。
+
+## 28. FileIntegrityState
+
+附件和外部链接在用户明确点击后才调用系统默认程序：
+
+- 附件打开前重新校验登记相对路径、规范路径、状态和 SHA-256；
+- 文件缺失、内容变化或越出工作目录时持久显示错误并阻止打开；
+- “打开”和“在文件夹中显示”是两个独立动作；
+- 外部链接在操作附近显示完整域名，用户再次点击后交给默认浏览器；
+- 不自动打开、不提供应用内预览。
+
+上述 Step 9 组件页面级金标位于 `docs/UI/step9-proposal/`，已于 2026-08-03 经用户确认。

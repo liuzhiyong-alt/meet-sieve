@@ -11,13 +11,9 @@ import {
 } from '../../wailsjs/go/wails/ASRBinding'
 
 export interface ASRSettingsProjection {
-  mode: 'legacy' | 'api_key'
-  app_id_configured: boolean
-  app_id_mask: string
-  access_token_configured: boolean
-  access_token_mask: string
   api_key_configured: boolean
   api_key_mask: string
+  requires_api_key_upgrade: boolean
   updated_at: number
 }
 
@@ -47,13 +43,9 @@ interface AppEvent<T> {
 }
 
 const emptySettings: ASRSettingsProjection = {
-  mode: 'legacy',
-  app_id_configured: false,
-  app_id_mask: '',
-  access_token_configured: false,
-  access_token_mask: '',
   api_key_configured: false,
   api_key_mask: '',
+  requires_api_key_upgrade: false,
   updated_at: 0,
 }
 
@@ -77,10 +69,8 @@ export const useASRStore = defineStore('asr', {
     rawRecordErrorCode: '',
   }),
   getters: {
-    /** legacyReady 表示已保存当前实时协议所需的两项凭据。 */
-    legacyReady: (state): boolean =>
-      state.settings.app_id_configured &&
-      state.settings.access_token_configured,
+    /** apiKeyReady 表示已保存实时与补录共同使用的 APP Key。 */
+    apiKeyReady: (state): boolean => state.settings.api_key_configured,
     /** latestSeq 返回当前已恢复的持久事件游标。 */
     latestSeq: (state): number =>
       state.timeline.reduce((latest, entry) => Math.max(latest, entry.seq), 0),
@@ -103,17 +93,14 @@ export const useASRStore = defineStore('asr', {
       }
       this.settings = result.data as ASRSettingsProjection
     },
-    /** saveLegacy 用非空草稿替换凭据，空草稿保留已保存值。 */
-    async saveLegacy(appID: string, accessToken: string): Promise<boolean> {
+    /** saveAPIKey 用非空草稿替换 APP Key，空草稿保留已保存值。 */
+    async saveAPIKey(apiKey: string): Promise<boolean> {
       this.saving = true
       this.errorMessage = ''
       this.notice = ''
       const result = await SaveASRSettings(
         wails.SaveASRSettingsDTO.createFrom({
-          mode: 'legacy',
-          app_id: credentialChange(appID),
-          access_token: credentialChange(accessToken),
-          api_key: { action: 'keep', value: '' },
+          api_key: credentialChange(apiKey),
         }),
       )
       this.saving = false
@@ -122,20 +109,17 @@ export const useASRStore = defineStore('asr', {
         return false
       }
       this.settings = result.data as ASRSettingsProjection
-      this.notice = '实时转写凭证已保存'
+      this.notice = 'APP Key 已保存'
       return true
     },
-    /** clearLegacy 明确删除实时协议使用的两项凭据。 */
-    async clearLegacy(): Promise<boolean> {
+    /** clearAPIKey 明确删除实时转写与补录共同使用的 APP Key。 */
+    async clearAPIKey(): Promise<boolean> {
       this.saving = true
       this.errorMessage = ''
       this.notice = ''
       const result = await SaveASRSettings(
         wails.SaveASRSettingsDTO.createFrom({
-          mode: 'legacy',
-          app_id: { action: 'clear', value: '' },
-          access_token: { action: 'clear', value: '' },
-          api_key: { action: 'keep', value: '' },
+          api_key: { action: 'clear', value: '' },
         }),
       )
       this.saving = false
@@ -144,22 +128,16 @@ export const useASRStore = defineStore('asr', {
         return false
       }
       this.settings = result.data as ASRSettingsProjection
-      this.notice = '已清除实时转写凭证'
+      this.notice = '已清除 APP Key'
       return true
     },
-    /** testLegacyConnection 使用未保存草稿探测连接，不发送真实音频。 */
-    async testLegacyConnection(
-      appID: string,
-      accessToken: string,
-    ): Promise<boolean> {
+    /** testAPIKeyConnection 使用未保存 APP Key 探测连接，不发送真实音频。 */
+    async testAPIKeyConnection(apiKey: string): Promise<boolean> {
       this.probing = true
       this.errorMessage = ''
       this.notice = ''
       const result = await TestASRConnection({
-        mode: 'legacy',
-        app_id: appID.trim(),
-        access_token: accessToken.trim(),
-        api_key: '',
+        api_key: apiKey.trim(),
       })
       this.probing = false
       if (result.code !== 200 || !result.data) {

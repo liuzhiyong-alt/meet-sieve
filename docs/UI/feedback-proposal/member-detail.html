@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>成员详情反馈提案 · MeetSieve</title>
+    <link rel="stylesheet" href="../../style/meet-sieve/tokens.css" />
+    <link rel="stylesheet" href="../assets/meetsieve.css" />
+    <link rel="stylesheet" href="../step9-proposal/step9-proposal.css" />
+    <link rel="stylesheet" href="proposal.css" />
+    <script src="proposal.js" defer></script>
+  </head>
+  <body>
+    <div class="app">
+      <aside class="sidebar">
+        <a class="brand" href="home.html"
+          ><span class="brand-mark">M</span><span>MeetSieve</span></a
+        >
+        <nav class="nav" aria-label="主导航">
+          <a href="home.html">首页</a><a href="start.html">开始会议</a
+          ><a href="records.html">会议记录</a
+          ><a class="active" aria-current="page" href="people.html">常用小组</a
+          ><a href="settings.html">设置</a>
+        </nav>
+        <div class="sidebar-foot">成员与声纹仅保存在本机</div>
+      </aside>
+      <main class="main">
+        <header class="titlebar">
+          <nav class="proposal-breadcrumb" aria-label="面包屑">
+            <a href="people.html">常用小组</a><i aria-hidden="true">/</i
+            ><a href="people.html?tab=members">成员</a
+            ><i aria-hidden="true">/</i><span aria-current="page">刘毅</span>
+          </nav>
+          <span class="status ok" id="member-save-status">已保存</span>
+        </header>
+        <div class="content">
+          <section class="page-head">
+            <div>
+              <p class="eyebrow">成员详情</p>
+              <h1>刘毅</h1>
+              <p>成员资料用于会前选择；历史会议始终显示当时的姓名快照。</p>
+            </div>
+            <button
+              class="btn btn-primary"
+              type="button"
+              data-prototype-feedback="成员资料已保存"
+              data-status-target="#member-save-status"
+              data-status-text="已保存"
+            >
+              保存成员
+            </button>
+          </section>
+          <section class="person-layout">
+            <article class="stack">
+              <section class="card">
+                <div class="card-head">
+                  <h2>基本信息</h2>
+                  <span class="status ok">使用中</span>
+                </div>
+                <label class="label"
+                  >姓名<input class="field" value="刘毅"
+                /></label>
+                <label class="label field-offset"
+                  >备注<textarea class="textarea">产品负责人</textarea>
+                </label>
+                <p class="help">成员删除统一在成员列表操作，本页只编辑资料。</p>
+              </section>
+              <section class="card">
+                <div class="card-head">
+                  <div>
+                    <h2>声纹样本</h2>
+                    <p class="muted">显式录入的样本独立于任何会议。</p>
+                  </div>
+                  <button
+                    class="btn btn-primary"
+                    type="button"
+                    data-prototype-feedback="原型：进入录入声纹"
+                  >
+                    录入新样本
+                  </button>
+                </div>
+                <ul class="list">
+                  <li class="list-item">
+                    <div>
+                      <strong>安静环境 · 18 秒</strong>
+                      <div class="meta num">2026-07-30 · SHA-256 已校验</div>
+                    </div>
+                    <span class="status ok">质量可用</span>
+                  </li>
+                  <li class="list-item">
+                    <div>
+                      <strong>会议室 · 24 秒</strong>
+                      <div class="meta num">2026-08-01 · SHA-256 已校验</div>
+                    </div>
+                    <span class="status warn">有背景噪声</span>
+                  </li>
+                </ul>
+                <div class="danger-zone">
+                  <div>
+                    <p class="eyebrow">声纹操作</p>
+                    <h3>删除全部声纹</h3>
+                  </div>
+                  <p class="muted">
+                    只删除该成员显式录入的声纹样本，不删除成员或历史会议。
+                  </p>
+                  <button
+                    class="btn btn-danger"
+                    type="button"
+                    data-prototype-feedback="原型：已请求删除全部声纹"
+                  >
+                    删除全部声纹
+                  </button>
+                </div>
+              </section>
+            </article>
+            <aside class="card">
+              <div class="card-head">
+                <h3>成员引用</h3>
+                <span class="status">历史快照保留</span>
+              </div>
+              <ul class="list">
+                <li class="list-item">
+                  <span>所在小组</span><strong>2</strong>
+                </li>
+                <li class="list-item">
+                  <span>历史会议</span><strong>18</strong>
+                </li>
+                <li class="list-item">
+                  <span>可用声纹</span><strong>2</strong>
+                </li>
+              </ul>
+              <div class="notice proposal-inline-note">
+                <span
+                  >删除成员后，历史会议仍显示会议发生时保存的姓名快照。</span
+                >
+              </div>
+            </aside>
+          </section>
+        </div>
+      </main>
+    </div>
+  </body>
+</html>

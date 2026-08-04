@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -18,37 +19,64 @@ import (
 	"gorm.io/gorm"
 )
 
-// TestSettingsService_SaveMasksAndKeepsOtherMode 验证显式动作、另一模式保留和掩码读取。
-func TestSettingsService_SaveMasksAndKeepsOtherMode(t *testing.T) {
+// TestSettingsService_SaveAPIKeyClearsLegacyCredentials 验证保存新版凭据会原子清理旧版凭据。
+func TestSettingsService_SaveAPIKeyClearsLegacyCredentials(t *testing.T) {
 	service, db := newSettingsServiceForTest(t)
-	view, err := service.SaveSettings(context.Background(), SaveASRSettingsInput{Mode: transcriptdomain.AuthModeAPIKey, AppID: CredentialChange{Action: CredentialKeep}, AccessToken: CredentialChange{Action: CredentialKeep}, APIKey: CredentialChange{Action: CredentialReplace, Value: "new-api-key-5678"}})
+	view, err := service.SaveSettings(context.Background(), SaveASRSettingsInput{APIKey: CredentialChange{Action: CredentialReplace, Value: "new-api-key-5678"}})
 	if err != nil {
 		t.Fatalf("保存 API Key 设置失败：%v", err)
 	}
-	if !view.APIKeyConfigured || view.APIKeyMask != "••••5678" || !view.AppIDConfigured || view.AppIDMask != "••••1234" {
+	if !view.APIKeyConfigured || view.APIKeyMask != "••••5678" || view.RequiresAPIKeyUpgrade {
 		t.Fatalf("掩码设置投影错误：%+v", view)
 	}
 	var settings models.Settings
 	if err = db.Where("singleton_key = 1").Take(&settings).Error; err != nil {
 		t.Fatalf("读取保存后的设置失败：%v", err)
 	}
-	if valueOrEmpty(settings.VolcAPIAppKey) != "legacy-app-1234" || valueOrEmpty(settings.VolcAPIAccessKey) != "legacy-token-9876" || valueOrEmpty(settings.VolcAPIKey) != "new-api-key-5678" {
-		t.Fatal("切换模式不得清除另一模式凭据")
+	if settings.VolcAPIAppKey != nil || settings.VolcAPIAccessKey != nil || valueOrEmpty(settings.VolcAPIKey) != "new-api-key-5678" {
+		t.Fatal("保存 APP Key 必须清理旧版凭据并保留新值")
+	}
+}
+
+// TestSettingsService_LegacyOnlySettingsRequireUpgrade 验证历史凭据只触发升级提示，不会被视为新版配置。
+func TestSettingsService_LegacyOnlySettingsRequireUpgrade(t *testing.T) {
+	service, _ := newSettingsServiceForTest(t)
+
+	view, err := service.GetSettings(context.Background())
+	if err != nil {
+		t.Fatalf("读取历史设置失败：%v", err)
+	}
+	if view.APIKeyConfigured || !view.RequiresAPIKeyUpgrade {
+		t.Fatalf("历史凭据应要求配置 APP Key：%+v", view)
+	}
+}
+
+// TestSettingsService_RejectsKeepWithoutSavedAPIKey 验证未配置时不能用 keep 绕过 APP Key 必填约束。
+func TestSettingsService_RejectsKeepWithoutSavedAPIKey(t *testing.T) {
+	service, db := newSettingsServiceForTest(t)
+
+	_, err := service.SaveSettings(context.Background(), SaveASRSettingsInput{APIKey: CredentialChange{Action: CredentialKeep}})
+	var appErr *apperr.AppError
+	if !errors.As(err, &appErr) || appErr.ErrorCode != apperr.CodeASRSettingsInvalid.ErrorCode {
+		t.Fatalf("未配置 APP Key 时 keep 应失败：%v", err)
+	}
+	var settings models.Settings
+	if err = db.Where("singleton_key = 1").Take(&settings).Error; err != nil {
+		t.Fatalf("读取拒绝后的设置失败：%v", err)
+	}
+	if settings.VolcAPIAppKey == nil || settings.VolcAPIAccessKey == nil {
+		t.Fatal("保存被拒绝后不得清理历史凭据")
 	}
 }
 
 // TestSettingsService_ClearsCurrentCredentials 验证用户可以明确删除当前模式凭据，后续连接再报告未配置。
 func TestSettingsService_ClearsCurrentCredentials(t *testing.T) {
 	service, _ := newSettingsServiceForTest(t)
-	view, err := service.SaveSettings(context.Background(), SaveASRSettingsInput{
-		Mode:  transcriptdomain.AuthModeLegacy,
-		AppID: CredentialChange{Action: CredentialClear}, AccessToken: CredentialChange{Action: CredentialClear},
-		APIKey: CredentialChange{Action: CredentialKeep},
-	})
+	view, err := service.SaveSettings(context.Background(), SaveASRSettingsInput{APIKey: CredentialChange{Action: CredentialClear}})
 	if err != nil {
 		t.Fatalf("清除当前凭据失败：%v", err)
 	}
-	if view.AppIDConfigured || view.AccessTokenConfigured || view.AppIDMask != "" || view.AccessTokenMask != "" {
+	if view.APIKeyConfigured || view.APIKeyMask != "" || view.RequiresAPIKeyUpgrade {
 		t.Fatalf("清除后不得保留配置或掩码：%+v", view)
 	}
 	_, err = service.CurrentCredentials(context.Background())
@@ -66,7 +94,7 @@ func TestSettingsService_RejectsActiveMeetingChange(t *testing.T) {
 	if err := db.Create(&meeting).Error; err != nil {
 		t.Fatalf("创建活动会议失败：%v", err)
 	}
-	_, err := service.SaveSettings(context.Background(), SaveASRSettingsInput{Mode: transcriptdomain.AuthModeLegacy, AppID: CredentialChange{Action: CredentialReplace, Value: "changed-app"}, AccessToken: CredentialChange{Action: CredentialKeep}, APIKey: CredentialChange{Action: CredentialKeep}})
+	_, err := service.SaveSettings(context.Background(), SaveASRSettingsInput{APIKey: CredentialChange{Action: CredentialReplace, Value: "changed-key"}})
 	var appErr *apperr.AppError
 	if !errors.As(err, &appErr) || appErr.ErrorCode != apperr.CodeASRSettingsChangeBlocked.ErrorCode {
 		t.Fatalf("活动会议应阻止修改：%v", err)
@@ -84,7 +112,7 @@ func TestSettingsService_RejectsActiveMeetingChange(t *testing.T) {
 func TestSettingsService_TestConnectionDoesNotClaimRealAudio(t *testing.T) {
 	service, _ := newSettingsServiceForTest(t)
 	service.transcriber = func(transcriptdomain.Credentials) port.RealtimeTranscriber { return &probeTranscriber{} }
-	result, err := service.TestConnection(context.Background(), transcriptdomain.Credentials{Mode: transcriptdomain.AuthModeLegacy, AppID: "draft-app", AccessToken: "draft-token"})
+	result, err := service.TestConnection(context.Background(), transcriptdomain.Credentials{Mode: transcriptdomain.AuthModeAPIKey, APIKey: "draft-key"})
 	if err != nil {
 		t.Fatalf("连接测试失败：%v", err)
 	}
@@ -93,14 +121,31 @@ func TestSettingsService_TestConnectionDoesNotClaimRealAudio(t *testing.T) {
 	}
 }
 
-// TestSettingsService_TestConnectionRejectsUnprovenAPIKey 验证文件 API 的鉴权方式不会被套用到实时 WebSocket。
-func TestSettingsService_TestConnectionRejectsUnprovenAPIKey(t *testing.T) {
+// TestSettingsService_TestConnectionRejectsLegacyCredentials 验证旧版凭据不会进入实时 WebSocket。
+func TestSettingsService_TestConnectionRejectsLegacyCredentials(t *testing.T) {
 	service, _ := newSettingsServiceForTest(t)
 	service.transcriber = func(transcriptdomain.Credentials) port.RealtimeTranscriber { return &probeTranscriber{} }
+	_, err := service.TestConnection(context.Background(), transcriptdomain.Credentials{Mode: transcriptdomain.AuthModeLegacy, APIKey: "legacy-placeholder"})
+	var appErr *apperr.AppError
+	if !errors.As(err, &appErr) || appErr.ErrorCode != apperr.CodeASRSettingsInvalid.ErrorCode {
+		t.Fatalf("旧版实时探测应明确返回设置无效：%v", err)
+	}
+}
+
+// TestSettingsService_TestConnectionDoesNotClaimRetry 验证设置页探测失败不会误报后台正在重试。
+func TestSettingsService_TestConnectionDoesNotClaimRetry(t *testing.T) {
+	service, _ := newSettingsServiceForTest(t)
+	service.transcriber = func(transcriptdomain.Credentials) port.RealtimeTranscriber {
+		return &failingProbeTranscriber{err: apperr.Dependency(apperr.CodeASRServiceBusy, errors.New("provider busy"))}
+	}
+
 	_, err := service.TestConnection(context.Background(), transcriptdomain.Credentials{Mode: transcriptdomain.AuthModeAPIKey, APIKey: "draft-key"})
 	var appErr *apperr.AppError
-	if !errors.As(err, &appErr) || appErr.ErrorCode != apperr.CodeASRProtocolIncompatible.ErrorCode {
-		t.Fatalf("API Key 实时探测应明确返回协议不兼容：%v", err)
+	if !errors.As(err, &appErr) || appErr.ErrorCode != apperr.CodeASRConnectionTestFailed.ErrorCode {
+		t.Fatalf("连接探测失败应使用专用错误码：%v", err)
+	}
+	if strings.Contains(appErr.Message, "正在重试") || !strings.Contains(appErr.Message, "稍后重试") {
+		t.Fatalf("连接探测失败文案错误：%s", appErr.Message)
 	}
 }
 
@@ -127,6 +172,15 @@ func newSettingsServiceForTest(t *testing.T) (*SettingsService, *gorm.DB) {
 }
 
 type probeTranscriber struct{}
+
+type failingProbeTranscriber struct {
+	err error
+}
+
+// Start 返回设置页连接探测的可控失败。
+func (transcriber *failingProbeTranscriber) Start(context.Context, port.RealtimeTranscriptionRequest) (port.RealtimeTranscriptionSession, error) {
+	return nil, transcriber.err
+}
 
 // Start 返回一个只验证生命周期的本地探测 session。
 func (transcriber *probeTranscriber) Start(context.Context, port.RealtimeTranscriptionRequest) (port.RealtimeTranscriptionSession, error) {

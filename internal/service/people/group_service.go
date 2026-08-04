@@ -50,6 +50,8 @@ type UpdateGroupInput struct {
 	DefaultLANEnabled bool
 	// MemberIDs 按用户明确提交的顺序排列，并完整替换当前关系。
 	MemberIDs []string
+	// Revision 是详情页读取到的 updated_at；零值兼容既有列表内编辑入口。
+	Revision int64
 }
 
 // GroupService 编排小组资料的事务型业务操作。
@@ -122,12 +124,15 @@ func (service *GroupService) UpdateGroup(ctx context.Context, groupID string, in
 			return err
 		}
 		var updateErr error
-		persisted, updated, updateErr = service.repository.Update(ctx, tx, group, members)
+		persisted, updated, updateErr = service.repository.Update(ctx, tx, group, members, input.Revision)
 		return updateErr
 	}); err != nil {
 		return peopledomain.Group{}, mapGroupError(err, "people.group.update")
 	}
 	if !updated {
+		if input.Revision > 0 {
+			return peopledomain.Group{}, apperr.Biz(apperr.CodePeopleRevisionConflict, apperr.WithOp("people.group.update"))
+		}
 		return peopledomain.Group{}, apperr.Biz(apperr.CodeGroupNotFound, apperr.WithOp("people.group.update"))
 	}
 	return mapGroup(persisted, members), nil

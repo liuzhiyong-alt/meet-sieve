@@ -56,19 +56,34 @@ export interface StartMeetingRequest {
   lanInterfaceId: string
 }
 
+const recordOnlyRetryErrorCodes = new Set([
+  'ASR_AUTH_FAILED',
+  'ASR_CONNECT_TIMEOUT',
+  'ASR_PROTOCOL_INCOMPATIBLE',
+  'ASR_SERVICE_BUSY',
+])
+
 /** useMeetingStore 只保存可由 Binding 查询重建的会议 UI 投影。 */
 export const useMeetingStore = defineStore('meeting', {
   state: () => ({
     screen: 'start' as 'start' | 'live' | 'interrupted',
     current: null as MeetingProjection | null,
     draft: { meetingNo: '', subject: '' },
+    prefill: null as null | { subject: string; memberIds: string[] },
     members: [] as MeetingMemberOption[],
     groups: [] as MeetingGroupOption[],
     microphones: [] as MicrophoneOption[],
+    createScreenLoaded: false,
     loading: false,
     saving: false,
     errorMessage: '',
+    errorCode: '',
   }),
+  getters: {
+    /** canRetryRecordOnly 只允许已登记的实时 ASR 启动错误显式降级。 */
+    canRetryRecordOnly: (state): boolean =>
+      recordOnlyRetryErrorCodes.has(state.errorCode),
+  },
   actions: {
     /** refreshCurrentMeeting 在刷新或重启后优先恢复活动录音，其次恢复中断结果页。 */
     async refreshCurrentMeeting(): Promise<void> {
@@ -99,6 +114,7 @@ export const useMeetingStore = defineStore('meeting', {
     },
     /** loadCreateScreen 并行读取草稿、参会候选和系统真实麦克风。 */
     async loadCreateScreen(): Promise<void> {
+      if (this.createScreenLoaded || this.loading) return
       this.loading = true
       this.errorMessage = ''
       const [draft, people, microphones] = await Promise.all([
@@ -121,11 +137,13 @@ export const useMeetingStore = defineStore('meeting', {
       this.groups = people.data!.groups ?? []
       this.members = people.data!.members ?? []
       this.microphones = microphones.data ?? []
+      this.createScreenLoaded = true
     },
     /** startMeeting 仅在后端首帧与状态事务均提交后切换会议中页面。 */
     async startMeeting(request: StartMeetingRequest): Promise<boolean> {
       this.saving = true
       this.errorMessage = ''
+      this.errorCode = ''
       const result = await StartMeeting({
         meeting_no: request.meetingNo,
         suggested_meeting_no: request.suggestedMeetingNo,
@@ -142,6 +160,7 @@ export const useMeetingStore = defineStore('meeting', {
       this.saving = false
       if (result.code !== 200 || !result.data) {
         this.errorMessage = result.message
+        this.errorCode = result.errorCode ?? ''
         return false
       }
       this.current = result.data
@@ -179,6 +198,13 @@ export const useMeetingStore = defineStore('meeting', {
     },
     /** startNewMeeting 离开恢复结果页，新会议仍会创建新的 UUID 和录音流。 */
     startNewMeeting(): void {
+      this.current = null
+      this.screen = 'start'
+      this.createScreenLoaded = false
+    },
+    /** prepareFromHistory 只保存会前主题和活动成员候选，不复用会议号或录音会话。 */
+    prepareFromHistory(subject: string, memberIds: string[]): void {
+      this.prefill = { subject, memberIds: [...memberIds] }
       this.current = null
       this.screen = 'start'
     },

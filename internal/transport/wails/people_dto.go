@@ -1,6 +1,9 @@
 package wails
 
-import peopledomain "meet-sieve/internal/domain/people"
+import (
+	peopledomain "meet-sieve/internal/domain/people"
+	peopleservice "meet-sieve/internal/service/people"
+)
 
 // CreateMemberDTO 是创建成员的 Wails 输入。
 type CreateMemberDTO struct {
@@ -10,8 +13,9 @@ type CreateMemberDTO struct {
 
 // UpdateMemberDTO 是修改成员的 Wails 输入。
 type UpdateMemberDTO struct {
-	Name  string `json:"name"`
-	Notes string `json:"notes"`
+	Name     string `json:"name"`
+	Notes    string `json:"notes"`
+	Revision *int64 `json:"revision,omitempty"`
 }
 
 // MemberDTO 是成员列表与编辑结果的稳定投影。
@@ -24,6 +28,18 @@ type MemberDTO struct {
 	VoiceReadiness      string  `json:"voice_readiness"`
 	CreatedAt           int64   `json:"created_at"`
 	UpdatedAt           int64   `json:"updated_at"`
+	ArchivedAt          *int64  `json:"archived_at,omitempty"`
+}
+
+// MemberDetailDTO 是成员独立详情页的引用和能力契约。
+type MemberDetailDTO struct {
+	Member             MemberDTO `json:"member"`
+	Revision           int64     `json:"revision"`
+	GroupCount         int64     `json:"group_count"`
+	HistoricalMeetings int64     `json:"historical_meetings"`
+	CanArchive         bool      `json:"can_archive"`
+	CanRestore         bool      `json:"can_restore"`
+	CanDelete          bool      `json:"can_delete"`
 }
 
 // GroupMemberDTO 是小组内显式排序的成员引用。
@@ -40,7 +56,12 @@ type CreateGroupDTO struct {
 }
 
 // UpdateGroupDTO 是完整替换小组当前设置的 Wails 输入。
-type UpdateGroupDTO = CreateGroupDTO
+type UpdateGroupDTO struct {
+	Name              string   `json:"name"`
+	DefaultLANEnabled bool     `json:"default_lan_enabled"`
+	MemberIDs         []string `json:"member_ids"`
+	Revision          *int64   `json:"revision,omitempty"`
+}
 
 // GroupDTO 是小组与有序成员关系的稳定投影。
 type GroupDTO struct {
@@ -81,8 +102,14 @@ func mapMemberDTO(member peopledomain.Member) MemberDTO {
 		AcceptedSampleCount: member.VoiceSummary.AcceptedSampleCount,
 		RejectedSampleCount: member.VoiceSummary.RejectedSampleCount,
 		VoiceReadiness:      string(member.VoiceSummary.Readiness),
-		CreatedAt:           member.CreatedAt, UpdatedAt: member.UpdatedAt,
+		CreatedAt:           member.CreatedAt, UpdatedAt: member.UpdatedAt, ArchivedAt: member.ArchivedAt,
 	}
+}
+
+// mapMemberDetailDTO 转换成员详情业务投影。
+func mapMemberDetailDTO(detail peopleservice.MemberDetail) MemberDetailDTO {
+	return MemberDetailDTO{Member: mapMemberDTO(detail.Member), Revision: detail.Revision, GroupCount: detail.GroupCount,
+		HistoricalMeetings: detail.HistoricalMeetings, CanArchive: detail.CanArchive, CanRestore: detail.CanRestore, CanDelete: detail.CanDelete}
 }
 
 // mapMemberDTOs 批量转换成员投影。

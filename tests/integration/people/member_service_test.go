@@ -2,6 +2,7 @@ package people_test
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"testing"
 	"time"
@@ -228,6 +229,7 @@ func TestMemberService_DeleteUnreferencedRemovesMember(t *testing.T) {
 	if _, err := service.CreateMember(context.Background(), peopleservice.CreateMemberInput{Name: "李四"}); err != nil {
 		t.Fatalf("准备成员失败：%v", err)
 	}
+	insertCurrentGroupRelation(t, db, createdMemberID)
 
 	if err := service.DeleteMember(context.Background(), createdMemberID); err != nil {
 		t.Fatalf("删除未引用成员失败：%v", err)
@@ -238,6 +240,12 @@ func TestMemberService_DeleteUnreferencedRemovesMember(t *testing.T) {
 	}
 	if count != 0 {
 		t.Fatalf("未引用成员必须被永久删除：count=%d", count)
+	}
+	if err := db.Table("group_members").Where("member_id = ?", createdMemberID).Count(&count).Error; err != nil {
+		t.Fatalf("统计小组关系失败：%v", err)
+	}
+	if count != 0 {
+		t.Fatalf("硬删除成员不得保留小组关系：count=%d", count)
 	}
 }
 
@@ -264,18 +272,121 @@ func TestMemberService_DeleteUnreferencedCleansVoiceFilesFirst(t *testing.T) {
 	}
 }
 
-// TestMemberService_DeleteHistoricallyReferencedMemberReturnsArchiveOnlyError 验证历史会议引用成员只能归档。
-func TestMemberService_DeleteHistoricallyReferencedMemberReturnsArchiveOnlyError(t *testing.T) {
+// TestMemberService_DeleteVoiceFailureKeepsCurrentMember 验证声纹清理失败不会修改成员和小组关系。
+func TestMemberService_DeleteVoiceFailureKeepsCurrentMember(t *testing.T) {
+	db := openPeopleDatabase(t)
+	service := peopleservice.NewMemberService(peopleservice.MemberServiceDependencies{
+		Repository: peoplerepository.NewMemberRepository(db), Transactions: database.NewTransactionManager(db),
+		IDs: identity.NewFixedGenerator(createdMemberID), Clock: fixedTestClock(),
+		DeleteVoiceSamples: func(context.Context, string) error {
+			return apperr.Dependency(apperr.CodeVoiceSampleDeleteFailed, fmt.Errorf("受控文件清理失败"), apperr.WithOp("people.test.delete_voice"))
+		},
+	})
+	if _, err := service.CreateMember(context.Background(), peopleservice.CreateMemberInput{Name: "声纹失败成员"}); err != nil {
+		t.Fatalf("准备成员失败：%v", err)
+	}
+	insertCurrentGroupRelation(t, db, createdMemberID)
+
+	err := service.DeleteMember(context.Background(), createdMemberID)
+	if got := apperr.Normalize(err); got.ErrorCode != apperr.CodeVoiceSampleDeleteFailed.ErrorCode {
+		t.Fatalf("声纹清理失败语义不正确：%+v", got)
+	}
+	member, found, readErr := peoplerepository.NewMemberRepository(db).GetActiveByID(context.Background(), createdMemberID)
+	if readErr != nil || !found || member.ArchivedAt != nil {
+		t.Fatalf("失败后成员必须保持活动：member=%+v found=%v err=%v", member, found, readErr)
+	}
+	var relationCount int64
+	if err := db.Table("group_members").Where("member_id = ?", createdMemberID).Count(&relationCount).Error; err != nil {
+		t.Fatalf("统计小组关系失败：%v", err)
+	}
+	if relationCount != 1 {
+		t.Fatalf("失败后小组关系必须保留：count=%d", relationCount)
+	}
+}
+
+// TestMemberService_DeleteMemberTwiceReturnsNotFound 验证重复删除不会报告新的成功。
+func TestMemberService_DeleteMemberTwiceReturnsNotFound(t *testing.T) {
 	db := openPeopleDatabase(t)
 	service := newMemberService(db, database.NewTransactionManager(db), createdMemberID)
+	if _, err := service.CreateMember(context.Background(), peopleservice.CreateMemberInput{Name: "重复删除成员"}); err != nil {
+		t.Fatalf("准备成员失败：%v", err)
+	}
+	if err := service.DeleteMember(context.Background(), createdMemberID); err != nil {
+		t.Fatalf("首次删除失败：%v", err)
+	}
+	err := service.DeleteMember(context.Background(), createdMemberID)
+	if got := apperr.Normalize(err); got.ErrorCode != apperr.CodeMemberNotFound.ErrorCode {
+		t.Fatalf("重复删除必须返回成员不存在：%+v", got)
+	}
+}
+
+// TestMemberService_DeleteHistoricallyReferencedMemberKeepsHistory 验证删除当前成员时保留历史姓名快照。
+func TestMemberService_DeleteHistoricallyReferencedMemberKeepsHistory(t *testing.T) {
+	db := openPeopleDatabase(t)
+	voiceCleaned := false
+	service := peopleservice.NewMemberService(peopleservice.MemberServiceDependencies{
+		Repository: peoplerepository.NewMemberRepository(db), Transactions: database.NewTransactionManager(db),
+		IDs: identity.NewFixedGenerator(createdMemberID), Clock: fixedTestClock(),
+		DeleteVoiceSamples: func(_ context.Context, memberID string) error {
+			voiceCleaned = memberID == createdMemberID
+			return nil
+		},
+	})
 	if _, err := service.CreateMember(context.Background(), peopleservice.CreateMemberInput{Name: "王五"}); err != nil {
 		t.Fatalf("准备成员失败：%v", err)
 	}
+	if err := db.Exec(`INSERT INTO groups (
+		id, name, name_normalized, default_lan_enabled, created_at, updated_at
+	) VALUES (?, '历史项目组', '历史项目组', 0, 0, 0)`, archivedGroupID).Error; err != nil {
+		t.Fatalf("准备小组失败：%v", err)
+	}
+	if err := db.Exec(`INSERT INTO group_members (
+		id, group_id, member_id, sort_order, created_at, updated_at
+	) VALUES ('44444444-4444-4444-8444-444444444444', ?, ?, 0, 0, 0)`, archivedGroupID, createdMemberID).Error; err != nil {
+		t.Fatalf("准备小组成员关系失败：%v", err)
+	}
 	insertHistoricalMemberReference(t, db, createdMemberID)
+	insertHistoricalMemberFacts(t, db, createdMemberID)
 
-	err := service.DeleteMember(context.Background(), createdMemberID)
-	if got := apperr.Normalize(err); got.ErrorCode != "MEMBER_HISTORICALLY_REFERENCED" || got.Kind != apperr.KindBusiness {
-		t.Fatalf("历史引用错误语义不正确：%+v", got)
+	if err := service.DeleteMember(context.Background(), createdMemberID); err != nil {
+		t.Fatalf("删除历史引用成员失败：%v", err)
+	}
+	if !voiceCleaned {
+		t.Fatal("删除历史引用成员前必须清理声纹")
+	}
+	var archivedAt *int64
+	if err := db.Table("members").Select("archived_at").Where("id = ?", createdMemberID).Scan(&archivedAt).Error; err != nil {
+		t.Fatalf("读取成员墓碑失败：%v", err)
+	}
+	if archivedAt == nil {
+		t.Fatal("历史引用成员必须保留内部墓碑")
+	}
+	var relationCount int64
+	if err := db.Table("group_members").Where("member_id = ?", createdMemberID).Count(&relationCount).Error; err != nil {
+		t.Fatalf("统计当前小组关系失败：%v", err)
+	}
+	if relationCount != 0 {
+		t.Fatalf("已删除成员不得保留当前小组关系：%d", relationCount)
+	}
+	active, err := service.ListActiveMembers(context.Background())
+	if err != nil || len(active) != 0 {
+		t.Fatalf("已删除成员不得出现在活动候选：members=%+v err=%v", active, err)
+	}
+	var snapshot string
+	if err := db.Table("meeting_participants").Select("display_name_snapshot").Where("member_id = ?", createdMemberID).Scan(&snapshot).Error; err != nil {
+		t.Fatalf("读取历史姓名快照失败：%v", err)
+	}
+	if snapshot != "王五" {
+		t.Fatalf("历史姓名快照必须保持不变：%q", snapshot)
+	}
+	for _, table := range []string{"utterances", "messages", "corrections", "minute_versions"} {
+		var count int64
+		if err := db.Table(table).Where("meeting_id = ?", historicalMeetingID).Count(&count).Error; err != nil {
+			t.Fatalf("统计 %s 历史事实失败：%v", table, err)
+		}
+		if count != 1 {
+			t.Fatalf("删除成员不得删除 %s 历史事实：count=%d", table, count)
+		}
 	}
 }
 
@@ -296,6 +407,26 @@ func TestMemberService_UpdateChangesOnlyEditableMemberFields(t *testing.T) {
 	}
 	if updated.Name != "新名称" || updated.NameNormalized != "新名称" || updated.Notes == nil || *updated.Notes != "新备注" {
 		t.Fatalf("修改后的成员投影不正确：%+v", updated)
+	}
+}
+
+// TestMemberService_UpdateRejectsStaleDetailRevision 验证详情页不会覆盖并发变化。
+func TestMemberService_UpdateRejectsStaleDetailRevision(t *testing.T) {
+	db := openPeopleDatabase(t)
+	service := newMemberService(db, database.NewTransactionManager(db), createdMemberID)
+	if _, err := service.CreateMember(context.Background(), peopleservice.CreateMemberInput{Name: "初始名称"}); err != nil {
+		t.Fatalf("准备成员失败：%v", err)
+	}
+	detail, err := service.GetMemberDetail(context.Background(), createdMemberID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Table("members").Where("id = ?", createdMemberID).Update("updated_at", detail.Revision+1).Error; err != nil {
+		t.Fatal(err)
+	}
+	_, err = service.UpdateMember(context.Background(), createdMemberID, peopleservice.UpdateMemberInput{Name: "覆盖名称", Revision: detail.Revision})
+	if got := apperr.Normalize(err); got.ErrorCode != apperr.CodePeopleRevisionConflict.ErrorCode {
+		t.Fatalf("旧 revision 必须返回人员冲突：%+v", got)
 	}
 }
 
@@ -330,6 +461,44 @@ func insertHistoricalMemberReference(t *testing.T, db *gorm.DB, memberID string)
 		id, meeting_id, member_id, participant_kind, display_name_snapshot, sort_order, created_at, updated_at
 	) VALUES ('66666666-6666-4666-8666-666666666666', ?, ?, 'member', '王五', 0, 0, 0)`, historicalMeetingID, memberID).Error; err != nil {
 		t.Fatalf("准备历史成员引用失败：%v", err)
+	}
+}
+
+// insertCurrentGroupRelation 为删除边界测试写入一个当前小组关系。
+func insertCurrentGroupRelation(t *testing.T, db *gorm.DB, memberID string) {
+	t.Helper()
+	if err := db.Exec(`INSERT INTO groups (
+		id, name, name_normalized, default_lan_enabled, created_at, updated_at
+	) VALUES (?, '当前项目组', '当前项目组', 0, 0, 0)`, archivedGroupID).Error; err != nil {
+		t.Fatalf("准备当前小组失败：%v", err)
+	}
+	if err := db.Exec(`INSERT INTO group_members (
+		id, group_id, member_id, sort_order, created_at, updated_at
+	) VALUES ('44444444-4444-4444-8444-444444444444', ?, ?, 0, 0, 0)`, archivedGroupID, memberID).Error; err != nil {
+		t.Fatalf("准备当前小组关系失败：%v", err)
+	}
+}
+
+// insertHistoricalMemberFacts 写入转写、校对、消息和纪要，验证成员删除不级联历史事实。
+func insertHistoricalMemberFacts(t *testing.T, db *gorm.DB, memberID string) {
+	t.Helper()
+	statements := []struct {
+		query string
+		args  []any
+	}{
+		{query: `INSERT INTO asr_sessions(id, meeting_id, provider, state, started_at, ended_at, reconnect_count, transport_mode, input_start_sample, last_sent_sample, last_final_sample, created_at, updated_at) VALUES ('77777777-7777-4777-8777-777777777777', ?, 'volcano', 'stopped', 0, 1, 0, 'seed_v1', 0, 16000, 16000, 0, 1)`, args: []any{historicalMeetingID}},
+		{query: `INSERT INTO meeting_events(id, meeting_id, seq, kind, occurred_at, source, entity_type, entity_id, created_at, updated_at) VALUES ('88888888-8888-4888-8888-888888888888', ?, 1, 'utterance.final', 0, 'asr', 'utterance', '99999999-9999-4999-8999-999999999999', 0, 0)`, args: []any{historicalMeetingID}},
+		{query: `INSERT INTO utterances(id, meeting_id, event_id, asr_session_id, provider_result_id, original_text, current_text, start_sample, end_sample, current_participant_id, speaker_assignment_source, text_revision, speaker_revision, created_at, updated_at) VALUES ('99999999-9999-4999-8999-999999999999', ?, '88888888-8888-4888-8888-888888888888', '77777777-7777-4777-8777-777777777777', 'history-result', '历史原文', '历史正文', 0, 16000, '66666666-6666-4666-8666-666666666666', 'manual_single', 1, 1, 0, 0)`, args: []any{historicalMeetingID}},
+		{query: `INSERT INTO meeting_events(id, meeting_id, seq, kind, occurred_at, source, entity_type, entity_id, created_at, updated_at) VALUES ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', ?, 2, 'message.created', 1, 'host', 'message', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', 1, 1)`, args: []any{historicalMeetingID}},
+		{query: `INSERT INTO messages(id, meeting_id, event_id, author_kind, member_id, display_name_snapshot, content, created_at, updated_at) VALUES ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', ?, 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'host', ?, '王五', '历史消息', 1, 1)`, args: []any{historicalMeetingID, memberID}},
+		{query: `INSERT INTO meeting_events(id, meeting_id, seq, kind, occurred_at, source, entity_type, entity_id, created_at, updated_at) VALUES ('cccccccc-cccc-4ccc-8ccc-cccccccccccc', ?, 3, 'utterance.corrected', 2, 'host', 'utterance', '99999999-9999-4999-8999-999999999999', 2, 2)`, args: []any{historicalMeetingID}},
+		{query: `INSERT INTO corrections(id, meeting_id, event_id, request_id, target_kind, target_id, correction_kind, before_json, after_json, operator_kind, target_revision, result_revision, batch_scope, created_at, updated_at) VALUES ('dddddddd-dddd-4ddd-8ddd-dddddddddddd', ?, 'cccccccc-cccc-4ccc-8ccc-cccccccccccc', 'ffffffff-ffff-4fff-8fff-ffffffffffff', 'utterance', '99999999-9999-4999-8999-999999999999', 'text', '{"text":"历史原文"}', '{"text":"历史正文"}', 'system', 1, 2, 'single', 2, 2)`, args: []any{historicalMeetingID}},
+		{query: `INSERT INTO minute_versions(id, meeting_id, version_no, source, content_markdown, state, is_current, confirmed_at, created_at, updated_at) VALUES ('eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee', ?, 1, 'human', '# 历史纪要', 'confirmed', 1, 3, 3, 3)`, args: []any{historicalMeetingID}},
+	}
+	for _, statement := range statements {
+		if err := db.Exec(statement.query, statement.args...).Error; err != nil {
+			t.Fatalf("准备成员历史事实失败：%v", err)
+		}
 	}
 }
 

@@ -97,6 +97,9 @@ type Resource struct {
 	CurrentDescription  *string `gorm:"column:current_description"`
 	DescriptionRevision int     `gorm:"column:description_revision"`
 	State               string  `gorm:"column:state"`
+	IntegrityState      string  `gorm:"column:integrity_state"`
+	LastVerifiedAt      *int64  `gorm:"column:last_verified_at"`
+	IntegrityErrorCode  *string `gorm:"column:integrity_error_code"`
 	CreatedAt           int64   `gorm:"column:created_at"`
 	UpdatedAt           int64   `gorm:"column:updated_at"`
 }

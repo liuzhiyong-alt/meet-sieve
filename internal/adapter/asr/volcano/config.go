@@ -26,13 +26,12 @@ func BuildHeaders(credentials Credentials, resourceID string, connectID string) 
 	if strings.TrimSpace(resourceID) == "" || strings.TrimSpace(connectID) == "" {
 		return nil, fmt.Errorf("实时转写握手参数不完整")
 	}
-	if credentials.Mode != transcriptdomain.AuthModeLegacy {
-		return nil, fmt.Errorf("API Key 尚无已确认的火山实时 WebSocket 鉴权协议")
+	if credentials.Mode != transcriptdomain.AuthModeAPIKey {
+		return nil, fmt.Errorf("旧版实时转写凭据已停止使用，请配置 APP Key")
 	}
 	headers := http.Header{}
 	headers.Set("X-Api-Resource-Id", resourceID)
 	headers.Set("X-Api-Connect-Id", connectID)
-	headers.Set("X-Api-App-Key", credentials.AppID)
-	headers.Set("X-Api-Access-Key", credentials.AccessToken)
+	headers.Set("X-Api-Key", credentials.APIKey)
 	return headers, nil
 }

@@ -5,6 +5,7 @@ import { EventsOn } from '../../../wailsjs/runtime/runtime'
 import { useGapStore } from '../../stores/gap'
 import { useMinutesStore } from '../../stores/minutes'
 import type { Step8EventEnvelope } from '../../stores/finalization'
+import { dirtyEditRegistry } from '../../router/dirty'
 
 const props = defineProps<{ meetingId: string; meetingNo: string }>()
 const emit = defineEmits<{ back: []; history: [] }>()
@@ -12,6 +13,7 @@ const minutes = useMinutesStore()
 const gaps = useGapStore()
 const tab = ref<'edit' | 'preview'>('edit')
 let stopListener: (() => void) | undefined
+let unregisterDirty: (() => void) | undefined
 
 const current = computed(() => minutes.projection.current)
 const generationBlocked = computed(() => gaps.state === 'processing')
@@ -38,8 +40,19 @@ onMounted(async () => {
       if (minutes.applyEvent(event)) void minutes.refresh(props.meetingId)
     },
   )
+  unregisterDirty = dirtyEditRegistry.register({
+    id: `minutes-${props.meetingId}`,
+    label: '会议纪要',
+    isDirty: () => minutes.dirty,
+    canSave: () => Boolean(minutes.baseVersionID && minutes.draft.trim()),
+    save: () => minutes.saveDraft(),
+    discard: () => minutes.resetDraft(),
+  })
 })
-onBeforeUnmount(() => stopListener?.())
+onBeforeUnmount(() => {
+  stopListener?.()
+  unregisterDirty?.()
+})
 
 /** sourceLabel 映射版本来源。 */
 function sourceLabel(source?: string): string {

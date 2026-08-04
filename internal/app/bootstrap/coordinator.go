@@ -77,6 +77,14 @@ func NewCoordinator(dependencies Dependencies) *Coordinator {
 	}
 }
 
+// SetWorkspaceChangeBlocker 把桌面业务运行时安全门接入工作目录设置。
+func (coordinator *Coordinator) SetWorkspaceChangeBlocker(blocker workspace.MeetingInProgress) {
+	if coordinator == nil || coordinator.workspace == nil {
+		return
+	}
+	coordinator.workspace.SetChangeBlocker(blocker)
+}
+
 // Start 从 journal 和 locator 重建启动状态；不存在 locator 时不打开 SQLite 或创建目录。
 func (coordinator *Coordinator) Start() State {
 	if coordinator == nil || coordinator.locator == nil {

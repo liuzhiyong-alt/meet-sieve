@@ -146,6 +146,8 @@ var (
 	CodeASRAuthFailed = Code{Value: 403, ErrorCode: "ASR_AUTH_FAILED", Message: "实时转写凭据无效或服务未开通", Kind: KindDependency}
 	// CodeASRConnectTimeout 表示实时 ASR WebSocket 未在时限内建立。
 	CodeASRConnectTimeout = Code{Value: 504, ErrorCode: "ASR_CONNECT_TIMEOUT", Message: "实时转写连接超时", Kind: KindDependency, Retryable: true}
+	// CodeASRConnectionTestFailed 表示设置页独立探测暂时失败，但不会自动重试。
+	CodeASRConnectionTestFailed = Code{Value: 502, ErrorCode: "ASR_CONNECTION_TEST_FAILED", Message: "实时转写服务暂不可用，请稍后重试", Kind: KindDependency, Retryable: true}
 	// CodeASRProtocolIncompatible 表示服务端响应缺少稳定 final、时间范围或停止语义。
 	CodeASRProtocolIncompatible = Code{Value: 502, ErrorCode: "ASR_PROTOCOL_INCOMPATIBLE", Message: "实时转写协议暂不兼容，已保留录音", Kind: KindDependency}
 	// CodeASRServiceBusy 表示火山服务限流或暂时不可用。

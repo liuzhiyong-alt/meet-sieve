@@ -51,6 +51,19 @@ type UpdateMemberInput struct {
 	Name string
 	// Notes 是修改后的可选成员备注；空字符串会清空备注。
 	Notes string
+	// Revision 是详情页读取到的 updated_at；零值兼容既有列表内编辑入口。
+	Revision int64
+}
+
+// MemberDetail 是独立成员路由需要的引用、状态和动作摘要。
+type MemberDetail struct {
+	Member             peopledomain.Member
+	Revision           int64
+	GroupCount         int64
+	HistoricalMeetings int64
+	CanArchive         bool
+	CanRestore         bool
+	CanDelete          bool
 }
 
 // MemberService 编排成员资料的事务型业务操作。
@@ -127,6 +140,30 @@ func (service *MemberService) GetMember(ctx context.Context, memberID string) (p
 	return result[0], nil
 }
 
+// GetMemberDetail 返回活动或归档成员的真实引用和能力投影。
+func (service *MemberService) GetMemberDetail(ctx context.Context, memberID string) (MemberDetail, error) {
+	if service.repository == nil {
+		return MemberDetail{}, fmt.Errorf("成员服务 Repository 未初始化")
+	}
+	member, found, err := service.repository.GetByID(ctx, memberID)
+	if err != nil || !found {
+		if err != nil {
+			return MemberDetail{}, err
+		}
+		return MemberDetail{}, apperr.Biz(apperr.CodeMemberNotFound, apperr.WithOp("people.member.detail"))
+	}
+	mapped, err := service.mapMembersWithVoice(ctx, []models.Member{member})
+	if err != nil {
+		return MemberDetail{}, err
+	}
+	groupCount, meetingCount, err := service.repository.CountReferences(ctx, memberID)
+	if err != nil {
+		return MemberDetail{}, err
+	}
+	archived := member.ArchivedAt != nil
+	return MemberDetail{Member: mapped[0], Revision: member.UpdatedAt, GroupCount: groupCount, HistoricalMeetings: meetingCount, CanArchive: !archived, CanRestore: archived, CanDelete: meetingCount == 0}, nil
+}
+
 // UpdateMember 修改活动成员的名称和备注。
 func (service *MemberService) UpdateMember(ctx context.Context, memberID string, input UpdateMemberInput) (peopledomain.Member, error) {
 	name, normalized, err := validateMemberName(input.Name)
@@ -139,12 +176,15 @@ func (service *MemberService) UpdateMember(ctx context.Context, memberID string,
 	var updated models.Member
 	var found bool
 	if err := service.transactions.WithinTransaction(ctx, func(tx *gorm.DB) error {
-		updated, found, err = service.repository.Update(ctx, tx, memberID, name, normalized, optionalNotes(input.Notes), service.clock.Now().UnixMilli())
+		updated, found, err = service.repository.Update(ctx, tx, memberID, name, normalized, optionalNotes(input.Notes), input.Revision, service.clock.Now().UnixMilli())
 		return err
 	}); err != nil {
 		return peopledomain.Member{}, mapCreateMemberError(err)
 	}
 	if !found {
+		if input.Revision > 0 {
+			return peopledomain.Member{}, apperr.Biz(apperr.CodePeopleRevisionConflict, apperr.WithOp("people.member.update"))
+		}
 		return peopledomain.Member{}, apperr.Biz(apperr.CodeMemberNotFound, apperr.WithOp("people.member.update"))
 	}
 	return mapMember(updated), nil
@@ -170,51 +210,91 @@ func (service *MemberService) ArchiveMember(ctx context.Context, memberID string
 	return nil
 }
 
-// DeleteMember 永久删除没有历史会议引用的成员。
-func (service *MemberService) DeleteMember(ctx context.Context, memberID string) error {
-	if service.transactions == nil || service.repository == nil {
+// RestoreMember 恢复归档成员；名称已被活动成员占用时返回稳定冲突。
+func (service *MemberService) RestoreMember(ctx context.Context, memberID string) error {
+	if service.transactions == nil || service.repository == nil || service.clock == nil {
 		return fmt.Errorf("成员服务依赖未初始化")
 	}
-	var referenced bool
+	var restored bool
+	err := service.transactions.WithinTransaction(ctx, func(tx *gorm.DB) error {
+		var restoreErr error
+		restored, restoreErr = service.repository.Restore(ctx, tx, memberID, service.clock.Now().UnixMilli())
+		return restoreErr
+	})
+	if errors.Is(err, peoplerepository.ErrMemberNameConflict) {
+		return apperr.Biz(apperr.CodeMemberNameConflict, apperr.WithOp("people.member.restore"))
+	}
+	if err != nil {
+		return err
+	}
+	if !restored {
+		return apperr.Biz(apperr.CodeMemberNotFound, apperr.WithOp("people.member.restore"))
+	}
+	return nil
+}
+
+// DeleteAllVoiceSamples 删除活动成员全部显式样本，但保留成员和历史会议。
+func (service *MemberService) DeleteAllVoiceSamples(ctx context.Context, memberID string) error {
+	if _, found, err := service.repository.GetActiveByID(ctx, memberID); err != nil {
+		return err
+	} else if !found {
+		return apperr.Biz(apperr.CodeMemberNotFound, apperr.WithOp("people.member.delete_voice"))
+	}
+	if service.deleteVoiceSamples == nil {
+		return fmt.Errorf("声纹删除服务未初始化")
+	}
+	return service.deleteVoiceSamples(ctx, memberID)
+}
+
+// DeleteMember 删除当前成员；有历史引用时保留内部墓碑，没有引用时执行硬删除。
+func (service *MemberService) DeleteMember(ctx context.Context, memberID string) error {
+	if service.transactions == nil || service.repository == nil || service.clock == nil {
+		return fmt.Errorf("成员服务依赖未初始化")
+	}
 	if _, found, err := service.repository.GetActiveByID(ctx, memberID); err != nil {
 		return err
 	} else if !found {
 		return apperr.Biz(apperr.CodeMemberNotFound, apperr.WithOp("people.member.delete"))
 	}
+	if err := service.cleanVoiceSamples(ctx, memberID); err != nil {
+		return err
+	}
+	var persisted bool
 	if err := service.transactions.WithinTransaction(ctx, func(tx *gorm.DB) error {
-		var err error
-		referenced, err = service.repository.HasHistoricalReference(ctx, tx, memberID)
+		referenced, err := service.resolveDeletionMode(ctx, tx, memberID)
+		if err != nil {
+			return err
+		}
+		persisted, err = service.persistMemberDeletion(ctx, tx, memberID, referenced)
 		return err
 	}); err != nil {
 		return err
 	}
-	if referenced {
-		return apperr.Biz(apperr.CodeMemberHistoricallyReferenced, apperr.WithOp("people.member.delete"))
-	}
-	if service.deleteVoiceSamples != nil {
-		if err := service.deleteVoiceSamples(ctx, memberID); err != nil {
-			return err
-		}
-	}
-	var deleted bool
-	if err := service.transactions.WithinTransaction(ctx, func(tx *gorm.DB) error {
-		var err error
-		referenced, err = service.repository.HasHistoricalReference(ctx, tx, memberID)
-		if err != nil || referenced {
-			return err
-		}
-		deleted, err = service.repository.DeleteUnreferenced(ctx, tx, memberID)
-		return err
-	}); err != nil {
-		return err
-	}
-	if referenced {
-		return apperr.Biz(apperr.CodeMemberHistoricallyReferenced, apperr.WithOp("people.member.delete"))
-	}
-	if !deleted {
+	if !persisted {
 		return apperr.Biz(apperr.CodeMemberNotFound, apperr.WithOp("people.member.delete"))
 	}
 	return nil
+}
+
+// cleanVoiceSamples 在 SQLite 写事务外清理受控声纹文件；失败时不改变成员和小组关系。
+func (service *MemberService) cleanVoiceSamples(ctx context.Context, memberID string) error {
+	if service.deleteVoiceSamples == nil {
+		return nil
+	}
+	return service.deleteVoiceSamples(ctx, memberID)
+}
+
+// resolveDeletionMode 在最终写事务内重新判断是否必须保留历史引用墓碑。
+func (service *MemberService) resolveDeletionMode(ctx context.Context, tx *gorm.DB, memberID string) (bool, error) {
+	return service.repository.HasHistoricalReference(ctx, tx, memberID)
+}
+
+// persistMemberDeletion 按历史引用结果执行墓碑或硬删除，并统一移除当前小组关系。
+func (service *MemberService) persistMemberDeletion(ctx context.Context, tx *gorm.DB, memberID string, referenced bool) (bool, error) {
+	if referenced {
+		return service.repository.Archive(ctx, tx, memberID, service.clock.Now().UnixMilli())
+	}
+	return service.repository.DeleteUnreferenced(ctx, tx, memberID)
 }
 
 // mapCreateMemberError 将 Repository 的稳定冲突转换为应用边界可识别的业务错误。

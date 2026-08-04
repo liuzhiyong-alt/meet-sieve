@@ -22,7 +22,7 @@
 | `finalizing`        | 会中页面切为 OperationSteps；停止 LAN、尾部 final、合并录音、刷新原始记录 | 等待本地保存 | existing        |
 | `finalizing/failed` | 保留已关闭分片和会议事件，明确完整录音尚未完成校验                        | 重试本地保存 | existing        |
 | `ended`             | 会议详情；显示本地保存、缺口、纪要和同步状态                              | 会后处理     | existing        |
-| `interrupted`       | 中断恢复页；说明可恢复内容、缺口和不能继续原录音                          | 恢复已有数据 | design-required |
+| `interrupted`       | 中断恢复页；说明可恢复内容、缺口和不能继续原录音                          | 恢复已有数据 | existing        |
 | `deleting`          | 页面或 Modal 持续显示删除中，禁止重复操作                                 | 等待         | derived         |
 | `delete_failed`     | Danger Notice + 未删除文件 + 重试                                         | 重试删除     | existing        |
 
@@ -34,6 +34,9 @@
   Codex 同步不得阻塞或伪装本地保存。
 - 收尾失败必须说明仍安全的内容、失败步骤和诊断编号，不提供“忽略并标记成功”。
 - 崩溃恢复禁止提供“继续原会议录音”。
+
+中断恢复页面级金标为 `docs/UI/step9-proposal/interrupted-recovery.html`，已于
+2026-08-03 经用户确认。
 
 收尾页面级金标为 `docs/UI/step8-proposal/finalizing.html` 与
 `docs/UI/step8-proposal/finalizing-failed.html`，已于 2026-08-03 经用户确认。
@@ -60,6 +63,10 @@
 | `reconnecting` | 实时转写中断，录音仍在保存 | Warning Status + Notice | derived  |
 | `unavailable`  | 实时转写暂不可用           | Warning Modal / Notice  | existing |
 | `stopped`      | 实时转写已停止             | Neutral Status          | derived  |
+
+设置页只提供一个 `APP Key` 密码字段，不展示鉴权方式单选、App ID 或 Access Token。历史工作
+目录只存在旧凭据时，使用 Warning Notice 持续显示“旧版凭证已停用”，录音能力保持可用；
+保存新版 APP Key 后恢复实时转写与缺口补录入口。该模式为 `existing`。
 
 ### 会前失败
 
@@ -242,7 +249,7 @@ MeetSieve 不提供会后恢复访客上传。用户只能等待当前上传完�
 | 工作目录不可用  | 重新选择目录或退出应用             | derived  |
 | 设置页无变更    | 保存按钮禁用                       | derived  |
 | 设置页校验中    | 保存按钮 loading，禁止重复提交     | derived  |
-| 已保存待重启    | 同时显示当前路径和下次启动路径     | derived  |
+| 已保存待重启    | 同时显示当前路径和下次启动路径     | existing |
 | 会议进行中      | 工作目录设置禁用并解释原因         | derived  |
 | schema 升级中   | 启动阻断状态，不确定进度 loading   | derived  |
 | schema 升级失败 | 重试、重新选择工作目录或退出       | derived  |
@@ -263,11 +270,12 @@ MeetSieve 不提供会后恢复访客上传。用户只能等待当前上传完�
 
 ### 删除录音
 
-成熟度 `derived`，使用现有 Danger Modal：
+成熟度 `existing`，使用详情页底部 DangerZone 与明确 Danger Modal：
 
-- 明确删除 `recording.wav` 和分片；
+- 删除混合录音、麦克风分片、缺口派生片段和临时音频；
 - 保留转写、附件、AI 问答和纪要；
 - 删除后不能回放或再次补转写；
+- 显式录入的成员声纹样本保持不变；
 - 永久删除，不进入回收站；
 - 按钮写 `永久删除录音`。
 
@@ -280,7 +288,62 @@ MeetSieve 不提供会后恢复访客上传。用户只能等待当前上传完�
 - 删除中阻止重复操作；
 - 部分文件失败时显示 `delete_failed`，不得报告成功。
 
-## 13. 安装、权限与退出
+删除过程中先停止本场播放、补转写、纪要、Codex 同步、附件下载和临时片段任务。无法在
+有界等待内安全停止时，不开始删除文件。部分删除不回滚，原 manifest 和剩余项持久化；重试
+只处理原 manifest 中的剩余项。录音部分删除时禁用全部播放和补转写，直到剩余项全部删除。
+
+页面级金标为 `docs/UI/step9-proposal/meeting-detail.html` 与
+`docs/UI/step9-proposal/delete-recovery.html`，已于 2026-08-03 经用户确认。
+
+## 13. 会议记录、路由与详情加载
+
+- 会议记录每页 50 场，使用游标分页，不查询总条数；
+- 排序固定为 `started_at DESC, meeting_no DESC`，搜索主题、会议号和参会人快照；
+- 记录列表只显示最高优先级状态，详情页分别显示所有状态轴；
+- 优先级依次为删除、保存/中断恢复、缺口冲突、缺口待处理、纪要草稿、Codex 未同步、
+  纪要确认、本地保存；
+- 会议详情三个页签按需读取 SQLite：原始记录每页 200 条，消息/资料/公开 AI 每页 100 条；
+- Vue Router 使用 Hash History；刷新、前进和后退均从 Go/SQLite 恢复页面状态；
+- 无效或已删除会议路由返回会议记录，并显示准确的持久 Notice。
+
+会议记录页面级金标为 `docs/UI/step9-proposal/records.html`。
+
+## 14. 设置、存储与诊断
+
+- 设置固定五个分类：通用、录音、实时转写、Codex、声纹模型；每个分类独立保存；
+- “通用”包含当前/下次启动工作目录和“存储与诊断”，不提供全局“保存全部”；
+- 存储扫描不跟随符号链接，不提供自动清理；
+- 全局诊断默认包含版本、平台、schema、健康错误码、工作目录可写性/空间、最近 7 天脱敏
+  日志和后台任务摘要；
+- 本场诊断只增加会议 UUID、状态、事件 seq 范围和文件大小；
+- 诊断包禁止包含数据库、录音、转写、纪要、消息、附件、Codex 内容、凭据、LAN token、
+  完整路径和完整 provider log ID。
+
+页面级金标为 `docs/UI/step9-proposal/settings-storage-diagnostics.html`。
+
+## 15. 小组、成员与声纹生命周期
+
+- 小组和成员使用独立详情路由；新建仍使用短 Modal；
+- 删除小组只删除小组与当前关系，不删除成员、声纹或历史会议；
+- 被历史会议引用的成员只能归档，归档成员默认不参与会前选择，可以恢复；
+- 从未被会议引用的成员可永久删除，并同时删除其显式声纹样本；
+- 显式录入的声纹样本独立于会议删除，可在成员详情中永久删除并重建模型。
+
+页面级金标为 `docs/UI/step9-proposal/group-detail.html` 与
+`docs/UI/step9-proposal/member-detail.html`。
+
+## 16. 未保存更改与附件完整性
+
+- 路由离开只拦截纪要、校对、成员/小组和设置中的本地未保存编辑；
+- 弹窗提供“继续编辑”“放弃未保存更改”和安全时的“保存并离开”；
+- 补转写、纪要生成、删除和同步等持久后台任务不因路由离开而停止；
+- 附件打开前重新校验规范路径、状态和 SHA-256，缺失或变化时阻止打开并持续显示错误；
+- 外部链接显示完整域名，只有用户明确点击后才调用默认浏览器。
+
+页面级金标为 `docs/UI/step9-proposal/unsaved-changes.html` 与
+`docs/UI/step9-proposal/attachment-error.html`。
+
+## 17. 安装、权限与退出
 
 安装器和卸载器遵循 NSIS 与 macOS 平台原生结构，不复用 MeetSieve App Shell，
 不实现品牌化 Web 安装页面。

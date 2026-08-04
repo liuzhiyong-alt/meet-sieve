@@ -46,6 +46,7 @@ export const useLANStore = defineStore('lan', {
     interfaces: [] as LANInterface[],
     selectedInterfaceID: '',
     recommendedID: '',
+    selectionReason: '',
     warning: '',
     status: initialStatus(),
     loading: false,
@@ -68,17 +69,20 @@ export const useLANStore = defineStore('lan', {
       if (result.code !== 200 || !result.data) {
         this.interfaces = []
         this.selectedInterfaceID = ''
+        this.recommendedID = ''
+        this.selectionReason = ''
         this.errorMessage = result.message
         return
       }
       this.interfaces = result.data.interfaces ?? []
       this.recommendedID = result.data.recommended_id ?? ''
+      this.selectionReason = result.data.reason ?? ''
       this.warning = result.data.warning ?? ''
-      if (
-        !this.interfaces.some((item) => item.id === this.selectedInterfaceID)
-      ) {
-        this.selectedInterfaceID = this.recommendedID
-      }
+      this.selectedInterfaceID = this.interfaces.some(
+        (item) => item.id === this.recommendedID,
+      )
+        ? this.recommendedID
+        : ''
     },
     /** refreshStatus 每次页面恢复都以 Go Runtime 为事实源。 */
     async refreshStatus(): Promise<void> {

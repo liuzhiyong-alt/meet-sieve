@@ -1,95 +1,92 @@
 <script lang="ts" setup>
-withDefaults(
-  defineProps<{
-    current?:
-      'start' | 'live' | 'interrupted' | 'records' | 'people' | 'settings'
-    meetingNo?: string
-    localSaveLabel?: string
-  }>(),
-  {
-    current: 'settings',
-    meetingNo: '',
-    localSaveLabel: '本地数据已验证',
-  },
-)
-defineEmits<{
-  navigate: [
-    destination: 'start' | 'live' | 'interrupted' | 'people' | 'settings',
-  ]
+import { RouterLink, useRoute } from 'vue-router'
+import PageBreadcrumb from '../navigation/PageBreadcrumb.vue'
+
+defineProps<{
+  meetingNo?: string
+  localSaveLabel?: string
+  activeMeeting?: boolean
 }>()
+defineEmits<{ endMeeting: [] }>()
+const route = useRoute()
+
+/** isCurrent 根据正式路由决定主导航选中态。 */
+function isCurrent(prefix: string): boolean {
+  return (
+    route.path === prefix ||
+    (prefix !== '/home' && route.path.startsWith(prefix))
+  )
+}
 </script>
 
 <template>
   <div class="ms-app-shell">
     <aside class="ms-sidebar" aria-label="主导航">
       <div>
-        <p class="ms-brand">MeetSieve</p>
+        <p class="ms-brand">
+          <span class="ms-brand-mark" aria-hidden="true">M</span>
+          <span>MeetSieve</span>
+        </p>
         <nav class="ms-nav">
-          <button
+          <RouterLink
             class="ms-nav__item"
-            :class="{ 'is-current': current === 'start' }"
-            :aria-current="current === 'start' ? 'page' : undefined"
-            @click="$emit('navigate', 'start')"
+            :class="{ 'is-current': isCurrent('/home') }"
+            to="/home"
+            >首页</RouterLink
           >
-            开始会议
-          </button>
-          <button
-            v-if="current === 'live' || current === 'interrupted'"
-            class="ms-nav__item is-current"
-            aria-current="page"
-            @click="$emit('navigate', current)"
-          >
-            {{ current === 'live' ? '会议进行中' : '会议恢复' }}
-          </button>
-          <span
+          <RouterLink
             class="ms-nav__item"
-            :class="{ 'is-current': current === 'records' }"
-            :aria-current="current === 'records' ? 'page' : undefined"
-            >会议记录</span
+            :class="{ 'is-current': isCurrent('/meetings/new') }"
+            to="/meetings/new"
+            >开始会议</RouterLink
           >
-          <button
+          <RouterLink
+            v-if="activeMeeting"
+            class="ms-nav__item ms-nav__item--active"
+            :class="{ 'is-current': isCurrent('/meetings/live') }"
+            to="/meetings/live"
+            >会议进行中</RouterLink
+          >
+          <RouterLink
             class="ms-nav__item"
-            :class="{ 'is-current': current === 'people' }"
-            :aria-current="current === 'people' ? 'page' : undefined"
-            @click="$emit('navigate', 'people')"
+            :class="{
+              'is-current':
+                route.path === '/meetings' || route.name === 'meeting-detail',
+            }"
+            to="/meetings"
+            >会议记录</RouterLink
           >
-            常用小组
-          </button>
-          <button
+          <RouterLink
             class="ms-nav__item"
-            :class="{ 'is-current': current === 'settings' }"
-            :aria-current="current === 'settings' ? 'page' : undefined"
-            @click="$emit('navigate', 'settings')"
+            :class="{ 'is-current': isCurrent('/people') }"
+            to="/people"
+            >小组与成员</RouterLink
           >
-            设置
-          </button>
+          <RouterLink
+            class="ms-nav__item"
+            :class="{ 'is-current': isCurrent('/settings') }"
+            to="/settings/general"
+            >设置</RouterLink
+          >
         </nav>
       </div>
       <div class="ms-sidebar__foot">
-        <p>{{ localSaveLabel }}</p>
+        <p>{{ localSaveLabel || '本地数据已验证' }}</p>
         <p v-if="meetingNo" class="ms-input--mono">{{ meetingNo }}</p>
+        <button
+          v-if="activeMeeting"
+          class="ms-button ms-button--danger"
+          type="button"
+          @click="$emit('endMeeting')"
+        >
+          结束会议
+        </button>
       </div>
     </aside>
     <main class="ms-main">
       <header class="ms-titlebar">
-        <span>
-          {{
-            current === 'people'
-              ? '常用小组'
-              : current === 'records'
-                ? '校对原始记录'
-                : current === 'settings'
-                  ? '设置'
-                  : current === 'start'
-                    ? '创建会议'
-                    : current === 'interrupted'
-                      ? '会议恢复'
-                      : 'MeetSieve / 会议进行中'
-          }}
-        </span>
-        <div id="meeting-titlebar-actions" class="ms-titlebar__actions">
-          <slot name="titlebar-actions" />
-        </div>
+        <PageBreadcrumb />
+        <div id="meeting-titlebar-actions" class="ms-titlebar__actions" />
       </header>
       <div class="ms-content"><slot /></div>
     </main>

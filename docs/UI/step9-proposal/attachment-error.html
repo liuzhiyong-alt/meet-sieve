@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>附件异常 · Step 9 提案 · MeetSieve</title>
+    <link rel="stylesheet" href="../../style/meet-sieve/tokens.css" />
+    <link rel="stylesheet" href="../assets/meetsieve.css" />
+    <link rel="stylesheet" href="step9-proposal.css" />
+  </head>
+  <body>
+    <div class="app">
+      <aside class="sidebar">
+        <a class="brand" href="../index.html"
+          ><span class="brand-mark">M</span><span>MeetSieve</span></a
+        >
+        <nav class="nav" aria-label="主导航">
+          <a href="../start.html">开始会议</a
+          ><a class="active" aria-current="page" href="../records.html"
+            >会议记录</a
+          ><a href="../people.html">常用小组</a
+          ><a href="../settings.html">设置</a>
+        </nav>
+        <div class="sidebar-foot">
+          <span class="status ok">本地已保存</span>
+        </div>
+      </aside>
+      <main class="main">
+        <header class="titlebar">
+          <a href="meeting-detail.html">← 返回会议详情</a
+          ><button class="btn btn-quiet" type="button">导出本场诊断</button>
+        </header>
+        <div class="content">
+          <section class="page-head">
+            <div>
+              <p class="eyebrow">20260731-A7K2-03 · 会议消息</p>
+              <h1>附件与链接</h1>
+              <p>
+                只有用户明确点击后才调用系统默认程序；打开前重新核对路径、状态与
+                SHA-256。
+              </p>
+            </div>
+            <span class="status warn">有 2 项不可用</span>
+          </section>
+          <section class="card stack">
+            <div class="file-state">
+              <div class="stage-copy">
+                <strong>Windows-Alpha-验收清单.docx</strong
+                ><span class="meta num">2.8 MB · SHA-256 已校验</span>
+              </div>
+              <div class="row">
+                <button class="btn" type="button">打开</button
+                ><button class="btn btn-quiet" type="button">
+                  在文件夹中显示
+                </button>
+              </div>
+            </div>
+            <div class="file-state">
+              <div class="stage-copy">
+                <strong>架构讨论截图.png</strong
+                ><span class="muted"
+                  >登记文件不存在，可能已被外部移动或删除。</span
+                >
+              </div>
+              <span class="status bad">文件缺失</span>
+            </div>
+            <div class="file-state">
+              <div class="stage-copy">
+                <strong>上线检查表.xlsx</strong
+                ><span class="muted"
+                  >文件内容与登记的 SHA-256
+                  不一致，为避免打开错误内容已阻止操作。</span
+                >
+              </div>
+              <span class="status bad">文件已变化</span>
+            </div>
+            <div class="file-state">
+              <div class="stage-copy">
+                <strong>火山引擎接入说明</strong
+                ><span class="meta">即将通过默认浏览器打开 volcengine.com</span>
+              </div>
+              <button class="btn" type="button">打开链接</button>
+            </div>
+          </section>
+        </div>
+      </main>
+    </div>
+  </body>
+</html>

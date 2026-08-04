@@ -17,12 +17,17 @@ import (
 	"meet-sieve/internal/port"
 	peoplerepository "meet-sieve/internal/repository/people"
 	agentservice "meet-sieve/internal/service/agent"
+	audioservice "meet-sieve/internal/service/audio"
+	deletionservice "meet-sieve/internal/service/deletion"
+	diagnosticsservice "meet-sieve/internal/service/diagnostics"
 	gapservice "meet-sieve/internal/service/gap"
 	lanservice "meet-sieve/internal/service/lan"
 	meetingservice "meet-sieve/internal/service/meeting"
 	minutesservice "meet-sieve/internal/service/minutes"
 	peopleservice "meet-sieve/internal/service/people"
+	queryservice "meet-sieve/internal/service/query"
 	resourceservice "meet-sieve/internal/service/resource"
+	resourceopenservice "meet-sieve/internal/service/resourceopen"
 	transcriptservice "meet-sieve/internal/service/transcript"
 	guesthttp "meet-sieve/internal/transport/http/guest"
 	wailstransport "meet-sieve/internal/transport/wails"
@@ -86,6 +91,11 @@ func run() error {
 		bootstrap.Logger,
 		bootstrap.Health,
 	)
+	workspaceModule.Coordinator.SetWorkspaceChangeBlocker(func() bool {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		return meetingModule.HasUnsafeWorkspaceChange(ctx)
+	})
 	if guestAssets, guestAssetsErr := fs.Sub(assets, "frontend/dist/guest"); guestAssetsErr == nil {
 		_ = meetingModule.SetGuestAssets(guestAssets)
 	}
@@ -347,6 +357,41 @@ func run() error {
 		},
 		func() context.Context { return wailsContext }, boundary,
 	)
+	queryBinding := wailstransport.NewQueryBinding(func() (*queryservice.Service, error) {
+		services, serviceErr := meetingModule.Current()
+		if serviceErr != nil {
+			return nil, serviceErr
+		}
+		return services.Query, nil
+	}, boundary)
+	deletionBinding := wailstransport.NewDeletionBinding(func() (*deletionservice.Service, error) {
+		services, serviceErr := meetingModule.Current()
+		if serviceErr != nil {
+			return nil, serviceErr
+		}
+		return services.Deletion, nil
+	}, boundary)
+	diagnosticBinding := wailstransport.NewDiagnosticBinding(func() (*diagnosticsservice.StorageScanService, *diagnosticsservice.ExportService, error) {
+		services, serviceErr := meetingModule.Current()
+		if serviceErr != nil {
+			return nil, nil, serviceErr
+		}
+		return services.StorageScan, services.Diagnostics, nil
+	}, func() context.Context { return wailsContext }, boundary)
+	resourceBinding := wailstransport.NewResourceBinding(func() (*resourceopenservice.Service, error) {
+		services, serviceErr := meetingModule.Current()
+		if serviceErr != nil {
+			return nil, serviceErr
+		}
+		return services.ResourceOpen, nil
+	}, boundary)
+	audioSettingsBinding := wailstransport.NewAudioSettingsBinding(func() (*audioservice.SettingsService, error) {
+		services, serviceErr := meetingModule.Current()
+		if serviceErr != nil {
+			return nil, serviceErr
+		}
+		return services.AudioSettings, nil
+	}, boundary)
 	correctionBinding := wailstransport.NewCorrectionBinding(
 		correctionProvider,
 		func() context.Context { return wailsContext },
@@ -395,6 +440,11 @@ func run() error {
 			finalizationBinding,
 			gapBinding,
 			minutesBinding,
+			queryBinding,
+			deletionBinding,
+			diagnosticBinding,
+			resourceBinding,
+			audioSettingsBinding,
 			correctionBinding,
 		},
 	})

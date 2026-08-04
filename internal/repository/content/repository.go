@@ -176,6 +176,9 @@ func (repository *Repository) CreateLink(ctx context.Context, tx *gorm.DB, event
 	if err := tx.WithContext(ctx).Select(eventColumns()).Create(&event).Error; err != nil {
 		return fmt.Errorf("写入链接事件失败：%w", err)
 	}
+	if resource.IntegrityState == "" {
+		resource.IntegrityState = "unchecked"
+	}
 	if err := tx.WithContext(ctx).Select(resourceColumns()).Create(&resource).Error; err != nil {
 		return fmt.Errorf("写入链接资源失败：%w", err)
 	}
@@ -300,6 +303,7 @@ func resourceColumns() []string {
 	return []string{
 		"id", "meeting_id", "event_id", "guest_session_id", "request_id", "kind",
 		"original_name", "safe_name", "relative_path", "source_url", "media_type", "size_bytes", "sha256",
-		"original_description", "current_description", "description_revision", "state", "created_at", "updated_at",
+		"original_description", "current_description", "description_revision", "state", "integrity_state",
+		"last_verified_at", "integrity_error_code", "created_at", "updated_at",
 	}
 }

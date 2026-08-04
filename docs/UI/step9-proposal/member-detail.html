@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>成员详情 · Step 9 提案 · MeetSieve</title>
+    <link rel="stylesheet" href="../../style/meet-sieve/tokens.css" />
+    <link rel="stylesheet" href="../assets/meetsieve.css" />
+    <link rel="stylesheet" href="step9-proposal.css" />
+  </head>
+  <body>
+    <div class="app">
+      <aside class="sidebar">
+        <a class="brand" href="../index.html"
+          ><span class="brand-mark">M</span><span>MeetSieve</span></a
+        >
+        <nav class="nav" aria-label="主导航">
+          <a href="../start.html">开始会议</a
+          ><a href="../records.html">会议记录</a
+          ><a class="active" aria-current="page" href="../people.html"
+            >常用小组</a
+          ><a href="../settings.html">设置</a>
+        </nav>
+        <div class="sidebar-foot">成员与声纹仅保存在本机</div>
+      </aside>
+      <main class="main">
+        <header class="titlebar">
+          <a href="../people.html">← 返回小组与成员</a
+          ><span class="status ok">已保存</span>
+        </header>
+        <div class="content">
+          <section class="page-head">
+            <div>
+              <p class="eyebrow">成员详情</p>
+              <h1>刘毅</h1>
+              <p>
+                成员资料用于会前选择；声纹只辅助说话人判断，不改变历史会议事实。
+              </p>
+            </div>
+            <button class="btn btn-primary" type="button">保存成员</button>
+          </section>
+          <section class="person-layout">
+            <article class="stack">
+              <section class="card">
+                <div class="card-head">
+                  <h2>基本信息</h2>
+                  <span class="status ok">使用中</span>
+                </div>
+                <label class="label"
+                  >姓名<input class="field" value="刘毅" /></label
+                ><label class="label field-offset"
+                  >备注<input class="field" value="产品负责人"
+                /></label>
+                <hr class="rule" />
+                <div class="person-actions">
+                  <button class="btn btn-quiet" type="button">归档成员</button>
+                </div>
+                <p class="help">
+                  归档后不再出现在默认参会人候选中，历史引用仍保留，也可随时恢复。
+                </p>
+              </section>
+              <section class="card">
+                <div class="card-head">
+                  <div>
+                    <h2>声纹样本</h2>
+                    <p class="muted">显式录入的样本独立于任何会议。</p>
+                  </div>
+                  <a class="btn btn-primary" href="../voice-enrollment.html"
+                    >录入新样本</a
+                  >
+                </div>
+                <ul class="list">
+                  <li class="list-item">
+                    <div>
+                      <strong>安静环境 · 18 秒</strong>
+                      <div class="meta num">2026-07-30 · SHA-256 已校验</div>
+                    </div>
+                    <span class="status ok">质量可用</span>
+                  </li>
+                  <li class="list-item">
+                    <div>
+                      <strong>会议室 · 24 秒</strong>
+                      <div class="meta num">2026-08-01 · SHA-256 已校验</div>
+                    </div>
+                    <span class="status warn">有背景噪声</span>
+                  </li>
+                </ul>
+                <div class="danger-zone">
+                  <div>
+                    <p class="eyebrow">永久操作</p>
+                    <h3>删除全部声纹</h3>
+                  </div>
+                  <p class="muted">
+                    永久删除该成员显式录入的所有样本，并触发声纹模型重建；不删除成员或历史会议。
+                  </p>
+                  <button class="btn btn-danger" type="button">
+                    永久删除全部声纹
+                  </button>
+                </div>
+              </section>
+            </article>
+            <aside class="card">
+              <div class="card-head">
+                <h3>成员引用</h3>
+                <span class="status">被历史引用</span>
+              </div>
+              <ul class="list">
+                <li class="list-item">
+                  <span>所在小组</span><strong>2</strong>
+                </li>
+                <li class="list-item">
+                  <span>历史会议</span><strong>18</strong>
+                </li>
+              </ul>
+              <div class="notice">
+                <span
+                  >该成员仍被历史会议引用，因此只能归档，不能永久删除成员资料。</span
+                >
+              </div>
+            </aside>
+          </section>
+        </div>
+      </main>
+    </div>
+  </body>
+</html>

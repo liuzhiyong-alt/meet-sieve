@@ -22,38 +22,27 @@ type CredentialChangeDTO struct {
 
 // SaveASRSettingsDTO 是设置页面提交的安全写入契约。
 type SaveASRSettingsDTO struct {
-	Mode        string              `json:"mode"`
-	AppID       CredentialChangeDTO `json:"app_id"`
-	AccessToken CredentialChangeDTO `json:"access_token"`
-	APIKey      CredentialChangeDTO `json:"api_key"`
+	APIKey CredentialChangeDTO `json:"api_key"`
 }
 
 // TestASRConnectionDTO 是连接探测使用的内存草稿，不会写入 SQLite。
 type TestASRConnectionDTO struct {
-	Mode        string `json:"mode"`
-	AppID       string `json:"app_id"`
-	AccessToken string `json:"access_token"`
-	APIKey      string `json:"api_key"`
+	APIKey string `json:"api_key"`
 }
 
 // ASRSettingsDTO 是不含任何凭证明文的设置投影。
 type ASRSettingsDTO struct {
-	Mode                  string `json:"mode"`
-	AppIDConfigured       bool   `json:"app_id_configured"`
-	AppIDMask             string `json:"app_id_mask"`
-	AccessTokenConfigured bool   `json:"access_token_configured"`
-	AccessTokenMask       string `json:"access_token_mask"`
 	APIKeyConfigured      bool   `json:"api_key_configured"`
 	APIKeyMask            string `json:"api_key_mask"`
+	RequiresAPIKeyUpgrade bool   `json:"requires_api_key_upgrade"`
 	UpdatedAt             int64  `json:"updated_at"`
 }
 
 // ASRConnectionProbeDTO 明确区分连通性与真实音频验证。
 type ASRConnectionProbeDTO struct {
-	Mode                  string `json:"mode"`
-	ConnectionEstablished bool   `json:"connection_established"`
-	RealAudioVerified     bool   `json:"real_audio_verified"`
-	LatencyMS             int64  `json:"latency_ms"`
+	ConnectionEstablished bool  `json:"connection_established"`
+	RealAudioVerified     bool  `json:"real_audio_verified"`
+	LatencyMS             int64 `json:"latency_ms"`
 }
 
 // ASRTimelineEntryDTO 是持久 final/gap 的判别联合；partial 使用独立事件且 seq 固定为 0。
@@ -136,10 +125,7 @@ func (binding *ASRBinding) TestASRConnection(input TestASRConnectionDTO) Result[
 		if err != nil {
 			return ASRConnectionProbeDTO{}, err
 		}
-		result, err := service.TestConnection(ctx, transcriptdomain.Credentials{
-			Mode: transcriptdomain.AuthMode(input.Mode), AppID: input.AppID,
-			AccessToken: input.AccessToken, APIKey: input.APIKey,
-		})
+		result, err := service.TestConnection(ctx, transcriptdomain.Credentials{Mode: transcriptdomain.AuthModeAPIKey, APIKey: input.APIKey})
 		return mapASRConnectionProbeDTO(result), err
 	})
 }
@@ -211,11 +197,7 @@ func (binding *ASRBinding) current() (*transcriptservice.SettingsService, contex
 
 // mapSaveASRSettingsInput 把边界 DTO 转换为领域服务输入。
 func mapSaveASRSettingsInput(input SaveASRSettingsDTO) transcriptservice.SaveASRSettingsInput {
-	return transcriptservice.SaveASRSettingsInput{
-		Mode:  transcriptdomain.AuthMode(input.Mode),
-		AppID: mapCredentialChange(input.AppID), AccessToken: mapCredentialChange(input.AccessToken),
-		APIKey: mapCredentialChange(input.APIKey),
-	}
+	return transcriptservice.SaveASRSettingsInput{APIKey: mapCredentialChange(input.APIKey)}
 }
 
 // mapCredentialChange 转换单个凭据动作，不在边界猜测默认行为。
@@ -226,17 +208,16 @@ func mapCredentialChange(input CredentialChangeDTO) transcriptservice.Credential
 // mapASRSettingsDTO 转换只含掩码的安全设置投影。
 func mapASRSettingsDTO(view transcriptservice.ASRSettingsView) ASRSettingsDTO {
 	return ASRSettingsDTO{
-		Mode: string(view.Mode), AppIDConfigured: view.AppIDConfigured, AppIDMask: view.AppIDMask,
-		AccessTokenConfigured: view.AccessTokenConfigured, AccessTokenMask: view.AccessTokenMask,
-		APIKeyConfigured: view.APIKeyConfigured, APIKeyMask: view.APIKeyMask, UpdatedAt: view.UpdatedAt,
+		APIKeyConfigured: view.APIKeyConfigured, APIKeyMask: view.APIKeyMask,
+		RequiresAPIKeyUpgrade: view.RequiresAPIKeyUpgrade, UpdatedAt: view.UpdatedAt,
 	}
 }
 
 // mapASRConnectionProbeDTO 转换连接探测事实。
 func mapASRConnectionProbeDTO(result transcriptservice.ConnectionProbeResult) ASRConnectionProbeDTO {
 	return ASRConnectionProbeDTO{
-		Mode: string(result.Mode), ConnectionEstablished: result.ConnectionEstablished,
-		RealAudioVerified: result.RealAudioVerified, LatencyMS: result.LatencyMS,
+		ConnectionEstablished: result.ConnectionEstablished, RealAudioVerified: result.RealAudioVerified,
+		LatencyMS: result.LatencyMS,
 	}
 }
 

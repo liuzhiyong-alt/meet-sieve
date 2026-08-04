@@ -34,7 +34,7 @@ func TestAdapterStreamsPCMAndWaitsForFinal(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 
-	adapter := NewAdapter(AdapterConfig{Endpoint: "ws" + strings.TrimPrefix(server.URL, "http"), ResourceID: DefaultResourceID, Credentials: Credentials{Mode: transcriptdomain.AuthModeLegacy, AppID: "app-id", AccessToken: "access-token"}, ConnectTimeout: time.Second}, identity.NewFixedGenerator("connect-id", "local-session"))
+	adapter := NewAdapter(AdapterConfig{Endpoint: "ws" + strings.TrimPrefix(server.URL, "http"), ResourceID: DefaultResourceID, Credentials: Credentials{Mode: transcriptdomain.AuthModeAPIKey, APIKey: "api-key"}, ConnectTimeout: time.Second}, identity.NewFixedGenerator("connect-id", "local-session"))
 	session, err := adapter.Start(context.Background(), port.RealtimeTranscriptionRequest{MeetingID: "meeting-id", Format: port.AudioFormat{SampleRate: 16000, BitsPerSample: 16, Channels: 1}, StartSample: 0})
 	if err != nil {
 		t.Fatalf("启动火山 adapter 失败：%v", err)
@@ -66,10 +66,10 @@ func TestAdapterStreamsPCMAndWaitsForFinal(t *testing.T) {
 	}
 }
 
-// serveAdapterFixture 校验脱敏 Header 和三类客户端帧，再返回一条负 sequence final。
+// serveAdapterFixture 校验新版脱敏 Header 和三类客户端帧，再返回一条负 sequence final。
 func serveAdapterFixture(connection *websocket.Conn, headers http.Header) error {
-	if headers.Get("X-Api-App-Key") != "app-id" || headers.Get("X-Api-Access-Key") != "access-token" || headers.Get("X-Api-Connect-Id") != "connect-id" {
-		return fmt.Errorf("握手 Header 不符合 legacy 契约")
+	if headers.Get("X-Api-Key") != "api-key" || headers.Get("X-Api-App-Key") != "" || headers.Get("X-Api-Access-Key") != "" || headers.Get("X-Api-Connect-Id") != "connect-id" {
+		return fmt.Errorf("握手 Header 不符合 APP Key 契约")
 	}
 	_, initial, err := connection.ReadMessage()
 	if err != nil {

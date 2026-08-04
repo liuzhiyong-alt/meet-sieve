@@ -1,0 +1,281 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>小组与成员反馈提案 · MeetSieve</title>
+    <link rel="stylesheet" href="../../style/meet-sieve/tokens.css" />
+    <link rel="stylesheet" href="../assets/meetsieve.css" />
+    <link rel="stylesheet" href="proposal.css" />
+    <script src="proposal.js" defer></script>
+  </head>
+  <body>
+    <div class="app">
+      <aside class="sidebar">
+        <a class="brand" href="home.html"
+          ><span class="brand-mark">M</span><span>MeetSieve</span></a
+        >
+        <nav class="nav" aria-label="主导航">
+          <a href="home.html">首页</a><a href="start.html">开始会议</a
+          ><a href="records.html">会议记录</a
+          ><a class="active" aria-current="page" href="people.html">常用小组</a
+          ><a href="settings.html">设置</a>
+        </nav>
+        <div class="sidebar-foot">成员与声纹仅保存在本机</div>
+      </aside>
+      <main class="main">
+        <header class="titlebar">
+          <nav class="proposal-breadcrumb" aria-label="面包屑">
+            <span aria-current="page">常用小组</span>
+          </nav>
+          <span class="meta">小组与成员</span>
+        </header>
+        <div class="content">
+          <section class="page-head">
+            <div>
+              <p class="eyebrow">本地成员库</p>
+              <h1>小组与成员</h1>
+              <p>小组加快会前选择；历史会议始终保留当时的参会者快照。</p>
+            </div>
+            <button
+              class="btn btn-primary"
+              type="button"
+              data-open="create-person"
+            >
+              新建
+            </button>
+          </section>
+
+          <div
+            class="tabs proposal-people-tabs"
+            role="tablist"
+            aria-label="成员库分类"
+            data-tabs="people"
+          >
+            <button
+              class="tab active"
+              role="tab"
+              aria-selected="true"
+              data-tab="groups"
+            >
+              小组
+            </button>
+            <button
+              class="tab"
+              role="tab"
+              aria-selected="false"
+              data-tab="members"
+            >
+              成员
+            </button>
+          </div>
+
+          <section
+            id="groups"
+            class="grid grid-2 section-offset"
+            data-tab-panel="people"
+          >
+            <article class="card">
+              <div class="card-head">
+                <div>
+                  <p class="meta">5 位成员</p>
+                  <h2>产品周会</h2>
+                </div>
+                <a class="btn btn-quiet" href="group-detail.html">详情</a>
+              </div>
+              <div class="avatar-group" aria-label="小组成员">
+                <span class="avatar">刘</span><span class="avatar">陈</span
+                ><span class="avatar">王</span><span class="avatar">林</span
+                ><span class="avatar">+1</span>
+              </div>
+              <hr class="rule" />
+              <div class="row-between">
+                <span>默认开启访客页</span><span class="status ok">开启</span>
+              </div>
+            </article>
+            <article class="card">
+              <div class="card-head">
+                <div>
+                  <p class="meta">7 位成员</p>
+                  <h2>技术评审</h2>
+                </div>
+                <a class="btn btn-quiet" href="group-detail.html">详情</a>
+              </div>
+              <div class="avatar-group" aria-label="小组成员">
+                <span class="avatar">陈</span><span class="avatar">周</span
+                ><span class="avatar">孙</span><span class="avatar">吴</span
+                ><span class="avatar">+3</span>
+              </div>
+              <hr class="rule" />
+              <div class="row-between">
+                <span>默认开启访客页</span><span class="status">关闭</span>
+              </div>
+            </article>
+          </section>
+
+          <section
+            id="members"
+            class="card section-offset"
+            data-tab-panel="people"
+            hidden
+          >
+            <ul class="list">
+              <li
+                id="member-liu"
+                class="list-item proposal-member-row"
+                data-member-row
+                data-member-name="刘毅"
+              >
+                <div class="row">
+                  <span class="avatar">刘</span>
+                  <div>
+                    <strong>刘毅</strong>
+                    <div class="meta">2 个声纹样本 · 产品负责人</div>
+                  </div>
+                </div>
+                <div class="proposal-person-actions">
+                  <a class="btn btn-quiet" href="member-detail.html">编辑</a>
+                  <button
+                    class="btn btn-quiet"
+                    type="button"
+                    data-prototype-feedback="原型：打开刘毅的声纹管理"
+                  >
+                    管理声纹
+                  </button>
+                  <button
+                    class="btn btn-danger"
+                    type="button"
+                    data-open="delete-member"
+                  >
+                    删除
+                  </button>
+                </div>
+              </li>
+              <li
+                id="member-wang"
+                class="list-item proposal-member-row"
+                data-member-row
+                data-member-name="王珂"
+              >
+                <div class="row">
+                  <span class="avatar">王</span>
+                  <div>
+                    <strong>王珂</strong>
+                    <div class="meta">未录入声纹 · 交互设计</div>
+                  </div>
+                </div>
+                <div class="proposal-person-actions">
+                  <a class="btn btn-quiet" href="member-detail.html">编辑</a>
+                  <button
+                    class="btn btn-quiet"
+                    type="button"
+                    data-prototype-feedback="原型：打开王珂的声纹管理"
+                  >
+                    管理声纹
+                  </button>
+                  <button
+                    class="btn btn-danger"
+                    type="button"
+                    data-open="delete-member"
+                  >
+                    删除
+                  </button>
+                </div>
+              </li>
+              <li
+                id="member-chen"
+                class="list-item proposal-member-row"
+                data-member-row
+                data-member-name="陈然"
+              >
+                <div class="row">
+                  <span class="avatar">陈</span>
+                  <div>
+                    <strong>陈然</strong>
+                    <div class="meta">1 个声纹样本 · 客户端工程师</div>
+                  </div>
+                </div>
+                <div class="proposal-person-actions">
+                  <a class="btn btn-quiet" href="member-detail.html">编辑</a>
+                  <button
+                    class="btn btn-quiet"
+                    type="button"
+                    data-prototype-feedback="原型：打开陈然的声纹管理"
+                  >
+                    管理声纹
+                  </button>
+                  <button
+                    class="btn btn-danger"
+                    type="button"
+                    data-open="delete-member"
+                  >
+                    删除
+                  </button>
+                </div>
+              </li>
+            </ul>
+          </section>
+        </div>
+      </main>
+    </div>
+
+    <div class="modal-backdrop" id="delete-member">
+      <section
+        class="modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="delete-member-title"
+      >
+        <h2 id="delete-member-title">删除成员？</h2>
+        <p class="proposal-modal-copy">
+          <strong data-delete-member-name>该成员</strong>
+          将从成员库、会前候选和当前小组中移除。历史会议继续保留当时的姓名快照。
+        </p>
+        <div class="notice warn">
+          <span
+            >该操作不提供归档或恢复入口。成员的显式声纹样本也会永久删除。</span
+          >
+        </div>
+        <div class="modal-actions">
+          <button class="btn" type="button" data-close>取消</button>
+          <button
+            class="btn btn-danger"
+            type="button"
+            data-confirm-delete-member
+          >
+            删除成员
+          </button>
+        </div>
+      </section>
+    </div>
+
+    <div class="modal-backdrop" id="create-person">
+      <section
+        class="modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="create-person-title"
+      >
+        <h2 id="create-person-title">新建小组或成员</h2>
+        <div class="tabs section-offset">
+          <button class="tab active" type="button">小组</button
+          ><button class="tab" type="button">成员</button>
+        </div>
+        <label class="label proposal-modal-form"
+          >名称<input class="field" placeholder="例如：客户端评审组"
+        /></label>
+        <div class="modal-actions">
+          <button class="btn" type="button" data-close>取消</button>
+          <button
+            class="btn btn-primary"
+            type="button"
+            data-close
+            data-prototype-feedback="原型：已创建"
+          >
+            创建
+          </button>
+        </div>
+      </section>
+    </div>
+  </body>
+</html>

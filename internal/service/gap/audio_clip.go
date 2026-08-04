@@ -158,6 +158,16 @@ func (service *AudioClipService) authorize(token string) (audioClipEntry, int) {
 	return entry, http.StatusOK
 }
 
+// RevokeAll 撤销当前单会议进程内全部 gap 回放 token，不删除审计音频。
+func (service *AudioClipService) RevokeAll() {
+	if service == nil {
+		return
+	}
+	service.mu.Lock()
+	service.entries = make(map[[32]byte]audioClipEntry)
+	service.mu.Unlock()
+}
+
 // decodedDigest 校验数据库 SHA 使用完整十六进制格式。
 func decodedDigest(value string) bool {
 	decoded, err := hex.DecodeString(value)
