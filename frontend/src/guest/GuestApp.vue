@@ -1,6 +1,8 @@
 <script lang="ts" setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 
+import SafeMarkdown from '../components/content/SafeMarkdown.vue'
+
 import {
   createSession,
   getMeeting,
@@ -9,6 +11,7 @@ import {
   sendContent,
   type GuestMeeting,
   type TimelineEvent,
+  type TimelineNotification,
   uploadAttachment,
 } from './api'
 
@@ -34,6 +37,8 @@ let pendingContentRequestID = ''
 let uploadController: AbortController | undefined
 let pollTimer: number | undefined
 let pollFailures = 0
+let socket: WebSocket | undefined
+let socketReconnectTimer: number | undefined
 
 const meetingToken = readMeetingToken()
 const uploadPercent = computed(() => {
@@ -54,7 +59,7 @@ onMounted(async () => {
     meeting.value = await getMeeting()
     screen.value = 'active'
     await refreshEvents()
-    schedulePoll(1000)
+    connectWebSocket()
   } catch (error) {
     endSession(publicMessage(error, '访客入口已停止'))
   }
@@ -63,6 +68,7 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   document.removeEventListener('visibilitychange', handleVisibilityChange)
   stopPoll()
+  stopWebSocket()
   uploadController?.abort()
 })
 
@@ -90,7 +96,7 @@ async function joinMeeting(): Promise<void> {
     )
     screen.value = 'active'
     await refreshEvents()
-    schedulePoll(1000)
+    connectWebSocket()
   } catch (error) {
     errorMessage.value = publicMessage(error, '无法加入本场会议')
   } finally {
@@ -195,7 +201,8 @@ async function poll(): Promise<void> {
       return
     }
   }
-  schedulePoll(Math.min(30_000, 1000 * 2 ** pollFailures))
+  if (!socket || socket.readyState !== WebSocket.OPEN)
+    schedulePoll(Math.min(30_000, 1000 * 2 ** pollFailures))
 }
 
 /** schedulePoll 保证任意时刻只存在一个事件轮询计时器。 */
@@ -211,10 +218,71 @@ function stopPoll(): void {
   pollTimer = undefined
 }
 
+/** connectWebSocket 建立实时失效通知通道，实际正文仍按 seq 通过 HTTP 恢复。 */
+function connectWebSocket(): void {
+  if (
+    screen.value !== 'active' ||
+    document.hidden ||
+    socket?.readyState === WebSocket.OPEN ||
+    socket?.readyState === WebSocket.CONNECTING
+  )
+    return
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+  socket = new WebSocket(`${protocol}//${window.location.host}/api/v1/guest/ws`)
+  socket.addEventListener('open', () => {
+    pollFailures = 0
+    stopPoll()
+  })
+  socket.addEventListener('message', (event) => {
+    try {
+      const notification = JSON.parse(
+        String(event.data),
+      ) as TimelineNotification
+      if (
+        notification.type === 'timeline.changed' &&
+        notification.meeting_id === meeting.value?.id &&
+        notification.latest_seq > nextSeq.value
+      )
+        schedulePoll(120)
+    } catch {
+      // 非法通知不改变页面状态，后续恢复轮询仍以 SQLite seq 为准。
+    }
+  })
+  socket.addEventListener('close', scheduleWebSocketRecovery)
+  socket.addEventListener('error', () => socket?.close())
+}
+
+/** scheduleWebSocketRecovery 在连接断开时同时启动事实补拉和有界重连。 */
+function scheduleWebSocketRecovery(): void {
+  socket = undefined
+  if (screen.value !== 'active' || document.hidden) return
+  schedulePoll(0)
+  if (socketReconnectTimer !== undefined)
+    window.clearTimeout(socketReconnectTimer)
+  socketReconnectTimer = window.setTimeout(connectWebSocket, 2000)
+}
+
+/** stopWebSocket 释放实时连接及其重连计时器。 */
+function stopWebSocket(): void {
+  if (socketReconnectTimer !== undefined)
+    window.clearTimeout(socketReconnectTimer)
+  socketReconnectTimer = undefined
+  if (socket) {
+    socket.removeEventListener('close', scheduleWebSocketRecovery)
+    socket.close()
+  }
+  socket = undefined
+}
+
 /** handleVisibilityChange 隐藏时停止网络活动，恢复可见时立即同步。 */
 function handleVisibilityChange(): void {
-  if (document.hidden) stopPoll()
-  else if (screen.value === 'active') schedulePoll(0)
+  if (document.hidden) {
+    stopPoll()
+    stopWebSocket()
+  } else if (screen.value === 'active') {
+    schedulePoll(0)
+    connectWebSocket()
+  }
 }
 
 /** handleActiveError 把终态错误切换到停止页，其余错误留在操作上下文。 */
@@ -226,6 +294,7 @@ function handleActiveError(error: unknown, fallback: string): void {
 /** endSession 清除可编辑内容并取消未完成上传。 */
 function endSession(message: string): void {
   stopPoll()
+  stopWebSocket()
   uploadController?.abort()
   content.value = ''
   pendingContentRequestID = ''
@@ -371,13 +440,18 @@ function reloadPage(): void {
                 >{{ formatTime(item.occurred_at) }} ·
                 {{ eventLabel(item) }}</span
               >
-              <p v-if="item.kind === 'message' || item.kind === 'ai_answer'">
+              <div v-if="item.kind === 'message' || item.kind === 'ai_answer'">
                 <strong>{{
                   item.display_name ||
                   (item.kind === 'ai_answer' ? 'AI 助手' : '访客')
-                }}</strong
-                >：{{ item.text }}
-              </p>
+                }}</strong>
+                <SafeMarkdown
+                  v-if="item.content_format === 'markdown'"
+                  :content="item.text || ''"
+                  external-links="browser"
+                />
+                <p v-else>{{ item.text }}</p>
+              </div>
               <p v-else-if="item.kind === 'link'">
                 <strong>{{ item.display_name || '访客' }}</strong
                 >：<a

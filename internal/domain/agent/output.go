@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/url"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -93,12 +94,17 @@ func ValidateOutput(kind port.AgentTurnKind, content []byte, allowlist Reference
 	}, nil
 }
 
-// OutputSchema 返回当前 turn 所需的严格 JSON Schema。
+// OutputSchema 返回不允许引用外部事实的严格 JSON Schema。
 func OutputSchema(kind port.AgentTurnKind) ([]byte, error) {
+	return OutputSchemaWithReferences(kind, ReferenceAllowlist{})
+}
+
+// OutputSchemaWithReferences 返回当前 turn 的严格 JSON Schema，并把引用限制在本轮白名单内。
+func OutputSchemaWithReferences(kind port.AgentTurnKind, allowlist ReferenceAllowlist) ([]byte, error) {
 	if !kind.Valid() {
 		return nil, fmt.Errorf("智能体 turn kind 无效")
 	}
-	properties := map[string]any{"snapshot": snapshotSchema()}
+	properties := map[string]any{"snapshot": snapshotSchema(AllowedReferences(allowlist))}
 	required := []string{"snapshot"}
 	if kind == port.AgentTurnAnswer {
 		properties["answer"] = map[string]any{"type": "string", "minLength": 1, "maxLength": MaxAnswerRunes}
@@ -108,6 +114,22 @@ func OutputSchema(kind port.AgentTurnKind) ([]byte, error) {
 		"type": "object", "additionalProperties": false,
 		"required": required, "properties": properties,
 	})
+}
+
+// AllowedReferences 返回去重且稳定排序的本轮合法引用，用于 Schema 与 Prompt 共用同一契约。
+func AllowedReferences(allowlist ReferenceAllowlist) []string {
+	values := make([]string, 0, len(allowlist.Sequences)+len(allowlist.URLs)+len(allowlist.Resources))
+	for sequence := range allowlist.Sequences {
+		values = append(values, "seq:"+strconv.FormatInt(sequence, 10))
+	}
+	for value := range allowlist.URLs {
+		values = append(values, value)
+	}
+	for value := range allowlist.Resources {
+		values = append(values, value)
+	}
+	sort.Strings(values)
+	return values
 }
 
 // decodeOutput 使用严格 decoder 拒绝未知字段和尾随 JSON。
@@ -225,15 +247,23 @@ func looksLikeWindowsAbsolutePath(value string) bool {
 	return len(value) >= 3 && ((value[0] >= 'A' && value[0] <= 'Z') || (value[0] >= 'a' && value[0] <= 'z')) && value[1] == ':' && (value[2] == '\\' || value[2] == '/')
 }
 
-// snapshotSchema 构造六类数组共用边界的展开 schema。
-func snapshotSchema() map[string]any {
+// snapshotSchema 构造六类数组边界，并让 references 只能选择本轮合法引用。
+func snapshotSchema(allowedReferences []string) map[string]any {
 	itemList := func() map[string]any {
 		return map[string]any{"type": "array", "maxItems": MaxSnapshotItems, "items": map[string]any{"type": "string", "minLength": 1, "maxLength": MaxSnapshotItemBytes}}
 	}
 	properties := map[string]any{}
-	for _, name := range []string{"current_topics", "confirmed_decisions", "business_rules", "disagreements", "open_questions", "references"} {
+	for _, name := range []string{"current_topics", "confirmed_decisions", "business_rules", "disagreements", "open_questions"} {
 		properties[name] = itemList()
 	}
+	references := map[string]any{"type": "array", "maxItems": MaxSnapshotItems}
+	if len(allowedReferences) == 0 {
+		references["maxItems"] = 0
+		references["items"] = map[string]any{"type": "string"}
+	} else {
+		references["items"] = map[string]any{"type": "string", "enum": allowedReferences}
+	}
+	properties["references"] = references
 	return map[string]any{
 		"type": "object", "additionalProperties": false,
 		"required":   []string{"current_topics", "confirmed_decisions", "business_rules", "disagreements", "open_questions", "references"},

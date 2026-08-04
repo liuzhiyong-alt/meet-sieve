@@ -139,7 +139,7 @@ func prepareMinuteFact(t *testing.T, db *gorm.DB) {
 	if err := db.Create(&event).Error; err != nil {
 		t.Fatal(err)
 	}
-	message := models.Message{ID: entityID, MeetingID: meetingID, EventID: event.ID, AuthorKind: "host", DisplayNameSnapshot: "主持人", Content: "确认下周一发布", CreatedAt: 1, UpdatedAt: 1}
+	message := models.Message{ID: entityID, MeetingID: meetingID, EventID: event.ID, AuthorKind: "host", DisplayNameSnapshot: "主持人", Content: "确认下周一发布", ContentFormat: "plain", CreatedAt: 1, UpdatedAt: 1}
 	if err := db.Create(&message).Error; err != nil {
 		t.Fatal(err)
 	}

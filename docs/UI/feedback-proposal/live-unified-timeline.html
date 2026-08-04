@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>会议进行中 · 统一时间线提案 · MeetSieve</title>
+    <link rel="stylesheet" href="../../style/meet-sieve/tokens.css" />
+    <link rel="stylesheet" href="../assets/meetsieve.css" />
+    <link rel="stylesheet" href="live-unified-timeline.css" />
+    <script src="../assets/meetsieve.js" defer></script>
+    <script src="live-unified-timeline.js" defer></script>
+  </head>
+  <body class="page-live page-live-timeline">
+    <div class="demo-banner" role="note">
+      设计预览：页面内容均为演示数据，不代表真实录音、转写或上传结果
+    </div>
+    <div class="app">
+      <aside class="sidebar">
+        <a class="brand" href="../index.html">
+          <span class="brand-mark">M</span><span>MeetSieve</span>
+        </a>
+        <nav class="nav" aria-label="主导航">
+          <a href="home.html">首页</a>
+          <a
+            class="active"
+            aria-current="page"
+            href="live-unified-timeline.html"
+            >开始会议</a
+          >
+          <a href="records.html">会议记录</a>
+          <a href="people.html">小组与成员</a>
+          <a href="settings.html">设置</a>
+        </nav>
+        <div class="sidebar-foot">
+          <span class="status ok">正在本地保存</span>
+          <p class="meta num">20260804-HAQR-01</p>
+          <button class="btn btn-danger" type="button" data-open="end-meeting">
+            结束会议
+          </button>
+        </div>
+      </aside>
+
+      <main class="main">
+        <header class="titlebar">
+          <span class="recording-line">
+            <span class="recording-dot" aria-hidden="true"></span>
+            <span>录音中</span>
+          </span>
+          <button class="btn btn-danger" type="button" data-open="end-meeting">
+            结束会议
+          </button>
+        </header>
+
+        <div class="content">
+          <section class="live-timeline-layout">
+            <article class="card timeline-workspace">
+              <header class="timeline-heading">
+                <div>
+                  <p class="eyebrow">测试会议 1</p>
+                  <h1 id="meeting-title">会议发言与消息</h1>
+                </div>
+                <span class="status ok">实时更新中</span>
+              </header>
+
+              <div class="conversation-shell">
+                <ol class="conversation" aria-label="会议统一时间线">
+                  <li class="conversation-item">
+                    <span class="avatar speaker-avatar" aria-hidden="true"
+                      >陈</span
+                    >
+                    <article class="conversation-body">
+                      <header class="message-head">
+                        <strong>陈然</strong>
+                        <span class="event-kind">会议发言</span>
+                        <time class="meta num" datetime="PT16M8S"
+                          >00:16:08</time
+                        >
+                      </header>
+                      <p>
+                        我建议会中页面直接按人显示实时转写。连续说话时更新同一组，换人以后再开始新的一组。
+                      </p>
+                    </article>
+                  </li>
+
+                  <li class="conversation-item">
+                    <span class="avatar speaker-avatar" aria-hidden="true"
+                      >王</span
+                    >
+                    <article class="conversation-body">
+                      <header class="message-head">
+                        <strong>王珂</strong>
+                        <span class="event-kind">会议发言</span>
+                        <time class="meta num" datetime="PT16M31S"
+                          >00:16:31</time
+                        >
+                      </header>
+                      <p>
+                        同意。主持人还需要手动补充文字和附件，这些内容应该和口头发言一起进入会议事实记录。
+                      </p>
+                    </article>
+                  </li>
+
+                  <li class="conversation-item is-host-message">
+                    <span class="avatar speaker-avatar" aria-hidden="true"
+                      >你</span
+                    >
+                    <article class="conversation-body">
+                      <header class="message-head">
+                        <strong>你</strong>
+                        <span class="event-kind">主持人消息</span>
+                        <time class="meta num" datetime="PT17M2S"
+                          >00:17:02</time
+                        >
+                      </header>
+                      <p>先按这个交互方向出一版静态设计，确认后再进入开发。</p>
+                    </article>
+                  </li>
+
+                  <li class="conversation-item is-resource">
+                    <span class="avatar speaker-avatar" aria-hidden="true"
+                      >林</span
+                    >
+                    <article class="conversation-body">
+                      <header class="message-head">
+                        <strong>访客 · 林舟</strong>
+                        <span class="event-kind">附件</span>
+                        <time class="meta num" datetime="PT17M18S"
+                          >00:17:18</time
+                        >
+                      </header>
+                      <button class="resource-row" type="button">
+                        <span class="resource-type" aria-hidden="true"
+                          >PDF</span
+                        >
+                        <span class="resource-copy">
+                          <strong>会中时间线交互说明.pdf</strong>
+                          <span>4.8 MB · 已进入本场资料</span>
+                        </span>
+                        <span class="resource-action">打开</span>
+                      </button>
+                    </article>
+                  </li>
+
+                  <li class="conversation-item is-agent">
+                    <span class="avatar speaker-avatar" aria-hidden="true"
+                      >AI</span
+                    >
+                    <article class="conversation-body">
+                      <header class="message-head">
+                        <strong>AI 助手</strong>
+                        <span class="event-kind">AI 回答</span>
+                        <time class="meta num" datetime="PT17M42S"
+                          >00:17:42</time
+                        >
+                      </header>
+                      <p>
+                        建议保留统一时间线作为主区域，在底部增加固定输入区。普通消息只写入会议记录，只有明确点击“请
+                        AI 参与”才触发 Codex。
+                      </p>
+                      <span class="message-note">AI 内容未经人工确认</span>
+                    </article>
+                  </li>
+
+                  <li class="conversation-item is-partial" data-live-partial>
+                    <span class="avatar speaker-avatar" aria-hidden="true"
+                      >周</span
+                    >
+                    <article class="conversation-body">
+                      <header class="message-head">
+                        <strong>周琪</strong>
+                        <span class="event-kind">正在识别</span>
+                        <time class="meta num">现在</time>
+                      </header>
+                      <p>
+                        <span data-partial-text>输入区已经压缩，</span
+                        ><span class="typing-cursor" aria-hidden="true"></span>
+                      </p>
+                    </article>
+                  </li>
+                </ol>
+                <button
+                  class="new-message-indicator"
+                  type="button"
+                  data-new-message-indicator
+                  hidden
+                >
+                  <span data-new-message-text>有新消息</span>
+                  <span class="new-message-action">查看最新</span>
+                </button>
+              </div>
+
+              <form class="meeting-composer" aria-label="发送会议消息">
+                <label class="label" for="meeting-message">会议消息</label>
+                <div class="composer-box">
+                  <textarea
+                    class="composer-input"
+                    id="meeting-message"
+                    rows="1"
+                    placeholder="输入需要写入本场会议记录的文字"
+                  >
+补充：连续发言按说话人合并展示。</textarea>
+                  <div class="composer-footer">
+                    <div class="composer-tools">
+                      <button
+                        class="btn btn-square btn-quiet composer-icon-button"
+                        type="button"
+                        aria-label="发送附件"
+                        title="发送附件"
+                        data-attachment-trigger
+                      >
+                        <!-- Tabler Icons paperclip，MIT License。 -->
+                        <svg
+                          aria-hidden="true"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="2"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        >
+                          <path
+                            d="M15 7l-6.5 6.5a2.121 2.121 0 0 0 3 3L18 10a4.243 4.243 0 0 0-6-6L5.5 10.5a6.364 6.364 0 0 0 9 9L21 13"
+                          />
+                        </svg>
+                      </button>
+                      <input
+                        class="visually-hidden"
+                        type="file"
+                        tabindex="-1"
+                        aria-hidden="true"
+                        data-file-picker
+                      />
+                      <span class="help">Enter 发送，Shift + Enter 换行</span>
+                    </div>
+                    <div class="composer-actions">
+                      <button
+                        class="btn btn-quiet"
+                        type="button"
+                        data-open="ask-ai"
+                      >
+                        请 AI 参与
+                      </button>
+                      <button
+                        class="btn btn-primary"
+                        type="submit"
+                        data-send-message
+                      >
+                        发送
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </form>
+            </article>
+
+            <aside class="stack live-side-panel">
+              <article class="card system-card">
+                <div class="card-head">
+                  <h2>系统状态</h2>
+                  <span class="status ok">运行中</span>
+                </div>
+                <dl class="status-list">
+                  <div>
+                    <dt>会议时长</dt>
+                    <dd class="num">00:18:42</dd>
+                  </div>
+                  <div>
+                    <dt>录音</dt>
+                    <dd>录音中</dd>
+                  </div>
+                  <div>
+                    <dt>麦克风</dt>
+                    <dd class="is-ok">输入正常</dd>
+                  </div>
+                  <div>
+                    <dt>本地保存</dt>
+                    <dd>2 秒前</dd>
+                  </div>
+                  <div>
+                    <dt>实时转写</dt>
+                    <dd class="is-ok">正常</dd>
+                  </div>
+                  <div>
+                    <dt>最近 final</dt>
+                    <dd class="num">00:17:42</dd>
+                  </div>
+                  <div>
+                    <dt>Codex</dt>
+                    <dd class="is-ok">AI 可参与</dd>
+                  </div>
+                  <div>
+                    <dt>访客页</dt>
+                    <dd class="is-ok">3 人在线</dd>
+                  </div>
+                </dl>
+              </article>
+
+              <article class="card participant-card">
+                <div class="card-head">
+                  <h2>参会人</h2>
+                  <button class="btn btn-quiet" type="button">访客入口</button>
+                </div>
+                <div class="participant-list">
+                  <div>
+                    <span class="avatar">陈</span>
+                    <span><strong>陈然</strong><small>声纹已匹配</small></span>
+                  </div>
+                  <div>
+                    <span class="avatar">王</span>
+                    <span><strong>王珂</strong><small>声纹已匹配</small></span>
+                  </div>
+                  <div>
+                    <span class="avatar">周</span>
+                    <span><strong>周琪</strong><small>正在发言</small></span>
+                  </div>
+                </div>
+                <p class="help participant-help">
+                  低置信度结果显示为未知说话人，不会强行关联正式成员。
+                </p>
+              </article>
+            </aside>
+          </section>
+        </div>
+      </main>
+    </div>
+
+    <div class="modal-backdrop" id="ask-ai">
+      <form
+        class="modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="ask-ai-title"
+      >
+        <h2 id="ask-ai-title">请 AI 参与</h2>
+        <p class="muted">
+          AI
+          会读取本场已同步的发言、会议消息和附件。这个操作与发送普通会议消息相互独立。
+        </p>
+        <label class="label" for="ai-question">
+          问题
+          <textarea
+            class="textarea"
+            id="ai-question"
+            placeholder="例如：整理刚才确认的交互规则"
+          ></textarea>
+        </label>
+        <div class="modal-actions">
+          <button class="btn" type="button" data-close>返回会议</button>
+          <button
+            class="btn btn-primary"
+            type="button"
+            data-action-feedback="演示问题已提交。"
+          >
+            提交问题
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <div class="modal-backdrop" id="end-meeting">
+      <div
+        class="modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="end-meeting-title"
+      >
+        <h2 id="end-meeting-title">结束并保存会议？</h2>
+        <p class="muted">
+          将停止访客访问，完成尾部转写、合并录音并刷新会议原始记录。
+        </p>
+        <div class="modal-actions">
+          <button class="btn" type="button" data-close>继续会议</button>
+          <button class="btn btn-primary" type="button">结束并保存</button>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

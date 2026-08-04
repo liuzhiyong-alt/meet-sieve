@@ -133,6 +133,7 @@ export const useAgentStore = defineStore('agent', {
     loading: false,
     saving: false,
     probing: false,
+    retrying: false,
     asking: false,
     errorMessage: '',
     notice: '',
@@ -264,10 +265,16 @@ export const useAgentStore = defineStore('agent', {
     },
     /** retry 让不可用会议优先恢复原 thread。 */
     async retry(): Promise<void> {
-      if (!this.meetingID) return
-      const result = await RetryAgent(this.meetingID)
-      if (result.code !== 200) this.errorMessage = result.message
-      await this.refreshState(this.meetingID)
+      if (!this.meetingID || this.retrying) return
+      this.retrying = true
+      this.errorMessage = ''
+      try {
+        const result = await RetryAgent(this.meetingID)
+        if (result.code !== 200) this.errorMessage = result.message
+        await this.refreshState(this.meetingID)
+      } finally {
+        this.retrying = false
+      }
     },
     /** startWakeTest 启动真实 ASR 三次测试。 */
     async startWakeTest(): Promise<void> {

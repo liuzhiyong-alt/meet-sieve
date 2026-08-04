@@ -71,6 +71,7 @@ type Message struct {
 	RequestID           *string `gorm:"column:request_id"`
 	DisplayNameSnapshot string  `gorm:"column:display_name_snapshot"`
 	Content             string  `gorm:"column:content"`
+	ContentFormat       string  `gorm:"column:content_format"`
 	CreatedAt           int64   `gorm:"column:created_at"`
 	UpdatedAt           int64   `gorm:"column:updated_at"`
 }

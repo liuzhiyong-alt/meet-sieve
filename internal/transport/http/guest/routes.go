@@ -21,6 +21,7 @@ import (
 	httpmiddleware "meet-sieve/internal/transport/http/middleware"
 
 	"github.com/gin-gonic/gin"
+	"github.com/gorilla/websocket"
 )
 
 const (
@@ -42,6 +43,7 @@ type RouteDependencies struct {
 	Generation     func() string
 	Limiter        *Limiter
 	Presence       *Presence
+	Hub            *Hub
 	WebAssets      fs.FS
 }
 
@@ -56,6 +58,9 @@ func RegisterRoutes(engine *gin.Engine, dependencies RouteDependencies) {
 	if dependencies.Presence == nil {
 		dependencies.Presence = NewPresence()
 	}
+	if dependencies.Hub == nil {
+		dependencies.Hub = NewHub()
+	}
 	group := engine.Group("/api/v1/guest")
 	group.Use(securityHeaders(), validateHostAndOrigin(dependencies.ExpectedOrigin))
 	group.POST("/sessions", createSessionHandler(dependencies))
@@ -64,11 +69,95 @@ func RegisterRoutes(engine *gin.Engine, dependencies RouteDependencies) {
 	authenticated.Use(authenticate(dependencies))
 	authenticated.GET("/meeting", meetingHandler(dependencies))
 	authenticated.GET("/events", eventsHandler(dependencies))
+	authenticated.GET("/ws", websocketHandler(dependencies))
 	authenticated.POST("/messages", messageHandler(dependencies))
 	authenticated.POST("/attachments", attachmentHandler(dependencies))
 	authenticated.GET("/attachments/:id", downloadHandler(dependencies))
 	authenticated.HEAD("/attachments/:id", downloadHandler(dependencies))
 	registerWebRoutes(engine, dependencies.WebAssets)
+}
+
+const (
+	websocketWriteWait = 10 * time.Second
+	websocketPongWait  = 60 * time.Second
+	websocketPingEvery = 45 * time.Second
+)
+
+// websocketHandler 建立认证后的同源通知通道，正文始终由 events 接口按 seq 恢复。
+func websocketHandler(dependencies RouteDependencies) gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		authenticated, ok := authenticatedFrom(ctx)
+		if !ok || dependencies.Hub == nil || !websocketOriginAllowed(ctx.Request, dependencies.ExpectedOrigin) {
+			if ok {
+				httpmiddleware.AbortWithError(ctx, apperr.Biz(apperr.CodeLANSessionInvalid, apperr.WithOp("http.guest.websocket_origin")))
+			}
+			return
+		}
+		connection, err := (&websocket.Upgrader{
+			HandshakeTimeout: websocketWriteWait,
+			CheckOrigin: func(request *http.Request) bool {
+				return websocketOriginAllowed(request, dependencies.ExpectedOrigin)
+			},
+		}).Upgrade(ctx.Writer, ctx.Request, nil)
+		if err != nil {
+			return
+		}
+		serveWebSocket(connection, dependencies.Hub, authenticated.Session.MeetingID)
+	}
+}
+
+// websocketOriginAllowed 要求浏览器握手 Origin 与当前 LAN Listener 完全同源。
+func websocketOriginAllowed(request *http.Request, expectedOrigin func() string) bool {
+	if request == nil || expectedOrigin == nil {
+		return false
+	}
+	expected := expectedOrigin()
+	return expected != "" && request.Header.Get("Origin") == expected
+}
+
+// serveWebSocket 串行写入通知和 ping；读取循环只用于处理 pong 与断开。
+func serveWebSocket(connection *websocket.Conn, hub *Hub, meetingID string) {
+	defer connection.Close()
+	notifications, unsubscribe := hub.Subscribe(meetingID)
+	defer unsubscribe()
+	_ = connection.SetReadDeadline(time.Now().Add(websocketPongWait))
+	connection.SetPongHandler(func(string) error {
+		return connection.SetReadDeadline(time.Now().Add(websocketPongWait))
+	})
+	closed := make(chan struct{})
+	go func() {
+		defer close(closed)
+		for {
+			if _, _, err := connection.ReadMessage(); err != nil {
+				return
+			}
+		}
+	}()
+	ticker := time.NewTicker(websocketPingEvery)
+	defer ticker.Stop()
+	for {
+		select {
+		case notification, exists := <-notifications:
+			if !exists || writeWebSocketJSON(connection, notification) != nil {
+				return
+			}
+		case <-ticker.C:
+			_ = connection.SetWriteDeadline(time.Now().Add(websocketWriteWait))
+			if connection.WriteMessage(websocket.PingMessage, nil) != nil {
+				return
+			}
+		case <-closed:
+			return
+		}
+	}
+}
+
+// writeWebSocketJSON 为所有通知写入设置固定超时。
+func writeWebSocketJSON(connection *websocket.Conn, value any) error {
+	if err := connection.SetWriteDeadline(time.Now().Add(websocketWriteWait)); err != nil {
+		return err
+	}
+	return connection.WriteJSON(value)
 }
 
 // securityHeaders 为所有 Guest API 禁止缓存、MIME 猜测和外部引用来源。

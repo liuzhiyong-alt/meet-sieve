@@ -42,6 +42,7 @@ type Orchestrator struct {
 	current    *port.AgentSession
 	initCancel context.CancelFunc
 	initDone   chan struct{}
+	retrying   bool
 }
 
 // NewOrchestrator 创建 session owner；构造阶段不启动 provider。
@@ -61,8 +62,14 @@ func (orchestrator *Orchestrator) Initialize(ctx context.Context, meetingID stri
 
 // Retry 优先恢复最近 thread；不存在时创建新 thread 并从本地快照恢复。
 func (orchestrator *Orchestrator) Retry(ctx context.Context, meetingID string) error {
+	if err := orchestrator.beginRetry(); err != nil {
+		return err
+	}
+	defer orchestrator.finishRetry()
 	// 进程退出后 owner 仍可能保留旧 session；先幂等收口，才能创建唯一恢复 session。
-	_ = orchestrator.Shutdown(ctx)
+	if err := orchestrator.Shutdown(ctx); err != nil {
+		return err
+	}
 	latest, err := orchestrator.repository.GetLatestSession(ctx, meetingID)
 	if err != nil && !errors.Is(err, agentrepository.ErrNotFound) {
 		return err
@@ -259,24 +266,20 @@ func (orchestrator *Orchestrator) initialize(ctx context.Context, meetingID stri
 	}
 	providerSession, err := orchestrator.openProviderSession(ctx, sessionModel.ID, workingDirectory, previous)
 	if err != nil {
-		orchestrator.failInitialization(sessionModel.ID, err)
-		return err
+		return orchestrator.failInitialization(sessionModel.ID, err)
 	}
 	if err := orchestrator.repository.SetSessionThread(ctx, sessionModel.ID, providerSession.ProviderSessionID, orchestrator.clock.Now().UnixMilli()); err != nil {
 		_ = orchestrator.provider.CloseSession(context.Background(), sessionModel.ID)
-		orchestrator.failInitialization(sessionModel.ID, err)
-		return err
+		return orchestrator.failInitialization(sessionModel.ID, err)
 	}
 	if err := orchestrator.rawRecord.Flush(ctx, meetingID); err != nil {
 		_ = orchestrator.provider.CloseSession(context.Background(), sessionModel.ID)
 		wrapped := apperr.Dependency(apperr.CodeAgentContextFlushFailed, err, apperr.WithOp("agent.initialize.flush"))
-		orchestrator.failInitialization(sessionModel.ID, wrapped)
-		return wrapped
+		return orchestrator.failInitialization(sessionModel.ID, wrapped)
 	}
 	if err := orchestrator.runInitializeTurn(ctx, meeting, sessionModel, previous); err != nil {
 		_ = orchestrator.provider.CloseSession(context.Background(), sessionModel.ID)
-		orchestrator.failInitialization(sessionModel.ID, err)
-		return err
+		return orchestrator.failInitialization(sessionModel.ID, err)
 	}
 	orchestrator.mu.Lock()
 	orchestrator.current = &providerSession
@@ -395,12 +398,12 @@ func (orchestrator *Orchestrator) executeInitializeUnit(ctx context.Context, ses
 			return domainagent.ValidatedOutput{}, "", err
 		}
 	}
-	schema, err := domainagent.OutputSchema(kind)
+	schema, err := buildAgentOutputSchema(kind, built)
 	if err != nil {
 		return domainagent.ValidatedOutput{}, "", err
 	}
 	events, err := orchestrator.provider.RunTurn(ctx, port.RunAgentTurnRequest{
-		SessionID: session.ID, TurnID: turnID, Kind: kind, Input: unit.Context.Prompt,
+		SessionID: session.ID, TurnID: turnID, Kind: kind, Input: appendReferenceInstructions(unit.Context.Prompt, built),
 		OutputSchema: schema, Deadline: deadlineFromContext(ctx),
 	})
 	if err != nil {
@@ -432,8 +435,11 @@ func (orchestrator *Orchestrator) executeInitializeUnit(ctx context.Context, ses
 	if providerTurnID == "" || len(final) == 0 || !completed {
 		return domainagent.ValidatedOutput{}, providerTurnID, apperr.Dependency(apperr.CodeAgentOutputInvalid, errors.New("initialize final missing"), apperr.WithOp("agent.initialize.output"))
 	}
-	validated, validateErr := domainagent.ValidateOutput(kind, final, domainagent.ReferenceAllowlist{Sequences: built.Sequences, URLs: built.URLs, Resources: built.Resources})
-	return validated, providerTurnID, validateErr
+	validated, validateErr := domainagent.ValidateOutput(kind, final, referenceAllowlist(built))
+	if validateErr != nil {
+		return domainagent.ValidatedOutput{}, providerTurnID, apperr.Dependency(apperr.CodeAgentOutputInvalid, validateErr, apperr.WithOp("agent.initialize.output.validate"))
+	}
+	return validated, providerTurnID, nil
 }
 
 // previousSnapshot 读取旧 session 最后成功本地快照，失败时从零恢复。
@@ -470,6 +476,24 @@ func (orchestrator *Orchestrator) reserveOwner(cancel context.CancelFunc, done c
 	return nil
 }
 
+// beginRetry 原子取得重试所有权；初始化或其他重试进行中时不取消既有任务。
+func (orchestrator *Orchestrator) beginRetry() error {
+	orchestrator.mu.Lock()
+	defer orchestrator.mu.Unlock()
+	if orchestrator.retrying || orchestrator.initDone != nil {
+		return apperr.Biz(apperr.CodeAgentBusy, apperr.WithOp("agent.orchestrator.retry"))
+	}
+	orchestrator.retrying = true
+	return nil
+}
+
+// finishRetry 释放重试所有权，允许后续显式恢复。
+func (orchestrator *Orchestrator) finishRetry() {
+	orchestrator.mu.Lock()
+	orchestrator.retrying = false
+	orchestrator.mu.Unlock()
+}
+
 // finishInitializeOwner 发布初始化完成，并清理仅初始化阶段使用的取消句柄。
 func (orchestrator *Orchestrator) finishInitializeOwner(cancel context.CancelFunc, done chan struct{}) {
 	cancel()
@@ -488,14 +512,17 @@ func (orchestrator *Orchestrator) releaseOwner() {
 	orchestrator.mu.Unlock()
 }
 
-// failInitialization 仅记录稳定错误码，不持久化 provider 原始错误。
-func (orchestrator *Orchestrator) failInitialization(sessionID string, cause error) {
+// failInitialization 记录稳定错误码；收敛失败时保留原始根因并附加清理错误。
+func (orchestrator *Orchestrator) failInitialization(sessionID string, cause error) error {
 	code := apperr.CodeAgentInitializeFailed.ErrorCode
 	var appError *apperr.AppError
 	if errors.As(cause, &appError) {
 		code = appError.ErrorCode
 	}
-	_ = orchestrator.repository.FailInitialization(context.Background(), sessionID, code, orchestrator.clock.Now().UnixMilli())
+	if err := orchestrator.repository.FailInitialization(context.Background(), sessionID, code, orchestrator.clock.Now().UnixMilli()); err != nil {
+		return errors.Join(cause, fmt.Errorf("收敛智能体初始化失败：%w", err))
+	}
+	return cause
 }
 
 // trustedMeetingDirectory 从可信 root 和数据库相对路径构造 cwd。

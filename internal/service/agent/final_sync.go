@@ -268,8 +268,11 @@ func (service *FinalSyncService) executeFinalBatch(ctx context.Context, turnID s
 	if err := service.repository.MarkBatchRunning(ctx, batch.ID, service.clock.Now().UnixMilli()); err != nil {
 		return domainagent.ValidatedOutput{}, "", err
 	}
-	schema, _ := domainagent.OutputSchema(port.AgentTurnIngest)
-	events, err := service.provider.RunTurn(ctx, port.RunAgentTurnRequest{SessionID: session.ID, TurnID: turnID, Kind: port.AgentTurnIngest, Input: batch.Context.Prompt, OutputSchema: schema, Deadline: deadlineFromContext(ctx)})
+	schema, err := buildAgentOutputSchema(port.AgentTurnIngest, built)
+	if err != nil {
+		return domainagent.ValidatedOutput{}, "", err
+	}
+	events, err := service.provider.RunTurn(ctx, port.RunAgentTurnRequest{SessionID: session.ID, TurnID: turnID, Kind: port.AgentTurnIngest, Input: appendReferenceInstructions(batch.Context.Prompt, built), OutputSchema: schema, Deadline: deadlineFromContext(ctx)})
 	if err != nil {
 		return domainagent.ValidatedOutput{}, "", err
 	}
@@ -299,8 +302,11 @@ func (service *FinalSyncService) executeFinalBatch(ctx context.Context, turnID s
 	if providerTurnID == "" || len(final) == 0 || !completed {
 		return domainagent.ValidatedOutput{}, providerTurnID, fmt.Errorf("Codex 结束同步输出不完整")
 	}
-	validated, validateErr := domainagent.ValidateOutput(port.AgentTurnIngest, final, domainagent.ReferenceAllowlist{Sequences: built.Sequences, URLs: built.URLs, Resources: built.Resources})
-	return validated, providerTurnID, validateErr
+	validated, validateErr := domainagent.ValidateOutput(port.AgentTurnIngest, final, referenceAllowlist(built))
+	if validateErr != nil {
+		return domainagent.ValidatedOutput{}, providerTurnID, apperr.Dependency(apperr.CodeAgentOutputInvalid, validateErr, apperr.WithOp("agent.final_sync.output.validate"))
+	}
+	return validated, providerTurnID, nil
 }
 
 // snapshotForSession 从当前或恢复来源 session 获取成功游标。

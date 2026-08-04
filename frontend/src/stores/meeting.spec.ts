@@ -69,7 +69,7 @@ describe('meeting store', () => {
     expect(store.microphones[0]?.id).toBe('device-1')
   })
 
-  it('loads the create screen projection only once while it remains current', async () => {
+  it('reloads the create screen projection with the latest member options', async () => {
     meetingBindings.GetCreateDraft.mockResolvedValue({
       code: 200,
       data: {
@@ -77,9 +77,18 @@ describe('meeting store', () => {
         default_subject: '未命名会议',
       },
     })
-    peopleBindings.GetMeetingPeopleOptions.mockResolvedValue({
+    peopleBindings.GetMeetingPeopleOptions.mockResolvedValueOnce({
       code: 200,
-      data: { groups: [], members: [] },
+      data: { groups: [], members: [{ id: 'member-1', name: '张三' }] },
+    }).mockResolvedValueOnce({
+      code: 200,
+      data: {
+        groups: [],
+        members: [
+          { id: 'member-2', name: '测试成员' },
+          { id: 'member-1', name: '张三' },
+        ],
+      },
     })
     voiceBindings.ListInputDevices.mockResolvedValue({
       code: 200,
@@ -90,9 +99,13 @@ describe('meeting store', () => {
     await store.loadCreateScreen()
     await store.loadCreateScreen()
 
-    expect(meetingBindings.GetCreateDraft).toHaveBeenCalledTimes(1)
-    expect(peopleBindings.GetMeetingPeopleOptions).toHaveBeenCalledTimes(1)
-    expect(voiceBindings.ListInputDevices).toHaveBeenCalledTimes(1)
+    expect(meetingBindings.GetCreateDraft).toHaveBeenCalledTimes(2)
+    expect(peopleBindings.GetMeetingPeopleOptions).toHaveBeenCalledTimes(2)
+    expect(voiceBindings.ListInputDevices).toHaveBeenCalledTimes(2)
+    expect(store.members.map((member) => member.name)).toEqual([
+      '测试成员',
+      '张三',
+    ])
   })
 
   it('only exposes record-only retry for registered realtime ASR start errors', async () => {

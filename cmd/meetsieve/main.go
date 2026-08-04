@@ -130,14 +130,43 @@ func run() error {
 			wailstransport.SpeakerChangedEventDTO{MeetingID: meetingID, TrackID: trackID},
 		))
 	})
+	_ = meetingModule.SetTimelinePublisher(func(meetingID string, latestSeq int64, reason string) {
+		if wailsContext == nil {
+			return
+		}
+		const name = "meeting.timeline.changed"
+		runtime.EventsEmit(wailsContext, name, wailstransport.NewEvent(
+			name, time.Now(), uint64(latestSeq),
+			wailstransport.TimelineChangedEventDTO{MeetingID: meetingID, LatestSeq: latestSeq, Reason: reason},
+		))
+	})
 	_ = meetingModule.SetAgentPublishers(
 		func(event port.AgentEvent) {
-			if wailsContext == nil {
-				return
-			}
 			if event.Type == port.AgentEventTimelineChanged {
+				services, serviceErr := meetingModule.Current()
+				if serviceErr == nil && services.Content != nil {
+					latestSeq, latestErr := services.Content.LatestEventSeq(context.Background(), event.MeetingID)
+					if latestErr == nil {
+						if services.GuestHub != nil {
+							services.GuestHub.Publish(event.MeetingID, latestSeq, "agent_persisted")
+						}
+						if wailsContext != nil {
+							const timelineName = "meeting.timeline.changed"
+							runtime.EventsEmit(wailsContext, timelineName, wailstransport.NewEvent(
+								timelineName, time.Now(), uint64(latestSeq),
+								wailstransport.TimelineChangedEventDTO{MeetingID: event.MeetingID, LatestSeq: latestSeq, Reason: "agent_persisted"},
+							))
+						}
+					}
+				}
+				if wailsContext == nil {
+					return
+				}
 				name := "meeting.agent.timeline.changed"
 				runtime.EventsEmit(wailsContext, name, wailstransport.NewEvent(name, time.Now(), 0, wailstransport.MapAgentEventDTO(event)))
+				return
+			}
+			if wailsContext == nil {
 				return
 			}
 			name := "meeting.agent.changed"
@@ -287,6 +316,22 @@ func run() error {
 		func(ctx context.Context, name string, data any) { runtime.EventsEmit(ctx, name, data) },
 		boundary,
 	)
+	contentBinding := wailstransport.NewContentBinding(
+		func() (wailstransport.ContentServices, error) {
+			services, serviceErr := meetingModule.Current()
+			if serviceErr != nil {
+				return wailstransport.ContentServices{}, serviceErr
+			}
+			return wailstransport.ContentServices{
+				Content: services.Content, Attachments: services.Attachments, Meetings: services.Meetings,
+				Runtime: services.Runtime, LAN: services.LAN, Presence: services.GuestPresence,
+			}, nil
+		},
+		func() context.Context { return wailsContext },
+		func(ctx context.Context, name string, data any) { runtime.EventsEmit(ctx, name, data) },
+		identity.NewUUIDGenerator(),
+		boundary,
+	)
 	lanBinding := wailstransport.NewLANBinding(
 		func() (*lanservice.Manager, *guesthttp.Presence, *resourceservice.UploadCoordinator, *meetingservice.Service, error) {
 			services, serviceErr := meetingModule.Current()
@@ -434,6 +479,7 @@ func run() error {
 			voiceModelBinding,
 			voiceBinding,
 			meetingBinding,
+			contentBinding,
 			lanBinding,
 			asrBinding,
 			agentBinding,

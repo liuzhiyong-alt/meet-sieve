@@ -1,12 +1,52 @@
 package agent_test
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
 	agent "meet-sieve/internal/domain/agent"
 	"meet-sieve/internal/port"
 )
+
+// TestOutputSchemaWithReferences_ConstrainsReferencesToCurrentAllowlist 验证动态 Schema 在生成阶段限制引用来源。
+func TestOutputSchemaWithReferences_ConstrainsReferencesToCurrentAllowlist(t *testing.T) {
+	schema, err := agent.OutputSchemaWithReferences(port.AgentTurnInitialize, agent.ReferenceAllowlist{
+		Sequences: map[int64]struct{}{12: {}, 3: {}},
+		URLs:      map[string]struct{}{"https://example.com/doc": {}},
+		Resources: map[string]struct{}{"attachments/report.pdf": {}},
+	})
+	if err != nil {
+		t.Fatalf("生成动态输出 Schema 失败：%v", err)
+	}
+	var document map[string]any
+	if err := json.Unmarshal(schema, &document); err != nil {
+		t.Fatalf("动态输出 Schema 不是合法 JSON：%v", err)
+	}
+	properties := document["properties"].(map[string]any)
+	snapshot := properties["snapshot"].(map[string]any)
+	snapshotProperties := snapshot["properties"].(map[string]any)
+	references := snapshotProperties["references"].(map[string]any)
+	items := references["items"].(map[string]any)
+	values := items["enum"].([]any)
+	want := []any{"attachments/report.pdf", "https://example.com/doc", "seq:12", "seq:3"}
+	if len(values) != len(want) {
+		t.Fatalf("引用枚举数量错误：got=%v want=%v", values, want)
+	}
+	for index := range want {
+		if values[index] != want[index] {
+			t.Fatalf("引用枚举必须稳定排序：got=%v want=%v", values, want)
+		}
+	}
+
+	emptySchema, err := agent.OutputSchemaWithReferences(port.AgentTurnInitialize, agent.ReferenceAllowlist{})
+	if err != nil {
+		t.Fatalf("生成空引用 Schema 失败：%v", err)
+	}
+	if !strings.Contains(string(emptySchema), `"maxItems":0`) {
+		t.Fatalf("没有白名单时 references 必须只能为空：%s", emptySchema)
+	}
+}
 
 // TestValidateOutput_AcceptsAnswerAndCanonicalSnapshot 验证回答、引用白名单和规范快照摘要。
 func TestValidateOutput_AcceptsAnswerAndCanonicalSnapshot(t *testing.T) {

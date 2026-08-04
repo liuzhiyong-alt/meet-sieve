@@ -38,6 +38,7 @@ import (
 	transcriptrepository "meet-sieve/internal/repository/transcript"
 	agentservice "meet-sieve/internal/service/agent"
 	audioservice "meet-sieve/internal/service/audio"
+	contentservice "meet-sieve/internal/service/content"
 	deletionservice "meet-sieve/internal/service/deletion"
 	diagnosticsservice "meet-sieve/internal/service/diagnostics"
 	finalizationservice "meet-sieve/internal/service/finalization"
@@ -79,6 +80,10 @@ type MeetingServices struct {
 	Meetings *meetingservice.Service
 	// Runtime 负责录音运行时生命周期。
 	Runtime *meetingservice.RuntimeService
+	// Content 提供主持人消息和会中统一时间线。
+	Content *contentservice.Service
+	// Attachments 提供主持人和访客共用的安全附件链路。
+	Attachments *resourceservice.AttachmentService
 	// Recovery 负责异常退出后的录音恢复。
 	Recovery *meetingservice.RecoveryService
 	// TranscriptSettings 负责火山 ASR 凭据设置与连接探测。
@@ -93,6 +98,8 @@ type MeetingServices struct {
 	LANRuntime *lanservice.Runtime
 	// GuestPresence 提供宿主 UI 的 45 秒在线人数。
 	GuestPresence *guesthttp.Presence
+	// GuestHub 向认证访客发布不含正文的统一时间线失效通知。
+	GuestHub *guesthttp.Hub
 	// GuestUploads 提供宿主取消活动上传的边界。
 	GuestUploads *resourceservice.UploadCoordinator
 	// RecoverAttachments 清理活动会议中仅由应用拥有的附件暂存和孤儿候选。
@@ -150,6 +157,7 @@ type MeetingModule struct {
 	speakerPublisher   func(meetingID string, trackID string)
 	agentPublisher     func(port.AgentEvent)
 	wakeTestPublisher  func(agentservice.WakeWordTestState)
+	timelinePublisher  func(meetingID string, latestSeq int64, reason string)
 	speakerCancel      context.CancelFunc
 	postMeetingCancel  context.CancelFunc
 	finalizationEvents meetingservice.FinalizationEventSink
@@ -255,6 +263,20 @@ func (module *MeetingModule) SetSpeakerPublisher(publisher func(meetingID string
 		return fmt.Errorf("会议服务已装配，不能更换 speaker 发布器")
 	}
 	module.speakerPublisher = publisher
+	return nil
+}
+
+// SetTimelinePublisher 在首次装配前登记统一时间线持久化后的轻量刷新通知。
+func (module *MeetingModule) SetTimelinePublisher(publisher func(meetingID string, latestSeq int64, reason string)) error {
+	if module == nil {
+		return fmt.Errorf("会议模块不可用")
+	}
+	module.mu.Lock()
+	defer module.mu.Unlock()
+	if module.services != nil {
+		return fmt.Errorf("会议服务已装配，不能更换统一时间线发布器")
+	}
+	module.timelinePublisher = publisher
 	return nil
 }
 
@@ -527,6 +549,7 @@ func (module *MeetingModule) buildServices(reader *gorm.DB, transactions *databa
 		return nil, fmt.Errorf("撤销上一进程访客会话：%w", err)
 	}
 	uploadCoordinator := resourceservice.NewUploadCoordinator()
+	guestHub := guesthttp.NewHub()
 	handlerProxy := &atomicHTTPHandler{}
 	lanRuntime := lanservice.NewRuntime(lanservice.Dependencies{
 		IDs: identity.NewUUIDGenerator(), Handler: handlerProxy,
@@ -538,17 +561,30 @@ func (module *MeetingModule) buildServices(reader *gorm.DB, transactions *databa
 		Repository: guestRepository, Access: lanRuntime, Clock: currentClock,
 		IDs: identity.NewUUIDGenerator(),
 	})
-	contentService := guestservice.NewContentService(guestservice.ContentDependencies{
+	notifyTimelineChanged := func(meetingID string, latestSeq int64, reason string) {
+		guestHub.Publish(meetingID, latestSeq, reason)
+		if module.timelinePublisher != nil {
+			module.timelinePublisher(meetingID, latestSeq, reason)
+		}
+	}
+	hostContentService := contentservice.NewService(contentservice.Dependencies{
 		Repository: contentRepository, Transactions: transactions, Clock: currentClock, IDs: identity.NewUUIDGenerator(),
-		OnPersisted: func(meetingID string) { _ = rawRecord.MarkDirty(meetingID) },
+		OnPersisted:       func(meetingID string) { _ = rawRecord.MarkDirty(meetingID) },
+		OnTimelineChanged: notifyTimelineChanged,
+	})
+	guestContentService := guestservice.NewContentService(guestservice.ContentDependencies{
+		Repository: contentRepository, Transactions: transactions, Clock: currentClock, IDs: identity.NewUUIDGenerator(),
+		OnPersisted:       func(meetingID string) { _ = rawRecord.MarkDirty(meetingID) },
+		OnTimelineChanged: notifyTimelineChanged,
 	})
 	directoryResolver := &meetingDirectoryResolver{repository: repository, workspaceRoot: workspacePath}
 	attachmentService := resourceservice.NewAttachmentService(resourceservice.AttachmentDependencies{
 		Repository: contentRepository, Transactions: transactions, Coordinator: uploadCoordinator,
 		Policy: resourceservice.NewFilePolicy(), Directories: directoryResolver, Clock: currentClock,
 		IDs: identity.NewUUIDGenerator(), AvailableBytes: filesystem.AvailableBytes,
-		MinimumFreeBytes: uint64(module.recordingConfig.MinimumFreeSpaceGiB) << 30,
-		OnPersisted:      func(meetingID string) { _ = rawRecord.MarkDirty(meetingID) },
+		MinimumFreeBytes:  uint64(module.recordingConfig.MinimumFreeSpaceGiB) << 30,
+		OnPersisted:       func(meetingID string) { _ = rawRecord.MarkDirty(meetingID) },
+		OnTimelineChanged: notifyTimelineChanged,
 	})
 	downloadService := resourceservice.NewDownloadService(contentRepository, directoryResolver, resourceservice.NewFileStore())
 	attachmentRecovery := resourceservice.NewRecovery(contentRepository.ListReferencedSafeNames)
@@ -579,8 +615,8 @@ func (module *MeetingModule) buildServices(reader *gorm.DB, transactions *databa
 		registry = health.NewRegistry()
 	}
 	guestEngine := transporthttp.NewGuestEngine(registry, appLogger, guesthttp.RouteDependencies{
-		Sessions: sessionService, Content: contentService, Timeline: guestservice.NewTimelineService(contentRepository),
-		Attachments: attachmentService, Downloads: downloadService, Limiter: limiter, Presence: presence,
+		Sessions: sessionService, Content: guestContentService, Timeline: guestservice.NewTimelineService(contentRepository),
+		Attachments: attachmentService, Downloads: downloadService, Limiter: limiter, Presence: presence, Hub: guestHub,
 		ExpectedOrigin: func() string { return guesthttp.ExpectedOriginFromJoinURL(lanRuntime.Snapshot().JoinURL) },
 		Generation:     func() string { return lanRuntime.Snapshot().Generation },
 		WebAssets:      module.guestAssets,
@@ -624,6 +660,9 @@ func (module *MeetingModule) buildServices(reader *gorm.DB, transactions *databa
 		Repository: transcripts, Transactions: transactions, IDs: identity.NewUUIDGenerator(), Clock: currentClock,
 		OnPersisted: func(meetingID string, event transcriptservice.PersistedEvent) {
 			_ = rawRecord.MarkDirty(meetingID)
+			if !event.Duplicate {
+				notifyTimelineChanged(meetingID, event.Seq, "transcript_persisted")
+			}
 			// final 提交后留下可恢复的 speaker 事实；模型门禁只影响后续自动匹配。
 			if event.Kind == "utterance.final" && event.EntityID != "" {
 				_, _ = speakerObserver.Observe(context.Background(), event.EntityID)
@@ -697,9 +736,9 @@ func (module *MeetingModule) buildServices(reader *gorm.DB, transactions *databa
 	return &MeetingServices{
 		Query: queryService, Deletion: deletion, AudioSettings: audioSettings, StorageScan: storageScan, Diagnostics: diagnostics,
 		ResourceOpen: resourceOpen, Maintenance: maintenance,
-		Meetings: meetings, Runtime: runtime, Recovery: recovery,
+		Meetings: meetings, Runtime: runtime, Recovery: recovery, Content: hostContentService, Attachments: attachmentService,
 		TranscriptSettings: transcriptSettings, TranscriptRuntime: transcriptRuntime, TranscriptTimeline: transcriptTimeline,
-		LAN: lanManager, LANRuntime: lanRuntime, GuestPresence: presence, GuestUploads: uploadCoordinator,
+		LAN: lanManager, LANRuntime: lanRuntime, GuestPresence: presence, GuestHub: guestHub, GuestUploads: uploadCoordinator,
 		RecoverAttachments: recoverAttachments,
 		AgentSettings:      agentSettings, AgentWakeTest: agentWakeTest, AgentOrchestrator: agentOrchestrator,
 		AgentTurns: agentTurns, AgentRecoveryCommands: agentRecoveryCommands,

@@ -67,7 +67,7 @@ func TestTurnService_CommitsQuestionAnswerSnapshotBatchAndCursorAtomically(t *te
 		t.Fatalf("滚动快照游标错误：snapshot=%#v err=%v", snapshot, err)
 	}
 	var payload string
-	if err := db.Model(&models.MeetingEvent{}).Select("payload_json").Where("id = ?", *turn.AnswerEventID).Scan(&payload).Error; err != nil || payload != `{"guest_visible":true,"text":"测试回答","v":1}` {
+	if err := db.Model(&models.MeetingEvent{}).Select("payload_json").Where("id = ?", *turn.AnswerEventID).Scan(&payload).Error; err != nil || payload != `{"content_format":"markdown","guest_visible":true,"text":"测试回答","v":2}` {
 		t.Fatalf("公开回答 payload 错误：payload=%s err=%v", payload, err)
 	}
 }

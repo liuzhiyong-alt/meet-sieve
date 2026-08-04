@@ -106,6 +106,16 @@ func NewRecordingCoordinator(capture port.AudioCapture, maxSegmentSamples int64,
 	}
 }
 
+// IsCapturing 返回真实 AudioStream 是否已经完成首帧并仍由协调器持有。
+func (coordinator *RecordingCoordinator) IsCapturing() bool {
+	if coordinator == nil {
+		return false
+	}
+	coordinator.mu.Lock()
+	defer coordinator.mu.Unlock()
+	return coordinator.session != nil
+}
+
 // Start 打开固定格式设备流；只有首帧成功写入 part 后才返回成功。
 func (coordinator *RecordingCoordinator) Start(ctx context.Context, deviceID string, segmentsDirectory string) error {
 	if err := coordinator.reserveStart(); err != nil {

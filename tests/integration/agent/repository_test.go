@@ -70,6 +70,30 @@ func TestRepository_UpsertSnapshotKeepsOneRollingRow(t *testing.T) {
 	}
 }
 
+// TestRepository_FailInitializationIsIdempotent 验证重复失败收敛不会用状态冲突覆盖原始错误。
+func TestRepository_FailInitializationIsIdempotent(t *testing.T) {
+	db := openAgentDatabase(t)
+	repository := agentrepository.NewRepository(db, database.NewTransactionManager(db))
+	if err := db.Model(&models.Meeting{}).Where("id = ?", meetingID).Update("agent_state", "initializing").Error; err != nil {
+		t.Fatalf("准备会议初始化状态失败：%v", err)
+	}
+	createSession(t, repository, sessionID, "starting")
+
+	for attempt := 1; attempt <= 2; attempt++ {
+		if err := repository.FailInitialization(context.Background(), sessionID, "AGENT_OUTPUT_INVALID", 2_000_000_000_000+int64(attempt)); err != nil {
+			t.Fatalf("第 %d 次收敛初始化失败：%v", attempt, err)
+		}
+	}
+
+	var session models.AgentSession
+	if err := db.Where("id = ?", sessionID).Take(&session).Error; err != nil {
+		t.Fatalf("读取失败 session 失败：%v", err)
+	}
+	if session.State != "failed" || session.LastErrorCode == nil || *session.LastErrorCode != "AGENT_OUTPUT_INVALID" {
+		t.Fatalf("失败 session 状态错误：%#v", session)
+	}
+}
+
 // createSession 写入 repository 测试所需 session。
 func createSession(t *testing.T, repository *agentrepository.Repository, id string, state string) {
 	t.Helper()

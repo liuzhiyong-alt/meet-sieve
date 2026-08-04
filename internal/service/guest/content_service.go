@@ -19,20 +19,22 @@ import (
 
 // ContentDependencies 是访客文字和链接事务的显式依赖。
 type ContentDependencies struct {
-	Repository   *contentrepository.Repository
-	Transactions *database.TransactionManager
-	Clock        clock.Clock
-	IDs          identity.Generator
-	OnPersisted  func(string)
+	Repository        *contentrepository.Repository
+	Transactions      *database.TransactionManager
+	Clock             clock.Clock
+	IDs               identity.Generator
+	OnPersisted       func(string)
+	OnTimelineChanged func(string, int64, string)
 }
 
 // ContentService 保证访客内容实体与 meeting event 原子提交。
 type ContentService struct {
-	repository   *contentrepository.Repository
-	transactions *database.TransactionManager
-	clock        clock.Clock
-	ids          identity.Generator
-	onPersisted  func(string)
+	repository        *contentrepository.Repository
+	transactions      *database.TransactionManager
+	clock             clock.Clock
+	ids               identity.Generator
+	onPersisted       func(string)
+	onTimelineChanged func(string, int64, string)
 }
 
 // ContentInput 是显式区分 text/link 的幂等写入请求。
@@ -55,7 +57,8 @@ func NewContentService(dependencies ContentDependencies) *ContentService {
 	return &ContentService{
 		repository: dependencies.Repository, transactions: dependencies.Transactions,
 		clock: dependencies.Clock, ids: dependencies.IDs,
-		onPersisted: dependencies.OnPersisted,
+		onPersisted:       dependencies.OnPersisted,
+		onTimelineChanged: dependencies.OnTimelineChanged,
 	}
 }
 
@@ -72,16 +75,21 @@ func (service *ContentService) Create(ctx context.Context, authenticated Authent
 		return ContentResult{}, err
 	}
 	var result ContentResult
+	created := false
 	err = service.transactions.WithinTransaction(ctx, func(tx *gorm.DB) error {
-		committed, commitErr := service.createWithinTransaction(ctx, tx, authenticated.Session, input.RequestID, input.Kind, normalized)
+		committed, wasCreated, commitErr := service.createWithinTransaction(ctx, tx, authenticated.Session, input.RequestID, input.Kind, normalized)
 		result = committed
+		created = wasCreated
 		return commitErr
 	})
 	if err != nil {
 		return ContentResult{}, mapContentError(err)
 	}
-	if service.onPersisted != nil {
+	if created && service.onPersisted != nil {
 		service.onPersisted(authenticated.Session.MeetingID)
+	}
+	if created && service.onTimelineChanged != nil {
+		service.onTimelineChanged(authenticated.Session.MeetingID, result.Seq, "message_created")
 	}
 	return result, nil
 }
@@ -94,22 +102,23 @@ func (service *ContentService) createWithinTransaction(
 	requestID string,
 	kind string,
 	content string,
-) (ContentResult, error) {
+) (ContentResult, bool, error) {
 	session, err := service.repository.GetWritableSession(ctx, tx, authenticated.MeetingID, authenticated.ID)
 	if err != nil {
-		return ContentResult{}, err
+		return ContentResult{}, false, err
 	}
 	existing, err := service.repository.FindExisting(ctx, tx, session.ID, requestID)
 	if err != nil {
-		return ContentResult{}, err
+		return ContentResult{}, false, err
 	}
 	if existing != nil {
 		if existing.Kind != kind || existing.Content != content {
-			return ContentResult{}, apperr.Biz(apperr.CodeConflict, apperr.WithOp("guest.content.idempotency_conflict"))
+			return ContentResult{}, false, apperr.Biz(apperr.CodeConflict, apperr.WithOp("guest.content.idempotency_conflict"))
 		}
-		return resultFromExisting(*existing), nil
+		return resultFromExisting(*existing), false, nil
 	}
-	return service.commitNewContent(ctx, tx, session, requestID, kind, content)
+	committed, err := service.commitNewContent(ctx, tx, session, requestID, kind, content)
+	return committed, err == nil, err
 }
 
 // commitNewContent 分配唯一 seq 并写入一种显式内容实体。
@@ -169,7 +178,7 @@ func buildMessage(id string, eventID string, requestID string, content string, s
 	return models.Message{
 		ID: id, MeetingID: session.MeetingID, EventID: eventID, AuthorKind: "guest",
 		GuestSessionID: &session.ID, RequestID: &requestID, DisplayNameSnapshot: session.DisplayName,
-		Content: content, CreatedAt: now, UpdatedAt: now,
+		Content: content, ContentFormat: "markdown", CreatedAt: now, UpdatedAt: now,
 	}
 }
 

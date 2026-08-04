@@ -426,6 +426,34 @@ export namespace wails {
 	        this.data = source["data"];
 	    }
 	}
+	export class AttachmentSendDTO {
+	    cancelled: boolean;
+	    request_id?: string;
+	    resource_id?: string;
+	    seq?: number;
+	    occurred_at?: number;
+	    original_name?: string;
+	    media_type?: string;
+	    size_bytes?: number;
+	    sha256?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new AttachmentSendDTO(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.cancelled = source["cancelled"];
+	        this.request_id = source["request_id"];
+	        this.resource_id = source["resource_id"];
+	        this.seq = source["seq"];
+	        this.occurred_at = source["occurred_at"];
+	        this.original_name = source["original_name"];
+	        this.media_type = source["media_type"];
+	        this.size_bytes = source["size_bytes"];
+	        this.sha256 = source["sha256"];
+	    }
+	}
 	export class AudioClipDTO {
 	    url: string;
 	    start_sample: number;
@@ -526,6 +554,18 @@ export namespace wails {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.cancelled = source["cancelled"];
+	    }
+	}
+	export class ChooseAttachmentDTO {
+	    meeting_id: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ChooseAttachmentDTO(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.meeting_id = source["meeting_id"];
 	    }
 	}
 	export class ClusterCorrectionDTO {
@@ -1509,6 +1549,36 @@ export namespace wails {
 		}
 	}
 	
+	export class LiveMeetingStatusDTO {
+	    started_at?: number;
+	    ended_at?: number;
+	    recording_state: string;
+	    microphone_state: string;
+	    local_save_state: string;
+	    realtime_asr_state: string;
+	    latest_final_at?: number;
+	    agent_state: string;
+	    lan_state: string;
+	    online_count: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new LiveMeetingStatusDTO(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.started_at = source["started_at"];
+	        this.ended_at = source["ended_at"];
+	        this.recording_state = source["recording_state"];
+	        this.microphone_state = source["microphone_state"];
+	        this.local_save_state = source["local_save_state"];
+	        this.realtime_asr_state = source["realtime_asr_state"];
+	        this.latest_final_at = source["latest_final_at"];
+	        this.agent_state = source["agent_state"];
+	        this.lan_state = source["lan_state"];
+	        this.online_count = source["online_count"];
+	    }
+	}
 	export class MeetingClipDTO {
 	    request_id: string;
 	    meeting_id: string;
@@ -2738,6 +2808,44 @@ export namespace wails {
 		    return a;
 		}
 	}
+	export class Result_meet_sieve_internal_transport_wails_AttachmentSendDTO_ {
+	    code: number;
+	    errorCode?: string;
+	    message: string;
+	    data?: AttachmentSendDTO;
+	    requestId: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Result_meet_sieve_internal_transport_wails_AttachmentSendDTO_(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.code = source["code"];
+	        this.errorCode = source["errorCode"];
+	        this.message = source["message"];
+	        this.data = this.convertValues(source["data"], AttachmentSendDTO);
+	        this.requestId = source["requestId"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class Result_meet_sieve_internal_transport_wails_AudioClipDTO_ {
 	    code: number;
 	    errorCode?: string;
@@ -3536,6 +3644,44 @@ export namespace wails {
 		    return a;
 		}
 	}
+	export class Result_meet_sieve_internal_transport_wails_LiveMeetingStatusDTO_ {
+	    code: number;
+	    errorCode?: string;
+	    message: string;
+	    data?: LiveMeetingStatusDTO;
+	    requestId: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Result_meet_sieve_internal_transport_wails_LiveMeetingStatusDTO_(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.code = source["code"];
+	        this.errorCode = source["errorCode"];
+	        this.message = source["message"];
+	        this.data = this.convertValues(source["data"], LiveMeetingStatusDTO);
+	        this.requestId = source["requestId"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class Result_meet_sieve_internal_transport_wails_MeetingCreateDraftDTO_ {
 	    code: number;
 	    errorCode?: string;
@@ -4172,6 +4318,172 @@ export namespace wails {
 		    return a;
 		}
 	}
+	export class TimelineEntryDTO {
+	    seq: number;
+	    kind: string;
+	    occurred_at: number;
+	    source: string;
+	    entity_id?: string;
+	    display_name?: string;
+	    text?: string;
+	    content_format?: string;
+	    speaker_key?: string;
+	    speaker_label?: string;
+	    start_sample?: number;
+	    end_sample?: number;
+	    state?: string;
+	    reason?: string;
+	    resource_kind?: string;
+	    original_name?: string;
+	    media_type?: string;
+	    size_bytes?: number;
+	    sha256?: string;
+	    url?: string;
+	    description?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new TimelineEntryDTO(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.seq = source["seq"];
+	        this.kind = source["kind"];
+	        this.occurred_at = source["occurred_at"];
+	        this.source = source["source"];
+	        this.entity_id = source["entity_id"];
+	        this.display_name = source["display_name"];
+	        this.text = source["text"];
+	        this.content_format = source["content_format"];
+	        this.speaker_key = source["speaker_key"];
+	        this.speaker_label = source["speaker_label"];
+	        this.start_sample = source["start_sample"];
+	        this.end_sample = source["end_sample"];
+	        this.state = source["state"];
+	        this.reason = source["reason"];
+	        this.resource_kind = source["resource_kind"];
+	        this.original_name = source["original_name"];
+	        this.media_type = source["media_type"];
+	        this.size_bytes = source["size_bytes"];
+	        this.sha256 = source["sha256"];
+	        this.url = source["url"];
+	        this.description = source["description"];
+	    }
+	}
+	export class Result_meet_sieve_internal_transport_wails_TimelineEntryDTO_ {
+	    code: number;
+	    errorCode?: string;
+	    message: string;
+	    data?: TimelineEntryDTO;
+	    requestId: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Result_meet_sieve_internal_transport_wails_TimelineEntryDTO_(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.code = source["code"];
+	        this.errorCode = source["errorCode"];
+	        this.message = source["message"];
+	        this.data = this.convertValues(source["data"], TimelineEntryDTO);
+	        this.requestId = source["requestId"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class TimelinePageDTO {
+	    entries: TimelineEntryDTO[];
+	    oldest_seq: number;
+	    latest_seq: number;
+	    has_older: boolean;
+	    has_more_after: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new TimelinePageDTO(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.entries = this.convertValues(source["entries"], TimelineEntryDTO);
+	        this.oldest_seq = source["oldest_seq"];
+	        this.latest_seq = source["latest_seq"];
+	        this.has_older = source["has_older"];
+	        this.has_more_after = source["has_more_after"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class Result_meet_sieve_internal_transport_wails_TimelinePageDTO_ {
+	    code: number;
+	    errorCode?: string;
+	    message: string;
+	    data?: TimelinePageDTO;
+	    requestId: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Result_meet_sieve_internal_transport_wails_TimelinePageDTO_(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.code = source["code"];
+	        this.errorCode = source["errorCode"];
+	        this.message = source["message"];
+	        this.data = this.convertValues(source["data"], TimelinePageDTO);
+	        this.requestId = source["requestId"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class TranscriptItemDTO {
 	    seq: number;
 	    kind: string;
@@ -4778,6 +5090,22 @@ export namespace wails {
 	        this.codex_executable_path = source["codex_executable_path"];
 	    }
 	}
+	export class SendMeetingMessageDTO {
+	    meeting_id: string;
+	    request_id: string;
+	    content: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new SendMeetingMessageDTO(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.meeting_id = source["meeting_id"];
+	        this.request_id = source["request_id"];
+	        this.content = source["content"];
+	    }
+	}
 	export class SeqPageInputDTO {
 	    meeting_id: string;
 	    after_seq: number;
@@ -4838,6 +5166,26 @@ export namespace wails {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.api_key = source["api_key"];
+	    }
+	}
+	
+	
+	export class TimelineQueryDTO {
+	    meeting_id: string;
+	    direction: string;
+	    cursor_seq: number;
+	    limit: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new TimelineQueryDTO(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.meeting_id = source["meeting_id"];
+	        this.direction = source["direction"];
+	        this.cursor_seq = source["cursor_seq"];
+	        this.limit = source["limit"];
 	    }
 	}
 	

@@ -3,9 +3,13 @@ package agent_test
 import (
 	"context"
 	"errors"
+	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"meet-sieve/internal/infra/apperr"
 	"meet-sieve/internal/infra/clock"
 	"meet-sieve/internal/infra/database"
 	"meet-sieve/internal/infra/identity"
@@ -48,6 +52,9 @@ func TestOrchestrator_InitializesWithoutBlockingMeetingAxes(t *testing.T) {
 	if rawRecord.flushes != 1 || provider.starts != 1 || provider.turns != 1 {
 		t.Fatalf("初始化调用次数错误：raw=%#v provider=%#v", rawRecord, provider)
 	}
+	if !strings.Contains(provider.lastRequest.Input, "snapshot.references 必须返回空数组") || !strings.Contains(string(provider.lastRequest.OutputSchema), `"maxItems":0`) {
+		t.Fatalf("空事件初始化没有下发动态引用契约：input=%q schema=%s", provider.lastRequest.Input, provider.lastRequest.OutputSchema)
+	}
 	if err := orchestrator.Shutdown(context.Background()); err != nil || provider.closes != 1 {
 		t.Fatalf("shutdown 未关闭 provider：err=%v closes=%d", err, provider.closes)
 	}
@@ -80,22 +87,94 @@ func TestOrchestrator_ShutdownCancelsInitialization(t *testing.T) {
 	}
 }
 
+// TestOrchestrator_RetryDoesNotCancelRunningInitialization 验证并发重试只返回忙碌，不取消已有初始化。
+func TestOrchestrator_RetryDoesNotCancelRunningInitialization(t *testing.T) {
+	db := openAgentDatabase(t)
+	repository := agentrepository.NewRepository(db, database.NewTransactionManager(db))
+	provider := &blockingInitializeProvider{started: make(chan struct{})}
+	orchestrator := serviceagent.NewOrchestrator(serviceagent.OrchestratorDependencies{
+		Repository: repository, Context: serviceagent.NewContextBuilder(repository), Provider: provider,
+		RawRecord: &turnRawRecord{}, Clock: clock.NewFixed(time.Date(2026, time.August, 2, 12, 0, 0, 0, time.UTC)),
+		WorkspaceRoot: t.TempDir(), IDs: identity.NewFixedGenerator("16161616-1616-4161-8161-161616161616"),
+	})
+	initializeDone := make(chan error, 1)
+	go func() { initializeDone <- orchestrator.Initialize(context.Background(), meetingID) }()
+	<-provider.started
+
+	retryContext, cancelRetry := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancelRetry()
+	retryErr := orchestrator.Retry(retryContext, meetingID)
+	if normalized := apperr.Normalize(retryErr); normalized.ErrorCode != apperr.CodeAgentBusy.ErrorCode {
+		t.Fatalf("初始化期间重试应返回 AGENT_BUSY：%v", retryErr)
+	}
+	if provider.starts.Load() != 1 {
+		t.Fatalf("并发重试不得启动第二个 provider：%d", provider.starts.Load())
+	}
+	select {
+	case err := <-initializeDone:
+		t.Fatalf("并发重试不得取消已有初始化：%v", err)
+	default:
+	}
+
+	shutdownContext, cancelShutdown := context.WithTimeout(context.Background(), time.Second)
+	defer cancelShutdown()
+	if err := orchestrator.Shutdown(shutdownContext); err != nil {
+		t.Fatalf("停止测试初始化失败：%v", err)
+	}
+	if err := <-initializeDone; !errors.Is(err, context.Canceled) {
+		t.Fatalf("显式 Shutdown 应取消初始化：%v", err)
+	}
+}
+
+// TestOrchestrator_MapsInvalidProviderOutput 验证模型输出校验失败使用稳定错误码并收敛独立状态轴。
+func TestOrchestrator_MapsInvalidProviderOutput(t *testing.T) {
+	db := openAgentDatabase(t)
+	repository := agentrepository.NewRepository(db, database.NewTransactionManager(db))
+	provider := &initializeProvider{output: []byte(`{"snapshot":{"current_topics":[],"confirmed_decisions":[],"business_rules":[],"disagreements":[],"open_questions":[],"references":["会议号：MS-20260802-0001"]}}`)}
+	orchestrator := serviceagent.NewOrchestrator(serviceagent.OrchestratorDependencies{
+		Repository: repository, Context: serviceagent.NewContextBuilder(repository), Provider: provider,
+		RawRecord: &turnRawRecord{}, Clock: clock.NewFixed(time.Date(2026, time.August, 2, 12, 0, 0, 0, time.UTC)),
+		WorkspaceRoot: t.TempDir(), IDs: identity.NewFixedGenerator(
+			"17171717-1717-4171-8171-171717171717",
+			"18181818-1818-4181-8181-181818181818",
+		),
+	})
+
+	err := orchestrator.Initialize(context.Background(), meetingID)
+	if normalized := apperr.Normalize(err); normalized.ErrorCode != apperr.CodeAgentOutputInvalid.ErrorCode {
+		t.Fatalf("非法输出应映射 AGENT_OUTPUT_INVALID：%v", err)
+	}
+	var meeting models.Meeting
+	if err := db.Where("id = ?", meetingID).Take(&meeting).Error; err != nil || meeting.AgentState != "unavailable" {
+		t.Fatalf("非法输出后会议 Agent 状态未收敛：meeting=%#v err=%v", meeting, err)
+	}
+	var session models.AgentSession
+	if err := db.Where("meeting_id = ?", meetingID).Take(&session).Error; err != nil || session.State != "failed" || session.LastErrorCode == nil || *session.LastErrorCode != apperr.CodeAgentOutputInvalid.ErrorCode {
+		t.Fatalf("非法输出后 session 未记录稳定错误码：session=%#v err=%v", session, err)
+	}
+}
+
 type initializeProvider struct {
-	starts int
-	turns  int
-	closes int
+	starts      int
+	turns       int
+	closes      int
+	output      []byte
+	lastRequest port.RunAgentTurnRequest
 }
 
 type blockingInitializeProvider struct {
-	started chan struct{}
-	closes  int
+	started   chan struct{}
+	startOnce sync.Once
+	starts    atomic.Int32
+	closes    int
 }
 
 func (provider *blockingInitializeProvider) CheckAvailability(context.Context, port.AgentAvailabilityRequest) (port.AgentAvailability, error) {
 	return port.AgentAvailability{}, nil
 }
 func (provider *blockingInitializeProvider) StartSession(ctx context.Context, _ port.StartAgentSessionRequest) (port.AgentSession, error) {
-	close(provider.started)
+	provider.starts.Add(1)
+	provider.startOnce.Do(func() { close(provider.started) })
 	<-ctx.Done()
 	return port.AgentSession{}, ctx.Err()
 }
@@ -133,9 +212,13 @@ func (provider *initializeProvider) ResumeSession(context.Context, port.ResumeAg
 // RunTurn 返回 initialize 所需的 snapshot-only 输出。
 func (provider *initializeProvider) RunTurn(_ context.Context, request port.RunAgentTurnRequest) (<-chan port.AgentEvent, error) {
 	provider.turns++
+	provider.lastRequest = request
 	events := make(chan port.AgentEvent, 3)
 	events <- port.AgentEvent{Type: port.AgentEventTurnStarted, SessionID: request.SessionID, TurnID: request.TurnID, ProviderTurnID: "provider-initialize-turn"}
-	output := []byte(`{"snapshot":{"current_topics":[],"confirmed_decisions":[],"business_rules":[],"disagreements":[],"open_questions":[],"references":[]}}`)
+	output := provider.output
+	if len(output) == 0 {
+		output = []byte(`{"snapshot":{"current_topics":[],"confirmed_decisions":[],"business_rules":[],"disagreements":[],"open_questions":[],"references":[]}}`)
+	}
 	events <- port.AgentEvent{Type: port.AgentEventFinalOutput, FinalOutput: &port.AgentFinalOutput{JSON: output}, ProviderTurnID: "provider-initialize-turn"}
 	events <- port.AgentEvent{Type: port.AgentEventCompleted, ProviderTurnID: "provider-initialize-turn"}
 	close(events)

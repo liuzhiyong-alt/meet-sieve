@@ -2,7 +2,7 @@
 import { RouterLink, useRoute } from 'vue-router'
 import PageBreadcrumb from '../navigation/PageBreadcrumb.vue'
 
-defineProps<{
+const props = defineProps<{
   meetingNo?: string
   localSaveLabel?: string
   activeMeeting?: boolean
@@ -16,6 +16,11 @@ function isCurrent(prefix: string): boolean {
     route.path === prefix ||
     (prefix !== '/home' && route.path.startsWith(prefix))
   )
+}
+
+/** startMeetingTarget 让“开始会议”在存在活动会议时直接回到会中页。 */
+function startMeetingTarget(): string {
+  return props.activeMeeting ? '/meetings/live' : '/meetings/new'
 }
 </script>
 
@@ -36,16 +41,12 @@ function isCurrent(prefix: string): boolean {
           >
           <RouterLink
             class="ms-nav__item"
-            :class="{ 'is-current': isCurrent('/meetings/new') }"
-            to="/meetings/new"
+            :class="{
+              'is-current':
+                isCurrent('/meetings/new') || isCurrent('/meetings/live'),
+            }"
+            :to="startMeetingTarget()"
             >开始会议</RouterLink
-          >
-          <RouterLink
-            v-if="activeMeeting"
-            class="ms-nav__item ms-nav__item--active"
-            :class="{ 'is-current': isCurrent('/meetings/live') }"
-            to="/meetings/live"
-            >会议进行中</RouterLink
           >
           <RouterLink
             class="ms-nav__item"

@@ -20,6 +20,7 @@ func TestStep6Schema_AddsScopedGuestIdempotency(t *testing.T) {
 		ID: "88888888-8888-4888-8888-888888888888", MeetingID: testMeetingID, EventID: testEventID,
 		AuthorKind: "guest", GuestSessionID: stringPointer("99999999-9999-4999-8999-999999999999"),
 		RequestID: stringPointer(requestID), DisplayNameSnapshot: "访客", Content: "第一条消息",
+		ContentFormat: "markdown",
 	}
 	if err := db.Create(&message).Error; err != nil {
 		t.Fatalf("写入首条访客消息失败：%v", err)
@@ -29,6 +30,38 @@ func TestStep6Schema_AddsScopedGuestIdempotency(t *testing.T) {
 	message.EventID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
 	if err := db.Create(&message).Error; err == nil {
 		t.Fatal("同一访客会话和 request_id 必须被唯一约束拒绝")
+	}
+}
+
+// TestStep11Schema_AddsMessageFormatAndHostIdempotency 验证新消息格式兼容旧数据且主持人请求由数据库幂等。
+func TestStep11Schema_AddsMessageFormatAndHostIdempotency(t *testing.T) {
+	db := openMigratedDatabase(t)
+	insertValidMeeting(t, db)
+
+	requestID := "77777777-7777-4777-8777-777777777777"
+	insertMeetingEvent(t, db, testEventID, 1)
+	message := models.Message{
+		ID: "88888888-8888-4888-8888-888888888888", MeetingID: testMeetingID, EventID: testEventID,
+		AuthorKind: "host", RequestID: stringPointer(requestID), DisplayNameSnapshot: "主持人",
+		Content: "**确认**", ContentFormat: "markdown",
+	}
+	if err := db.Create(&message).Error; err != nil {
+		t.Fatalf("写入主持人 Markdown 消息失败：%v", err)
+	}
+	insertMeetingEvent(t, db, "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", 2)
+	message.ID = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+	message.EventID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+	if err := db.Create(&message).Error; err == nil {
+		t.Fatal("同一会议的主持人 request_id 必须被唯一约束拒绝")
+	}
+
+	insertMeetingEvent(t, db, "cccccccc-cccc-4ccc-8ccc-cccccccccccc", 3)
+	message.ID = "dddddddd-dddd-4ddd-8ddd-dddddddddddd"
+	message.EventID = "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
+	message.RequestID = stringPointer("eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee")
+	message.ContentFormat = "html"
+	if err := db.Create(&message).Error; err == nil {
+		t.Fatal("未登记的消息格式必须被数据库约束拒绝")
 	}
 }
 

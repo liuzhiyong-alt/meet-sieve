@@ -110,6 +110,7 @@ vi.mock('../../stores/meeting', () => ({
 vi.mock('../../stores/agent', () => ({ useAgentStore: () => stores.agent }))
 
 import GeneralSettingsView from './GeneralSettingsView.vue'
+import { dirtyEditRegistry } from '../../router/dirty'
 
 /** mountGeneralSettings 以真实设置路由挂载通用设置。 */
 async function mountGeneralSettings(section = 'general') {
@@ -169,5 +170,38 @@ describe('GeneralSettingsView 通用设置', () => {
     expect(wrapper.find('label[for="asr-app-id"]').exists()).toBe(false)
     expect(wrapper.find('label[for="asr-access-token"]').exists()).toBe(false)
     expect(wrapper.findAll('input[type="radio"]')).toHaveLength(0)
+  })
+
+  it('未修改设置时切换所有分类都不产生 dirty 状态', async () => {
+    const wrapper = await mountGeneralSettings()
+
+    for (const section of ['audio', 'asr', 'codex', 'voice-model']) {
+      await wrapper.setProps({ section })
+      expect(dirtyEditRegistry.dirtyEditors()).toHaveLength(0)
+    }
+    await wrapper.setProps({ section: 'asr' })
+    expect(wrapper.get('#asr-api-key').attributes('autocomplete')).toBe(
+      'new-password',
+    )
+    wrapper.unmount()
+  })
+
+  it('只保护当前分类，并在弹窗保存 ASR 后清空凭证草稿', async () => {
+    const wrapper = await mountGeneralSettings('asr')
+    await wrapper.get('#asr-api-key').setValue('draft-app-key')
+
+    expect(
+      dirtyEditRegistry.dirtyEditors().map((editor) => editor.label),
+    ).toEqual(['实时转写凭证'])
+
+    await wrapper.setProps({ section: 'audio' })
+    expect(dirtyEditRegistry.dirtyEditors()).toHaveLength(0)
+
+    await wrapper.setProps({ section: 'asr' })
+    const [asrEditor] = dirtyEditRegistry.dirtyEditors()
+    expect(await asrEditor?.save()).toBe(true)
+    expect(stores.asr.saveAPIKey).toHaveBeenCalledWith('draft-app-key')
+    expect(dirtyEditRegistry.dirtyEditors()).toHaveLength(0)
+    wrapper.unmount()
   })
 })

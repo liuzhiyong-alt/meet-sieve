@@ -73,7 +73,6 @@ export const useMeetingStore = defineStore('meeting', {
     members: [] as MeetingMemberOption[],
     groups: [] as MeetingGroupOption[],
     microphones: [] as MicrophoneOption[],
-    createScreenLoaded: false,
     loading: false,
     saving: false,
     errorMessage: '',
@@ -112,9 +111,9 @@ export const useMeetingStore = defineStore('meeting', {
       this.current = null
       this.screen = 'start'
     },
-    /** loadCreateScreen 并行读取草稿、参会候选和系统真实麦克风。 */
+    /** loadCreateScreen 每次进入创建页时并行读取最新草稿、参会候选和系统真实麦克风。 */
     async loadCreateScreen(): Promise<void> {
-      if (this.createScreenLoaded || this.loading) return
+      if (this.loading) return
       this.loading = true
       this.errorMessage = ''
       const [draft, people, microphones] = await Promise.all([
@@ -137,7 +136,6 @@ export const useMeetingStore = defineStore('meeting', {
       this.groups = people.data!.groups ?? []
       this.members = people.data!.members ?? []
       this.microphones = microphones.data ?? []
-      this.createScreenLoaded = true
     },
     /** startMeeting 仅在后端首帧与状态事务均提交后切换会议中页面。 */
     async startMeeting(request: StartMeetingRequest): Promise<boolean> {
@@ -200,7 +198,6 @@ export const useMeetingStore = defineStore('meeting', {
     startNewMeeting(): void {
       this.current = null
       this.screen = 'start'
-      this.createScreenLoaded = false
     },
     /** prepareFromHistory 只保存会前主题和活动成员候选，不复用会议号或录音会话。 */
     prepareFromHistory(subject: string, memberIds: string[]): void {

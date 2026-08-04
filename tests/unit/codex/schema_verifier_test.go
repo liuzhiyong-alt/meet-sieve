@@ -16,6 +16,7 @@ import (
 
 type schemaRunner struct {
 	version       string
+	versionErr    error
 	files         map[string][]byte
 	generateErr   error
 	generateCount int
@@ -24,7 +25,37 @@ type schemaRunner struct {
 
 // Version 返回测试控制的 provider 版本。
 func (runner *schemaRunner) Version(context.Context, string) (string, error) {
-	return runner.version, nil
+	return runner.version, runner.versionErr
+}
+
+// TestSchemaVerifier_PreservesCancellationAndTimeout 验证进程取消和超时不会伪装成协议不兼容。
+func TestSchemaVerifier_PreservesCancellationAndTimeout(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		cause     error
+		errorCode string
+	}{
+		{name: "canceled", cause: context.Canceled, errorCode: apperr.CodeCanceled.ErrorCode},
+		{name: "timeout", cause: context.DeadlineExceeded, errorCode: apperr.CodeDependencyTimeout.ErrorCode},
+	}
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			root := t.TempDir()
+			executable := filepath.Join(root, "codex")
+			if err := os.WriteFile(executable, []byte("binary"), 0o700); err != nil {
+				t.Fatalf("创建测试 executable 失败：%v", err)
+			}
+			verifier := codex.NewSchemaVerifier(&schemaRunner{versionErr: test.cause}, contractFor("required.json", []byte(`{}`)), root)
+			err := verifier.Verify(context.Background(), executable)
+			if normalized := apperr.Normalize(err); normalized.ErrorCode != test.errorCode {
+				t.Fatalf("Schema 命令错误分类错误：got=%s want=%s err=%v", normalized.ErrorCode, test.errorCode, err)
+			}
+		})
+	}
 }
 
 // Generate 把测试 schema 写入 verifier 提供的一次性目录。

@@ -103,6 +103,46 @@ describe('StartMeetingView', () => {
     )
   })
 
+  it('重新进入开始会议页时显示新增的活动成员', async () => {
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: '/meetings/new', component: StartMeetingView }],
+    })
+    await router.push('/meetings/new')
+    await router.isReady()
+    const pinia = createPinia()
+    const firstWrapper = mount(StartMeetingView, {
+      global: { plugins: [pinia, router] },
+    })
+    await flushPromises()
+
+    expect(firstWrapper.text()).not.toContain('测试成员')
+    firstWrapper.unmount()
+    peopleBindings.GetMeetingPeopleOptions.mockResolvedValue({
+      code: 200,
+      data: {
+        groups: [],
+        members: [
+          {
+            id: 'member-new',
+            name: '测试成员',
+            voice_readiness: 'unavailable',
+          },
+          { id: 'member-active', name: '刘毅', voice_readiness: 'ready' },
+          { id: 'member-other', name: '陈然', voice_readiness: 'ready' },
+        ],
+      },
+    })
+
+    const secondWrapper = mount(StartMeetingView, {
+      global: { plugins: [pinia, router] },
+    })
+    await flushPromises()
+
+    expect(peopleBindings.GetMeetingPeopleOptions).toHaveBeenCalledTimes(2)
+    expect(secondWrapper.text()).toContain('测试成员')
+  })
+
   it('使用卡片标题区弹窗维护临时成员并在关闭后恢复焦点', async () => {
     const router = createRouter({
       history: createMemoryHistory(),

@@ -98,6 +98,17 @@ func (service *Service) GetActiveMeeting(ctx context.Context) (*models.Meeting, 
 	return &meeting, nil
 }
 
+// GetMeeting 按 ID 返回会议事实，供结束后的状态卡继续读取冻结状态。
+func (service *Service) GetMeeting(ctx context.Context, meetingID string) (models.Meeting, error) {
+	if err := service.validateDependencies(); err != nil {
+		return models.Meeting{}, err
+	}
+	if strings.TrimSpace(meetingID) == "" {
+		return models.Meeting{}, apperr.Biz(apperr.CodeInvalidRequest, apperr.WithOp("meeting.get.id"))
+	}
+	return service.repository.GetMeeting(ctx, meetingID)
+}
+
 // GetLatestInterruptedMeeting 返回最近一次恢复页会议，不把它当作可继续的活动录音。
 func (service *Service) GetLatestInterruptedMeeting(ctx context.Context) (*models.Meeting, error) {
 	if err := service.validateDependencies(); err != nil {

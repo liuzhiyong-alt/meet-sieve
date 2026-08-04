@@ -62,7 +62,7 @@ func (repository *Repository) CreateQuestion(ctx context.Context, input CreateQu
 			return err
 		}
 		payload, err := json.Marshal(map[string]any{
-			"v": 1, "text": input.Text, "trigger": input.Trigger,
+			"v": 2, "text": input.Text, "content_format": "markdown", "trigger": input.Trigger,
 			"trigger_utterance_id": input.UtteranceID, "speaker": input.Speaker,
 		})
 		if err != nil {
@@ -334,7 +334,9 @@ func createAnswerEvent(ctx context.Context, tx *gorm.DB, turn models.AgentTurn, 
 	if err != nil {
 		return err
 	}
-	payload, err := json.Marshal(map[string]any{"v": 1, "text": answer, "guest_visible": true})
+	payload, err := json.Marshal(map[string]any{
+		"v": 2, "text": answer, "content_format": "markdown", "guest_visible": true,
+	})
 	if err != nil {
 		return fmt.Errorf("编码回答事件失败：%w", err)
 	}

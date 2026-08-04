@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	domainagent "meet-sieve/internal/domain/agent"
+	"meet-sieve/internal/port"
 )
 
 const (
@@ -62,6 +63,31 @@ type ContextBuildResult struct {
 	Sequences   map[int64]struct{}
 	URLs        map[string]struct{}
 	Resources   map[string]struct{}
+}
+
+// referenceAllowlist 把上下文构建结果转换为 Schema 和本地校验共用的引用白名单。
+func referenceAllowlist(result ContextBuildResult) domainagent.ReferenceAllowlist {
+	return domainagent.ReferenceAllowlist{
+		Sequences: result.Sequences,
+		URLs:      result.URLs,
+		Resources: result.Resources,
+	}
+}
+
+// buildAgentOutputSchema 生成只允许引用本轮真实输入的动态输出契约。
+func buildAgentOutputSchema(kind port.AgentTurnKind, result ContextBuildResult) ([]byte, error) {
+	return domainagent.OutputSchemaWithReferences(kind, referenceAllowlist(result))
+}
+
+// appendReferenceInstructions 向模型明确引用格式；最终合法范围仍由动态 Schema 和本地校验控制。
+func appendReferenceInstructions(prompt string, result ContextBuildResult) string {
+	allowed := domainagent.AllowedReferences(referenceAllowlist(result))
+	if len(allowed) == 0 {
+		return prompt + "\n\n引用要求\n本轮没有可引用事实，snapshot.references 必须返回空数组。会议号、主题和总结文字不能作为引用。"
+	}
+	return prompt + "\n\n引用要求\n" +
+		"snapshot.references 只能逐字选择下列值，不得改写、解释或创建引用；事件序号必须保持 seq:<数字> 格式。\n" +
+		strings.Join(allowed, "\n")
 }
 
 // ContextBuilder 只从 SQLite 安全投影构造 prompt，不读取内存事实。

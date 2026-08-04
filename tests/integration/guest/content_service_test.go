@@ -11,6 +11,7 @@ import (
 	"meet-sieve/internal/infra/database"
 	"meet-sieve/internal/infra/identity"
 	contentrepository "meet-sieve/internal/repository/content"
+	contentservice "meet-sieve/internal/service/content"
 	guestservice "meet-sieve/internal/service/guest"
 	"meet-sieve/models"
 
@@ -44,6 +45,48 @@ func TestContentService_TextCommitsEntityAndEventIdempotently(t *testing.T) {
 	var message models.Message
 	if err := db.Where("id = ?", first.EntityID).Take(&message).Error; err != nil || message.Content != "请看\n设计稿" {
 		t.Fatalf("消息正文或实体缺失：%#v err=%v", message, err)
+	}
+}
+
+// TestHostContentService_CommitsMarkdownIdempotently 验证主持人消息进入统一 seq，且重试不重复通知。
+func TestHostContentService_CommitsMarkdownIdempotently(t *testing.T) {
+	db := openGuestDatabase(t)
+	insertRecordingMeeting(t, db)
+	notifications := 0
+	service := contentservice.NewService(contentservice.Dependencies{
+		Repository: contentrepository.NewRepository(db), Transactions: database.NewTransactionManager(db),
+		Clock: clock.NewFixed(time.Date(2026, time.August, 4, 12, 0, 0, 0, time.UTC)),
+		IDs: identity.NewFixedGenerator(
+			"61616161-6161-4161-8161-616161616161", "62626262-6262-4262-8262-626262626262",
+		),
+		OnTimelineChanged: func(string, int64, string) { notifications++ },
+	})
+	input := contentservice.SendMessageInput{
+		MeetingID: testMeetingID, RequestID: "33333333-3333-4333-8333-333333333333", Content: "**已确认**\r\n下一项",
+	}
+	first, err := service.SendHostMessage(context.Background(), input)
+	if err != nil {
+		t.Fatalf("主持人消息提交失败：%v", err)
+	}
+	second, err := service.SendHostMessage(context.Background(), input)
+	if err != nil {
+		t.Fatalf("主持人消息幂等重试失败：%v", err)
+	}
+	if first.Seq != 1 || second != first || notifications != 1 {
+		t.Fatalf("主持人消息幂等结果错误：first=%#v second=%#v notifications=%d", first, second, notifications)
+	}
+	var message models.Message
+	if err := db.Where("id = ?", first.EntityID).Take(&message).Error; err != nil {
+		t.Fatal(err)
+	}
+	if message.AuthorKind != "host" || message.ContentFormat != "markdown" || message.Content != "**已确认**\n下一项" {
+		t.Fatalf("主持人 Markdown 实体错误：%#v", message)
+	}
+	page, err := service.ListTimeline(context.Background(), contentservice.TimelineQuery{
+		MeetingID: testMeetingID, Direction: "latest", Limit: 100,
+	})
+	if err != nil || len(page.Entries) != 1 || page.Entries[0].ContentFormat != "markdown" || page.Entries[0].Source != "host" {
+		t.Fatalf("统一时间线主持人投影错误：page=%#v err=%v", page, err)
 	}
 }
 

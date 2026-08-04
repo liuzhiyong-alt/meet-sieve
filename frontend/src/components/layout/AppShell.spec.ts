@@ -13,6 +13,7 @@ describe('AppShell', () => {
       routes: [
         { path: '/home', component: { template: '<p>home</p>' } },
         { path: '/meetings/new', component: { template: '<p>new</p>' } },
+        { path: '/meetings/live', component: { template: '<p>live</p>' } },
         { path: '/meetings', component: { template: '<p>records</p>' } },
         { path: '/people', component: { template: '<p>people</p>' } },
         {
@@ -30,5 +31,33 @@ describe('AppShell', () => {
       'page',
     )
     expect(wrapper.get('a[href="/people"]').text()).toBe('小组与成员')
+  })
+
+  it('活动会议复用“开始会议”入口，不增加“会议进行中”菜单', async () => {
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: '/home', component: { template: '<p>home</p>' } },
+        { path: '/meetings/new', component: { template: '<p>new</p>' } },
+        { path: '/meetings/live', component: { template: '<p>live</p>' } },
+        { path: '/meetings', component: { template: '<p>records</p>' } },
+        { path: '/people', component: { template: '<p>people</p>' } },
+        {
+          path: '/settings/general',
+          component: { template: '<p>settings</p>' },
+        },
+      ],
+    })
+    await router.push('/meetings/live')
+    await router.isReady()
+    const wrapper = mount(AppShell, {
+      props: { activeMeeting: true },
+      global: { plugins: [router] },
+    })
+
+    expect(wrapper.text()).not.toContain('会议进行中')
+    expect(wrapper.get('.ms-nav a[href="/meetings/live"]').text()).toBe(
+      '开始会议',
+    )
   })
 })

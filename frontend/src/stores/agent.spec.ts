@@ -89,4 +89,29 @@ describe('agent store', () => {
     expect(store.wakeTest.state).toBe('running')
     expect(store.wakeTest.matched).toBe(0)
   })
+
+  it('coalesces repeated retry actions while one request is running', async () => {
+    let resolveRetry: ((value: { code: number; data: boolean }) => void) | undefined
+    bindings.RetryAgent.mockReturnValue(
+      new Promise((resolve) => {
+        resolveRetry = resolve
+      }),
+    )
+    bindings.GetAgentState.mockResolvedValue({
+      code: 200,
+      data: { state: 'available', meeting_id: 'meeting-1' },
+    })
+    const store = useAgentStore()
+    store.meetingID = 'meeting-1'
+
+    const first = store.retry()
+    const repeated = store.retry()
+    expect(store.retrying).toBe(true)
+    expect(bindings.RetryAgent).toHaveBeenCalledTimes(1)
+
+    resolveRetry?.({ code: 200, data: true })
+    await Promise.all([first, repeated])
+    expect(store.retrying).toBe(false)
+    expect(store.runtime.state).toBe('available')
+  })
 })

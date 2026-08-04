@@ -366,13 +366,13 @@ func (service *TurnService) executeBatch(ctx context.Context, job *activeJob, ba
 	if err := service.repository.MarkBatchRunning(ctx, batch.ID, service.clock.Now().UnixMilli()); err != nil {
 		return domainagent.ValidatedOutput{}, "", err
 	}
-	schema, err := domainagent.OutputSchema(kind)
+	schema, err := buildAgentOutputSchema(kind, built)
 	if err != nil {
 		return domainagent.ValidatedOutput{}, "", err
 	}
 	events, err := service.provider.RunTurn(ctx, port.RunAgentTurnRequest{
 		SessionID: job.sessionID, TurnID: job.localTurnID, Kind: kind,
-		Input: batch.Context.Prompt, OutputSchema: schema, Deadline: deadlineFromContext(ctx),
+		Input: appendReferenceInstructions(batch.Context.Prompt, built), OutputSchema: schema, Deadline: deadlineFromContext(ctx),
 	})
 	if err != nil {
 		return domainagent.ValidatedOutput{}, "", err
@@ -403,9 +403,7 @@ func (service *TurnService) executeBatch(ctx context.Context, job *activeJob, ba
 	if !completed || len(final) == 0 || providerTurnID == "" {
 		return domainagent.ValidatedOutput{}, providerTurnID, apperr.Dependency(apperr.CodeAgentOutputInvalid, errors.New("final or completed missing"), apperr.WithOp("agent.turn.final"))
 	}
-	validated, err := domainagent.ValidateOutput(kind, final, domainagent.ReferenceAllowlist{
-		Sequences: built.Sequences, URLs: built.URLs, Resources: built.Resources,
-	})
+	validated, err := domainagent.ValidateOutput(kind, final, referenceAllowlist(built))
 	if err != nil {
 		return domainagent.ValidatedOutput{}, providerTurnID, apperr.Dependency(apperr.CodeAgentOutputInvalid, err, apperr.WithOp("agent.turn.validate"))
 	}

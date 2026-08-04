@@ -8,13 +8,16 @@ import { useASRStore } from '../../stores/asr'
 import { useLANStore } from '../../stores/lan'
 import { useAgentStore } from '../../stores/agent'
 import { useGapStore } from '../../stores/gap'
+import { useTimelineStore } from '../../stores/timeline'
 import FinalizingView from '../finalization/FinalizingView.vue'
+import MeetingTimelinePanel from './components/MeetingTimelinePanel.vue'
 
 const meeting = useMeetingStore()
 const asr = useASRStore()
 const lan = useLANStore()
 const agent = useAgentStore()
 const postGaps = useGapStore()
+const timeline = useTimelineStore()
 const emit = defineEmits<{
   openCorrection: []
   openGap: [gapId: string]
@@ -24,7 +27,6 @@ const confirmEnd = ref(false)
 const showGuestEntry = ref(false)
 const showAskAgent = ref(false)
 const agentQuestion = ref('')
-const agentBusySince = ref(0)
 const qrDataURL = ref('')
 const copyFeedback = ref('')
 const modalElement = ref<HTMLElement | null>(null)
@@ -38,6 +40,9 @@ let stopAgentDeltaListener: (() => void) | undefined
 let stopAgentApprovalListener: (() => void) | undefined
 let stopAgentTimelineListener: (() => void) | undefined
 let stopGapListener: (() => void) | undefined
+let stopTimelineListener: (() => void) | undefined
+let stopAttachmentListener: (() => void) | undefined
+let stopSpeakerListener: (() => void) | undefined
 const timer = window.setInterval(() => {
   now.value = Date.now()
   refreshTicks++
@@ -46,6 +51,10 @@ const timer = window.setInterval(() => {
     void meeting.refreshCurrentMeeting()
     if (meeting.current?.id) void asr.restoreTimeline(meeting.current.id)
     if (meeting.current?.id) void agent.refreshState(meeting.current.id)
+    if (meeting.current?.id) {
+      void timeline.refreshStatus()
+      if (refreshTicks % 10 === 0) void timeline.recoverAfter()
+    }
     if (meeting.current?.id && meeting.current.lifecycle_state === 'ended')
       void postGaps.refresh(meeting.current.id)
     void lan.refreshStatus()
@@ -60,13 +69,16 @@ onMounted(async () => {
     await Promise.all([
       agent.refreshState(meetingID),
       agent.restoreTimeline(meetingID),
+      timeline.loadLatest(meetingID),
     ])
+    await timeline.refreshStatus()
   }
   await Promise.all([lan.loadInterfaces(), lan.refreshStatus()])
   if (meetingID && meeting.current?.lifecycle_state === 'ended')
     await postGaps.refresh(meetingID)
   stopPartialListener = EventsOn('meeting.asr.partial', (event) => {
     asr.applyPartial(event)
+    timeline.applyPartial(event)
   })
   stopStateListener = EventsOn('meeting.asr.changed', (event) => {
     asr.applyRealtimeState(event)
@@ -74,9 +86,6 @@ onMounted(async () => {
   })
   const applyAgentEvent = (event: Parameters<typeof agent.applyEvent>[0]) => {
     agent.applyEvent(event)
-    if (agent.runtime.state === 'busy' && !agentBusySince.value)
-      agentBusySince.value = Date.now()
-    if (agent.runtime.state !== 'busy') agentBusySince.value = 0
   }
   stopAgentChangedListener = EventsOn('meeting.agent.changed', applyAgentEvent)
   stopAgentDeltaListener = EventsOn('meeting.agent.delta', applyAgentEvent)
@@ -91,6 +100,18 @@ onMounted(async () => {
     if (postGaps.applyEvent(event) && meeting.current?.id)
       void postGaps.refresh(meeting.current.id)
   })
+  stopTimelineListener = EventsOn('meeting.timeline.changed', (event) => {
+    if (event.data?.meeting_id === timeline.meetingID)
+      void timeline.recoverAfter()
+  })
+  stopAttachmentListener = EventsOn(
+    'meeting.attachment.upload.changed',
+    (event) => timeline.applyAttachmentState(event),
+  )
+  stopSpeakerListener = EventsOn('meeting.speaker.changed', (event) => {
+    if (event.data?.meeting_id === timeline.meetingID)
+      void timeline.loadLatest(timeline.meetingID)
+  })
 })
 
 onBeforeUnmount(() => {
@@ -102,6 +123,9 @@ onBeforeUnmount(() => {
   stopAgentApprovalListener?.()
   stopAgentTimelineListener?.()
   stopGapListener?.()
+  stopTimelineListener?.()
+  stopAttachmentListener?.()
+  stopSpeakerListener?.()
   document.querySelector('.ms-app-shell')?.removeAttribute('inert')
 })
 
@@ -171,23 +195,6 @@ const asrState = computed(
   () => projection.value?.realtime_asr_state || asr.realtimeState || 'idle',
 )
 const activeUploads = computed(() => lan.status.active_uploads ?? [])
-const unifiedTimeline = computed(() =>
-  [
-    ...asr.timeline.map((entry) => ({ ...entry, source: 'asr' as const })),
-    ...agent.timeline.map((entry) => ({
-      ...entry,
-      source: 'agent' as const,
-      start_sample: 0,
-      end_sample: 0,
-    })),
-  ].sort((left, right) => left.seq - right.seq),
-)
-const agentBusyLong = computed(
-  () =>
-    agent.runtime.state === 'busy' &&
-    agentBusySince.value > 0 &&
-    now.value - agentBusySince.value >= 30_000,
-)
 const agentQuestionBytes = computed(
   () => new TextEncoder().encode(agentQuestion.value).length,
 )
@@ -195,6 +202,15 @@ const maskedJoinURL = computed(() => {
   const joinURL = lan.status.join_url ?? ''
   const marker = joinURL.indexOf('#')
   return marker >= 0 ? `${joinURL.slice(0, marker)}#k=••••••••` : joinURL
+})
+const visibleSpeakers = computed(() => {
+  const speakers = new Map<string, string>()
+  for (const entry of timeline.entries) {
+    if (entry.kind !== 'utterance') continue
+    const key = entry.speaker_key || entry.speaker_label || 'unknown'
+    speakers.set(key, entry.speaker_label || '未知说话人')
+  }
+  return [...speakers.entries()].map(([key, label]) => ({ key, label }))
 })
 
 /** asrStateText 把内部状态码映射为统一中文状态动词。 */
@@ -232,29 +248,9 @@ function localSaveStateText(state: string): string {
   return labels[state] ?? '状态待确认'
 }
 
-/** gapReasonText 把缺口原因转换为不暴露内部错误的用户说明。 */
-function gapReasonText(reason?: string): string {
-  const labels: Record<string, string> = {
-    connect_failed: '连接失败',
-    disconnected: '连接中断',
-    backpressure: '实时处理拥塞',
-    tail_timeout: '尾部结果等待超时',
-    recovery: '应用异常退出后恢复',
-    record_only: '会议选择仅录音',
-  }
-  return labels[reason ?? ''] ?? '实时转写缺口'
-}
-
-/** sampleTime 把 16 kHz 全局样本位置格式化为会议相对时间。 */
-function sampleTime(sample: number): string {
-  const total = Math.max(0, Math.floor(sample / 16000))
-  const minutes = Math.floor(total / 60)
-  const seconds = total % 60
-  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
-}
-
-/** eventTime 把 AI 事件毫秒时间格式化为本地时分秒。 */
-function eventTime(value: number): string {
+/** statusTime 格式化系统状态卡的最近 final 时间。 */
+function statusTime(value?: number): string {
+  if (!value) return '等待转写'
   return new Intl.DateTimeFormat('zh-CN', {
     hour: '2-digit',
     minute: '2-digit',
@@ -373,29 +369,6 @@ function trapModal(event: KeyboardEvent): void {
 </script>
 
 <template>
-  <section
-    v-if="projection && !isFinalizing"
-    class="ms-live-stage"
-    :class="{ 'is-interrupted': isInterrupted }"
-  >
-    <div>
-      <p class="ms-recording-line" aria-live="polite">
-        <span class="ms-recording-dot" aria-hidden="true" />
-        <span v-if="isInterrupted">录音已中断 · 不能继续原录音</span>
-        <span v-else-if="isEnded">录音已结束 · 本地保存完成</span>
-        <span v-else-if="isFinalizing">录音已停止 · 正在安全保存录音</span>
-        <span v-else>录音中 · 正在本地保存</span>
-      </p>
-      <h1>{{ projection.subject }}</h1>
-      <p class="ms-lead">
-        录音、本地保存和实时转写分别运行；转写中断不会停止本地录音。
-      </p>
-    </div>
-    <div class="ms-live-clock" :aria-label="`会议已进行 ${elapsed}`">
-      {{ elapsed }}
-    </div>
-  </section>
-
   <p
     v-if="meeting.errorMessage"
     class="ms-notice ms-notice--danger"
@@ -456,230 +429,123 @@ function trapModal(event: KeyboardEvent): void {
     v-if="projection && !isFinalizing"
     class="ms-meeting-split ms-live-layout"
   >
-    <div class="ms-card ms-meeting-card">
-      <div class="ms-card-head">
-        <div>
-          <p class="ms-eyebrow">统一时间线</p>
-          <span class="ms-help">最近发言与 AI 参与记录</span>
+    <MeetingTimelinePanel
+      :subject="projection?.subject || ''"
+      :agent-partial="agent.runtime.partial"
+      :agent-available="agent.runtime.state === 'available'"
+      :ended="isEnded || isInterrupted"
+      @ask-agent="showAskAgent = true"
+      @interrupt-agent="agent.interrupt()"
+    >
+      <template #followup>
+        <div v-if="isInterrupted" class="ms-actions">
+          <button
+            class="ms-button ms-button--primary"
+            type="button"
+            :disabled="meeting.saving"
+            @click="meeting.retryRecovery()"
+          >
+            {{ meeting.saving ? '正在重试保存…' : '重试保存' }}
+          </button>
+          <button
+            class="ms-button ms-button--quiet"
+            type="button"
+            @click="emit('openCorrection')"
+          >
+            校对原始记录
+          </button>
+          <button
+            class="ms-button ms-button--quiet"
+            type="button"
+            @click="meeting.startNewMeeting()"
+          >
+            开始新会议
+          </button>
         </div>
-        <button
-          v-if="!isInterrupted && !isEnded"
-          class="ms-button ms-button--primary"
-          type="button"
-          :disabled="agent.runtime.state !== 'available'"
-          @click="showAskAgent = true"
-        >
-          请 AI 参与
-        </button>
-      </div>
-      <h2 v-if="isInterrupted">现有录音材料已保留</h2>
-      <h2 v-else-if="isEnded">完整录音已安全保存</h2>
-      <h2 v-else>会议正在录音</h2>
-      <p v-if="isInterrupted || isEnded" class="ms-lead">
-        {{
-          isInterrupted
-            ? '可以重试文件对账和合并，不能在原会议上续录。'
-            : '录音按 60 秒精确分片，并以 2 秒检查点同步到本地磁盘。'
-        }}
-      </p>
-      <div
-        v-if="
-          unifiedTimeline.length ||
-          asr.orderedPartials.length ||
-          agent.runtime.partial
-        "
-        class="ms-transcript-list"
-        aria-live="polite"
-      >
-        <article
-          v-for="entry in unifiedTimeline"
-          :key="entry.seq"
-          class="ms-transcript-entry"
-          :class="{
-            'is-gap': entry.kind === 'asr.gap',
-            'is-agent': entry.source === 'agent',
-          }"
-        >
-          <time>{{
-            entry.source === 'agent'
-              ? eventTime(entry.occurred_at)
-              : sampleTime(entry.start_sample)
-          }}</time>
-          <div v-if="entry.source === 'agent'">
-            <strong>{{
-              entry.kind === 'ai.question'
-                ? '你 · AI 问题'
-                : entry.kind === 'ai.answer'
-                  ? 'AI 助手 · 未经人工确认'
-                  : 'AI 状态'
-            }}</strong>
-            <p>
-              {{
-                entry.text ||
-                (entry.kind === 'ai.cancelled'
-                  ? '回答已停止。'
-                  : '回答未完成。')
-              }}
-            </p>
-          </div>
-          <div v-else-if="entry.kind === 'utterance.final'">
-            <strong>{{
-              entry.speaker_label
-                ? `说话人 ${entry.speaker_label}`
-                : `说话人 · 会话 ${entry.session_order || 1}`
-            }}</strong>
-            <p>{{ entry.text }}</p>
-          </div>
-          <div v-else>
-            <strong>{{ gapReasonText(entry.gap_reason) }}</strong>
-            <p>
-              {{ sampleTime(entry.start_sample) }}–{{
-                sampleTime(entry.end_sample)
-              }}
-              暂无实时文字，录音已保留。
-            </p>
-          </div>
-        </article>
-        <article
-          v-if="agent.runtime.partial"
-          class="ms-transcript-entry is-agent is-partial"
-        >
-          <time>现在</time>
-          <div>
-            <strong>AI 助手 · 正在回答</strong>
-            <p>{{ agent.runtime.partial }}</p>
-            <p class="ms-help">
-              当前内容仅主持人可见。最终回答成功后会自动公开到局域网访客页。
-            </p>
-            <button
-              class="ms-button ms-button--quiet"
-              type="button"
-              @click="agent.interrupt()"
-            >
-              停止回答
-            </button>
-          </div>
-        </article>
-        <article
-          v-for="partial in asr.orderedPartials"
-          :key="partial.result_id"
-          class="ms-transcript-entry is-partial"
-        >
-          <time>{{ sampleTime(partial.start_sample) }}</time>
-          <div>
-            <strong>正在识别</strong>
-            <p>{{ partial.text }}</p>
-          </div>
-        </article>
-      </div>
-      <div v-else-if="!isInterrupted && !isEnded" class="ms-transcript-empty">
-        <h2>
-          {{ asrState === 'streaming' ? '正在聆听' : asrStateText(asrState) }}
-        </h2>
-        <p>final 结果会保存在 SQLite，并同步生成会议原始记录。</p>
-      </div>
-      <div v-if="isInterrupted" class="ms-actions">
-        <button
-          class="ms-button ms-button--primary"
-          type="button"
-          :disabled="meeting.saving"
-          @click="meeting.retryRecovery()"
-        >
-          {{ meeting.saving ? '正在重试保存…' : '重试保存' }}
-        </button>
-        <button
-          class="ms-button ms-button--quiet"
-          type="button"
-          @click="emit('openCorrection')"
-        >
-          校对原始记录
-        </button>
-        <button
-          class="ms-button ms-button--quiet"
-          type="button"
-          @click="meeting.startNewMeeting()"
-        >
-          开始新会议
-        </button>
-      </div>
-      <div v-else-if="isEnded" class="ms-actions">
-        <button
-          class="ms-button ms-button--primary"
-          type="button"
-          @click="emit('openCorrection')"
-        >
-          校对原始记录
-        </button>
-        <button
-          class="ms-button ms-button--quiet"
-          type="button"
-          @click="emit('openMinutes')"
-        >
-          会议纪要
-        </button>
-        <button
-          v-if="postGaps.conflictGap"
-          class="ms-button ms-button--quiet"
-          type="button"
-          @click="emit('openGap', postGaps.conflictGap.id)"
-        >
-          处理补转写冲突
-        </button>
-        <button
-          v-else-if="postGaps.state === 'failed'"
-          class="ms-button ms-button--quiet"
-          type="button"
-          :disabled="postGaps.submitting"
-          @click="postGaps.retryFailed(projection.id)"
-        >
-          重试补转写
-        </button>
-        <button
-          v-else-if="postGaps.state === 'processing'"
-          class="ms-button ms-button--quiet"
-          type="button"
-          :disabled="postGaps.submitting"
-          @click="postGaps.stop(projection.id)"
-        >
-          停止补转写
-        </button>
-        <button
-          class="ms-button ms-button--quiet"
-          type="button"
-          @click="meeting.startNewMeeting()"
-        >
-          开始新会议
-        </button>
-      </div>
-      <div v-if="isEnded && postGaps.gaps.length" class="ms-gap-summary">
-        <strong>存在 {{ postGaps.gaps.length }} 段转写缺口</strong>
-        <p>
-          本地录音已保存。当前补转写状态：{{
+        <div v-else-if="isEnded" class="ms-actions">
+          <button
+            class="ms-button ms-button--primary"
+            type="button"
+            @click="emit('openCorrection')"
+          >
+            校对原始记录
+          </button>
+          <button
+            class="ms-button ms-button--quiet"
+            type="button"
+            @click="emit('openMinutes')"
+          >
+            会议纪要
+          </button>
+          <button
+            v-if="postGaps.conflictGap"
+            class="ms-button ms-button--quiet"
+            type="button"
+            @click="emit('openGap', postGaps.conflictGap.id)"
+          >
+            处理补转写冲突
+          </button>
+          <button
+            v-else-if="postGaps.state === 'failed'"
+            class="ms-button ms-button--quiet"
+            type="button"
+            :disabled="postGaps.submitting"
+            @click="postGaps.retryFailed(projection.id)"
+          >
+            重试补转写
+          </button>
+          <button
+            v-else-if="postGaps.state === 'processing'"
+            class="ms-button ms-button--quiet"
+            type="button"
+            :disabled="postGaps.submitting"
+            @click="postGaps.stop(projection.id)"
+          >
+            停止补转写
+          </button>
+          <button
+            class="ms-button ms-button--quiet"
+            type="button"
+            @click="meeting.startNewMeeting()"
+          >
+            开始新会议
+          </button>
+        </div>
+        <p v-if="isEnded && postGaps.gaps.length" class="ms-help">
+          存在 {{ postGaps.gaps.length }} 段转写缺口；当前状态：{{
             postGaps.state
-          }}；外部处理不影响本地保存。
+          }}。
         </p>
-      </div>
-      <div
-        v-if="agentBusyLong"
-        class="ms-notice ms-notice--warning"
-        role="status"
-      >
-        <div>
-          <strong>AI 仍在处理</strong>
-          <p>工具调用和等待主持人审批都计入本次任务的 10 分钟总时限。</p>
-        </div>
-      </div>
-    </div>
-
+      </template>
+    </MeetingTimelinePanel>
     <aside class="ms-stack ms-live-aside">
       <div class="ms-card ms-meeting-card">
         <div class="ms-card-head"><h2>系统状态</h2></div>
         <ul class="ms-status-list">
           <li>
+            <span>录音时长</span
+            ><strong class="ms-input--mono">{{ elapsed }}</strong>
+          </li>
+          <li>
             <span>录音</span
             ><strong>{{
               recordingStateText(projection.lifecycle_state)
             }}</strong>
+          </li>
+          <li>
+            <span>麦克风</span
+            ><strong
+              :class="{
+                'is-ok': timeline.status.microphone_state === 'capturing',
+              }"
+              >{{
+                timeline.status.microphone_state === 'capturing'
+                  ? '输入正常'
+                  : timeline.status.microphone_state === 'unavailable'
+                    ? '不可用'
+                    : '已停止'
+              }}</strong
+            >
           </li>
           <li>
             <span>本地保存</span
@@ -691,6 +557,12 @@ function trapModal(event: KeyboardEvent): void {
             <span>实时转写</span
             ><strong :class="{ 'is-ok': asrState === 'streaming' }">{{
               asrStateText(asrState)
+            }}</strong>
+          </li>
+          <li>
+            <span>最近 final</span
+            ><strong class="ms-input--mono">{{
+              statusTime(timeline.status.latest_final_at)
             }}</strong>
           </li>
           <li>
@@ -720,6 +592,23 @@ function trapModal(event: KeyboardEvent): void {
           </li>
         </ul>
       </div>
+      <div v-if="visibleSpeakers.length" class="ms-card ms-meeting-card">
+        <div class="ms-card-head"><h2>参会人</h2></div>
+        <div class="ms-participant-live-list">
+          <div v-for="speaker in visibleSpeakers" :key="speaker.key">
+            <span class="ms-avatar" aria-hidden="true">{{
+              speaker.label.slice(-1)
+            }}</span>
+            <span
+              ><strong>{{ speaker.label }}</strong
+              ><small>已在转写中识别</small></span
+            >
+          </div>
+        </div>
+        <p class="ms-help ms-participant-help">
+          低置信度结果显示为未知说话人，不会强行关联正式成员。
+        </p>
+      </div>
       <div
         v-if="agent.runtime.state === 'unavailable'"
         class="ms-card ms-meeting-card"
@@ -735,9 +624,11 @@ function trapModal(event: KeyboardEvent): void {
           <button
             class="ms-button ms-button--quiet"
             type="button"
+            :disabled="agent.retrying"
+            :aria-busy="agent.retrying"
             @click="agent.retry()"
           >
-            重新检测
+            {{ agent.retrying ? '正在检测' : '重新检测' }}
           </button>
         </div>
       </div>

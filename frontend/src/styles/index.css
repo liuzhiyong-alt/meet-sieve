@@ -1362,6 +1362,9 @@ code {
   gap: var(--ms-space-5);
   margin-top: var(--ms-space-5);
 }
+.ms-detail-panel {
+  margin-top: var(--ms-space-5);
+}
 .ms-detail-grid > :only-child,
 .ms-danger-zone {
   grid-column: 1 / -1;
@@ -1743,6 +1746,350 @@ code {
   background: var(--ms-status-info-bg);
   color: var(--ms-text-secondary);
   white-space: nowrap;
+}
+.ms-status-pill.is-ok {
+  background: var(--ms-status-success-bg);
+  color: var(--ms-status-success);
+}
+
+/* 会中统一时间线：视觉基准来自已确认的 live-unified-timeline.html。 */
+.ms-live-layout {
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: var(--ms-space-5);
+}
+.timeline-workspace {
+  min-width: 0;
+  height: max(520px, calc(100vh - 116px));
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  padding: 0;
+  overflow: hidden;
+}
+.timeline-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ms-space-4);
+  padding: var(--ms-space-4) var(--ms-space-5);
+  border-bottom: var(--ms-border-width) solid var(--ms-border-soft);
+}
+.timeline-heading h1 {
+  margin: 0;
+  font-family: var(--ms-font-display);
+  font-size: var(--ms-text-title);
+}
+.conversation-shell {
+  position: relative;
+  min-height: 0;
+}
+.conversation-scroll {
+  height: 100%;
+  min-height: 0;
+  padding: var(--ms-space-5);
+  overflow-y: auto;
+  scroll-behavior: smooth;
+}
+.conversation-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.load-history {
+  display: block;
+  margin: 0 auto var(--ms-space-4);
+}
+.new-message-indicator {
+  position: absolute;
+  left: 50%;
+  bottom: var(--ms-space-3);
+  min-height: var(--ms-control-height-sm);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ms-space-2);
+  padding: var(--ms-space-2) var(--ms-space-4);
+  border: var(--ms-border-width) solid var(--ms-border-default);
+  border-radius: var(--ms-radius-pill);
+  background: var(--ms-bg-canvas);
+  color: var(--ms-action-primary-active);
+  font-weight: 600;
+  box-shadow: var(--ms-elevation-raised);
+  transform: translateX(-50%);
+  z-index: 1;
+}
+.new-message-action {
+  font-weight: 700;
+}
+.conversation-item {
+  display: grid;
+  grid-template-columns: var(--ms-avatar-size) minmax(0, 1fr);
+  align-items: start;
+  gap: var(--ms-space-3);
+}
+.conversation-item + .conversation-item {
+  margin-top: var(--ms-space-5);
+}
+.speaker-avatar {
+  display: inline-grid;
+  width: var(--ms-avatar-size);
+  height: var(--ms-avatar-size);
+  margin-top: 1px;
+  place-items: center;
+  border-radius: var(--ms-radius-pill);
+  background: var(--ms-bg-subtle);
+  color: var(--ms-text-secondary);
+  font-size: var(--ms-text-xs);
+  font-weight: 700;
+}
+.conversation-body {
+  min-width: 0;
+}
+.message-head {
+  min-height: 22px;
+  display: flex;
+  align-items: baseline;
+  gap: var(--ms-space-2);
+}
+.message-head time {
+  margin-left: auto;
+  white-space: nowrap;
+}
+.event-kind {
+  color: var(--ms-text-muted);
+  font-size: var(--ms-text-xs);
+  font-weight: 600;
+}
+.conversation-body > p {
+  margin: var(--ms-space-1) 0 0;
+  color: var(--ms-text-secondary);
+  overflow-wrap: anywhere;
+}
+.is-host-message .conversation-body,
+.conversation-item.is-agent .conversation-body,
+.conversation-item.is-partial .conversation-body {
+  padding: var(--ms-space-3) var(--ms-space-4);
+  border-radius: var(--ms-radius-md);
+}
+.is-host-message .conversation-body {
+  background: var(--ms-bg-subtle);
+}
+.conversation-item.is-agent .conversation-body {
+  border-left: 3px solid var(--ms-status-info);
+  background: var(--ms-status-info-bg);
+}
+.conversation-item.is-agent .speaker-avatar {
+  background: var(--ms-action-primary);
+  color: var(--ms-action-on-primary);
+}
+.conversation-item.is-partial .conversation-body {
+  border: var(--ms-border-width) solid var(--ms-status-info);
+  background: var(--ms-bg-canvas);
+}
+.conversation-item.is-partial .event-kind {
+  color: var(--ms-status-info);
+}
+.typewriter-line p:last-child::after,
+.typewriter-line .ms-markdown > :last-child::after {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  margin-left: 3px;
+  vertical-align: -0.12em;
+  background: var(--ms-action-primary);
+  content: '';
+  animation: timeline-cursor 900ms steps(1) infinite;
+}
+.message-note {
+  display: block;
+  margin-top: var(--ms-space-2);
+  color: var(--ms-text-muted);
+  font-size: var(--ms-text-xs);
+}
+.attachment-card {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--ms-space-3);
+  margin-top: var(--ms-space-2);
+  padding: var(--ms-space-3);
+  border: var(--ms-border-width) solid var(--ms-border-soft);
+  border-radius: var(--ms-radius-md);
+  background: var(--ms-bg-sidebar);
+  color: var(--ms-text-primary);
+  text-align: left;
+  cursor: pointer;
+}
+.attachment-card:hover {
+  border-color: var(--ms-border-default);
+}
+.attachment-card > span:nth-child(2) {
+  min-width: 0;
+  display: grid;
+}
+.attachment-card strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.attachment-card small,
+.attachment-open {
+  color: var(--ms-text-muted);
+  font-size: var(--ms-text-xs);
+}
+.attachment-open {
+  color: var(--ms-action-primary-active);
+  font-weight: 600;
+}
+.attachment-icon {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--ms-radius-sm);
+  background: var(--ms-bg-canvas);
+}
+.attachment-icon svg {
+  width: 18px;
+  height: 18px;
+}
+.meeting-composer {
+  display: grid;
+  gap: var(--ms-space-2);
+  padding: var(--ms-space-3) var(--ms-space-5) var(--ms-space-4);
+  border-top: var(--ms-border-width) solid var(--ms-border-soft);
+  background: var(--ms-bg-canvas);
+}
+.meeting-composer > label {
+  color: var(--ms-text-secondary);
+  font-size: var(--ms-text-xs);
+  font-weight: 600;
+}
+.meeting-composer--followup .ms-actions,
+.meeting-composer--followup .ms-help {
+  margin: 0;
+}
+.composer-box {
+  display: grid;
+  gap: var(--ms-space-2);
+  padding: 10px var(--ms-space-3) var(--ms-space-2);
+  border: var(--ms-border-width) solid var(--ms-border-default);
+  border-radius: var(--ms-radius-md);
+  background: var(--ms-bg-canvas);
+}
+.composer-input {
+  width: 100%;
+  min-height: 28px;
+  max-height: 96px;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  resize: none;
+  overflow-y: auto;
+  background: transparent;
+  color: var(--ms-text-primary);
+  font: inherit;
+  line-height: var(--ms-leading-body);
+}
+.composer-input.is-pointer-focused:focus-visible {
+  box-shadow: none;
+}
+.composer-footer,
+.composer-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--ms-space-2);
+}
+.composer-footer {
+  justify-content: space-between;
+}
+.composer-actions {
+  justify-content: flex-end;
+}
+.composer-actions .ms-help {
+  margin: 0 var(--ms-space-2) 0 0;
+  font-size: var(--ms-text-xs);
+}
+.composer-icon-button {
+  width: var(--ms-control-height-md);
+  min-width: var(--ms-control-height-md);
+  padding: 0;
+}
+.composer-icon-button svg {
+  width: 18px;
+  height: 18px;
+}
+.ms-markdown {
+  color: var(--ms-text-secondary);
+  overflow-wrap: anywhere;
+}
+.ms-markdown > :first-child {
+  margin-top: var(--ms-space-1);
+}
+.ms-markdown > :last-child {
+  margin-bottom: 0;
+}
+.ms-markdown pre {
+  overflow-x: auto;
+  padding: var(--ms-space-3);
+  border-radius: var(--ms-radius-sm);
+  background: var(--ms-bg-emphasis);
+  color: var(--ms-text-on-emphasis);
+}
+.ms-markdown code {
+  font-family: var(--ms-font-mono);
+}
+.ms-markdown a {
+  color: var(--ms-action-primary-active);
+}
+.ms-markdown-image-placeholder {
+  color: var(--ms-text-muted);
+}
+.ms-participant-live-list {
+  display: grid;
+  gap: var(--ms-space-3);
+}
+.ms-participant-live-list > div {
+  display: grid;
+  grid-template-columns: var(--ms-control-height-md) minmax(0, 1fr);
+  align-items: center;
+  gap: var(--ms-space-3);
+}
+.ms-participant-live-list > div > span:last-child {
+  min-width: 0;
+  display: grid;
+}
+.ms-participant-live-list small {
+  color: var(--ms-text-muted);
+  font-size: var(--ms-text-xs);
+}
+.ms-participant-help {
+  margin: var(--ms-space-4) 0 0;
+}
+@keyframes timeline-cursor {
+  50% {
+    opacity: 0;
+  }
+}
+@media (max-width: 1100px) {
+  .ms-live-layout {
+    grid-template-columns: minmax(0, 1fr) 236px;
+    gap: var(--ms-space-3);
+  }
+  .timeline-workspace {
+    height: max(520px, calc(100vh - 116px));
+  }
+  .ms-live-aside {
+    grid-template-columns: 1fr;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .typewriter-line p:last-child::after,
+  .typewriter-line .ms-markdown > :last-child::after {
+    animation: none;
+  }
+  .conversation-scroll {
+    scroll-behavior: auto;
+  }
 }
 .ms-correction-layout {
   display: grid;

@@ -178,6 +178,17 @@ func NewRuntimeService(dependencies RuntimeDependencies) *RuntimeService {
 	}
 }
 
+// MicrophoneState 返回录音运行时的真实麦克风状态，不根据页面计时猜测。
+func (service *RuntimeService) MicrophoneState() string {
+	if service == nil || service.coordinator == nil {
+		return "unavailable"
+	}
+	if service.coordinator.IsCapturing() {
+		return "capturing"
+	}
+	return "stopped"
+}
+
 // EndMeeting 幂等执行唯一安全收尾；并发调用复用同一结果。
 func (service *RuntimeService) EndMeeting(ctx context.Context, meetingID string) (models.Meeting, error) {
 	call, owner, cached := service.reserveEnd(meetingID)

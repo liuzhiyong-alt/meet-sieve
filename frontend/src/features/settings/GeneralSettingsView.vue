@@ -136,11 +136,11 @@ async function choosePath(): Promise<void> {
   }
 }
 
-/** saveASR 保存后清空明文草稿，页面只继续展示后端掩码。 */
-async function saveASR(): Promise<void> {
-  if (await asr.saveAPIKey(apiKey.value)) {
-    apiKey.value = ''
-  }
+/** saveASR 保存后清空明文草稿，避免已保存凭证继续触发 dirty guard。 */
+async function saveASR(): Promise<boolean> {
+  const saved = await asr.saveAPIKey(apiKey.value)
+  if (saved) apiKey.value = ''
+  return saved
 }
 
 /** testASRConnection 使用当前未保存草稿探测连接，不发送会议音频。 */
@@ -241,7 +241,9 @@ function registerDirtyEditors(): void {
     dirtyEditRegistry.register({
       id: 'settings-general',
       label: '通用设置',
-      isDirty: () => path.value !== workspace.settings.savedPath,
+      isDirty: () =>
+        activeSection.value === 'general' &&
+        path.value !== workspace.settings.savedPath,
       canSave: () => Boolean(path.value && workspace.settings.editable),
       save: () => workspace.save(path.value),
       discard: () => {
@@ -251,7 +253,9 @@ function registerDirtyEditors(): void {
     dirtyEditRegistry.register({
       id: 'settings-audio',
       label: '录音设置',
-      isDirty: () => audioDeviceID.value !== audioBaselineDeviceID.value,
+      isDirty: () =>
+        activeSection.value === 'audio' &&
+        audioDeviceID.value !== audioBaselineDeviceID.value,
       canSave: () => Boolean(audioDeviceID.value),
       save: async () => {
         await saveAudioSettings()
@@ -264,9 +268,10 @@ function registerDirtyEditors(): void {
     dirtyEditRegistry.register({
       id: 'settings-asr',
       label: '实时转写凭证',
-      isDirty: () => Boolean(apiKey.value),
-      canSave: () => Boolean(apiKey.value),
-      save: () => asr.saveAPIKey(apiKey.value),
+      isDirty: () =>
+        activeSection.value === 'asr' && Boolean(apiKey.value.trim()),
+      canSave: () => Boolean(apiKey.value.trim()),
+      save: saveASR,
       discard: () => {
         apiKey.value = ''
       },
@@ -275,8 +280,9 @@ function registerDirtyEditors(): void {
       id: 'settings-codex',
       label: 'Codex 设置',
       isDirty: () =>
-        codexPath.value !== agent.settings.codex_executable_path ||
-        wakeWord.value !== agent.settings.wake_word,
+        activeSection.value === 'codex' &&
+        (codexPath.value !== agent.settings.codex_executable_path ||
+          wakeWord.value !== agent.settings.wake_word),
       canSave: () => Boolean(wakeWord.value.trim()),
       save: () => agent.saveSettings(wakeWord.value, codexPath.value),
       discard: () => {
@@ -588,7 +594,8 @@ function registerDirtyEditors(): void {
               v-model="apiKey"
               class="ms-input ms-input--mono"
               type="password"
-              autocomplete="off"
+              name="meetsieve-asr-api-key"
+              autocomplete="new-password"
               :placeholder="asr.settings.api_key_mask || '输入 APP Key'"
               :disabled="
                 asr.saving ||

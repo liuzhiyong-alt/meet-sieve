@@ -102,7 +102,7 @@ func TestInspect_AcceptsFixedDatabaseAndLeavesDatabaseFilesUntouched(t *testing.
 	}
 }
 
-// TestInspect_ClassifiesSchemaAndHalfInitializationStates 验证 v1、过新、dirty 与半初始化数据库均走稳定分支。
+// TestInspect_ClassifiesSchemaAndHalfInitializationStates 验证旧版本、过新、dirty 与半初始化数据库均走稳定分支。
 func TestInspect_ClassifiesSchemaAndHalfInitializationStates(t *testing.T) {
 	base := t.TempDir()
 	inspector := newInspector(t, base, 11*gibibyte)
@@ -116,6 +116,23 @@ func TestInspect_ClassifiesSchemaAndHalfInitializationStates(t *testing.T) {
 	}
 	if candidate := inspector.Inspect(filepath.Join(base, "step0")); candidate.Kind != domainworkspace.CandidateKindMeetSieve || candidate.SchemaState != domainworkspace.SchemaStateUpgradeRequired {
 		t.Fatalf("Step 0 数据库分类不正确：%+v", candidate)
+	}
+
+	previousPath := filepath.Join(base, "previous")
+	previousDatabasePath := createFinalizedWorkspaceDatabase(t, previousPath)
+	previousDB, err := sql.Open("sqlite3", previousDatabasePath)
+	if err != nil {
+		t.Fatalf("打开旧版本数据库失败：%v", err)
+	}
+	if _, err := previousDB.Exec("UPDATE schema_migrations SET version = ?", database.CurrentSchemaVersion-1); err != nil {
+		_ = previousDB.Close()
+		t.Fatalf("设置旧版本号失败：%v", err)
+	}
+	if err := previousDB.Close(); err != nil {
+		t.Fatalf("关闭旧版本数据库失败：%v", err)
+	}
+	if candidate := inspector.Inspect(previousPath); candidate.Kind != domainworkspace.CandidateKindMeetSieve || candidate.SchemaState != domainworkspace.SchemaStateUpgradeRequired || candidate.DatabaseID == "" {
+		t.Fatalf("受支持旧版本数据库分类不正确：%+v", candidate)
 	}
 
 	halfPath := filepath.Join(base, "half", "data", "meetings.db")

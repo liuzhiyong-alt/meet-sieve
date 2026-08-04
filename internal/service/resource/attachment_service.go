@@ -38,30 +38,32 @@ type MeetingDirectoryResolver interface {
 
 // AttachmentDependencies 是附件流式落盘与短事务提交的显式依赖。
 type AttachmentDependencies struct {
-	Repository       *contentrepository.Repository
-	Transactions     *database.TransactionManager
-	Coordinator      *UploadCoordinator
-	Policy           *FilePolicy
-	Directories      MeetingDirectoryResolver
-	Clock            clock.Clock
-	IDs              identity.Generator
-	AvailableBytes   AvailableBytesReader
-	MinimumFreeBytes uint64
-	OnPersisted      func(string)
+	Repository        *contentrepository.Repository
+	Transactions      *database.TransactionManager
+	Coordinator       *UploadCoordinator
+	Policy            *FilePolicy
+	Directories       MeetingDirectoryResolver
+	Clock             clock.Clock
+	IDs               identity.Generator
+	AvailableBytes    AvailableBytesReader
+	MinimumFreeBytes  uint64
+	OnPersisted       func(string)
+	OnTimelineChanged func(string, int64, string)
 }
 
 // AttachmentService 编排 reserve、preflight、stream、validate、rename 和 DB commit。
 type AttachmentService struct {
-	repository       *contentrepository.Repository
-	transactions     *database.TransactionManager
-	coordinator      *UploadCoordinator
-	policy           *FilePolicy
-	directories      MeetingDirectoryResolver
-	clock            clock.Clock
-	ids              identity.Generator
-	availableBytes   AvailableBytesReader
-	minimumFreeBytes uint64
-	onPersisted      func(string)
+	repository        *contentrepository.Repository
+	transactions      *database.TransactionManager
+	coordinator       *UploadCoordinator
+	policy            *FilePolicy
+	directories       MeetingDirectoryResolver
+	clock             clock.Clock
+	ids               identity.Generator
+	availableBytes    AvailableBytesReader
+	minimumFreeBytes  uint64
+	onPersisted       func(string)
+	onTimelineChanged func(string, int64, string)
 }
 
 // AttachmentInput 包含 HTTP 边界校验后的单文件流和声明元数据。
@@ -91,26 +93,54 @@ func NewAttachmentService(dependencies AttachmentDependencies) *AttachmentServic
 		repository: dependencies.Repository, transactions: dependencies.Transactions,
 		coordinator: dependencies.Coordinator, policy: dependencies.Policy, directories: dependencies.Directories,
 		clock: dependencies.Clock, ids: dependencies.IDs, availableBytes: dependencies.AvailableBytes,
-		minimumFreeBytes: dependencies.MinimumFreeBytes,
-		onPersisted:      dependencies.OnPersisted,
+		minimumFreeBytes:  dependencies.MinimumFreeBytes,
+		onPersisted:       dependencies.OnPersisted,
+		onTimelineChanged: dependencies.OnTimelineChanged,
 	}
 }
 
 // Upload 在固定内存中流式保存附件，只在最终文件存在后创建 Resource/event。
 func (service *AttachmentService) Upload(ctx context.Context, authenticated guestservice.AuthenticatedSession, input AttachmentInput) (AttachmentResult, error) {
+	return service.upload(ctx, attachmentOwner{
+		meetingID: authenticated.Session.MeetingID,
+		sessionID: authenticated.Session.ID,
+		source:    "guest",
+	}, input)
+}
+
+// UploadHost 使用同一安全文件链路提交主持人从系统窗口选择的附件。
+func (service *AttachmentService) UploadHost(ctx context.Context, meetingID string, input AttachmentInput) (AttachmentResult, error) {
+	return service.upload(ctx, attachmentOwner{
+		meetingID: meetingID,
+		sessionID: "host:" + meetingID,
+		source:    "host",
+	}, input)
+}
+
+type attachmentOwner struct {
+	meetingID string
+	sessionID string
+	source    string
+}
+
+// upload 执行 Host 和 Guest 共用的流式文件主流程，身份校验仍在事务边界内区分。
+func (service *AttachmentService) upload(ctx context.Context, owner attachmentOwner, input AttachmentInput) (AttachmentResult, error) {
 	if err := service.validateInput(input); err != nil {
 		return AttachmentResult{}, err
 	}
-	reservation, err := service.coordinator.ReserveAttachment(ctx, authenticated.Session.MeetingID, authenticated.Session.ID, input.RequestID, input.OriginalName, input.DeclaredSize)
+	if owner.meetingID == "" || owner.sessionID == "" || (owner.source != "guest" && owner.source != "host") {
+		return AttachmentResult{}, apperr.Biz(apperr.CodeInvalidRequest, apperr.WithOp("resource.attachment.owner"))
+	}
+	reservation, err := service.coordinator.ReserveAttachment(ctx, owner.meetingID, owner.sessionID, input.RequestID, input.OriginalName, input.DeclaredSize)
 	if err != nil {
 		return AttachmentResult{}, err
 	}
 	defer reservation.Release()
-	meetingDirectory, err := service.directories.ResolveMeetingDirectory(reservation.Context(), authenticated.Session.MeetingID)
+	meetingDirectory, err := service.directories.ResolveMeetingDirectory(reservation.Context(), owner.meetingID)
 	if err != nil {
 		return AttachmentResult{}, mapAttachmentError(err)
 	}
-	existing, err := service.findExisting(reservation.Context(), authenticated.Session, input.RequestID)
+	existing, err := service.findExisting(reservation.Context(), owner, input.RequestID)
 	if err != nil {
 		return AttachmentResult{}, mapAttachmentError(err)
 	}
@@ -128,7 +158,7 @@ func (service *AttachmentService) Upload(ctx context.Context, authenticated gues
 		}
 		return resultFromExistingAttachment(*existing), nil
 	}
-	return service.commitStaged(reservation.Context(), authenticated.Session, input, staged)
+	return service.commitStaged(reservation.Context(), owner, input, staged)
 }
 
 type stagedAttachment struct {
@@ -231,13 +261,21 @@ func (service *AttachmentService) ensureDiskSpace(path string, remaining int64) 
 }
 
 // findExisting 在短事务中查询已完成的同 request ID 内容。
-func (service *AttachmentService) findExisting(ctx context.Context, session models.GuestSession, requestID string) (*contentrepository.ExistingContent, error) {
+func (service *AttachmentService) findExisting(ctx context.Context, owner attachmentOwner, requestID string) (*contentrepository.ExistingContent, error) {
 	var existing *contentrepository.ExistingContent
 	err := service.transactions.WithinTransaction(ctx, func(tx *gorm.DB) error {
-		if _, err := service.repository.GetWritableSession(ctx, tx, session.MeetingID, session.ID); err != nil {
+		if owner.source == "guest" {
+			if _, err := service.repository.GetWritableSession(ctx, tx, owner.meetingID, owner.sessionID); err != nil {
+				return err
+			}
+			found, err := service.repository.FindExisting(ctx, tx, owner.sessionID, requestID)
+			existing = found
 			return err
 		}
-		found, err := service.repository.FindExisting(ctx, tx, session.ID, requestID)
+		if _, err := service.repository.GetWritableMeeting(ctx, tx, owner.meetingID); err != nil {
+			return err
+		}
+		found, err := service.repository.FindExistingHost(ctx, tx, owner.meetingID, requestID)
 		existing = found
 		return err
 	})
@@ -245,7 +283,7 @@ func (service *AttachmentService) findExisting(ctx context.Context, session mode
 }
 
 // commitStaged 先原子 rename 到内部 UUID 文件，再以短事务写 Resource/event；DB 失败回滚文件。
-func (service *AttachmentService) commitStaged(ctx context.Context, session models.GuestSession, input AttachmentInput, staged *stagedAttachment) (AttachmentResult, error) {
+func (service *AttachmentService) commitStaged(ctx context.Context, owner attachmentOwner, input AttachmentInput, staged *stagedAttachment) (AttachmentResult, error) {
 	resourceID := service.ids.New()
 	eventID := service.ids.New()
 	if resourceID == "" || eventID == "" {
@@ -257,13 +295,16 @@ func (service *AttachmentService) commitStaged(ctx context.Context, session mode
 		return AttachmentResult{}, mapAttachmentError(fmt.Errorf("原子提交附件：%w", err))
 	}
 	staged.committed = true
-	result, err := service.commitDatabase(ctx, session, input, staged, resourceID, eventID, safeName)
+	result, err := service.commitDatabase(ctx, owner, input, staged, resourceID, eventID, safeName)
 	if err != nil {
 		_ = os.Remove(finalPath)
 		return AttachmentResult{}, mapAttachmentError(err)
 	}
 	if service.onPersisted != nil {
-		service.onPersisted(session.MeetingID)
+		service.onPersisted(owner.meetingID)
+	}
+	if service.onTimelineChanged != nil {
+		service.onTimelineChanged(owner.meetingID, result.Seq, "resource_created")
 	}
 	return result, nil
 }
@@ -271,7 +312,7 @@ func (service *AttachmentService) commitStaged(ctx context.Context, session mode
 // commitDatabase 只在最终文件存在后分配 seq 并提交 Resource/event。
 func (service *AttachmentService) commitDatabase(
 	ctx context.Context,
-	session models.GuestSession,
+	owner attachmentOwner,
 	input AttachmentInput,
 	staged *stagedAttachment,
 	resourceID string,
@@ -280,25 +321,27 @@ func (service *AttachmentService) commitDatabase(
 ) (AttachmentResult, error) {
 	var result AttachmentResult
 	err := service.transactions.WithinTransaction(ctx, func(tx *gorm.DB) error {
-		persistedSession, err := service.repository.GetWritableSession(ctx, tx, session.MeetingID, session.ID)
+		guestSessionID, err := service.validateOwnerForCommit(ctx, tx, owner)
 		if err != nil {
 			return err
 		}
-		if existing, err := service.repository.FindExisting(ctx, tx, session.ID, input.RequestID); err != nil {
+		existing, err := service.findExistingForCommit(ctx, tx, owner, input.RequestID)
+		if err != nil {
 			return err
-		} else if existing != nil {
+		}
+		if existing != nil {
 			return apperr.Biz(apperr.CodeConflict, apperr.WithOp("resource.attachment.concurrent_commit"))
 		}
-		seq, err := service.repository.NextEventSeq(ctx, tx, session.MeetingID)
+		seq, err := service.repository.NextEventSeq(ctx, tx, owner.meetingID)
 		if err != nil {
 			return err
 		}
 		now := service.clock.Now().UnixMilli()
-		resource := buildAttachmentResource(resourceID, eventID, safeName, input, staged, persistedSession, now)
+		resource := buildAttachmentResource(resourceID, eventID, safeName, input, staged, owner.meetingID, guestSessionID, now)
 		entityType := "resource"
 		event := models.MeetingEvent{
-			ID: eventID, MeetingID: session.MeetingID, Seq: seq, Kind: "resource.created", OccurredAt: now,
-			Source: "guest", EntityType: &entityType, EntityID: &resourceID, CreatedAt: now, UpdatedAt: now,
+			ID: eventID, MeetingID: owner.meetingID, Seq: seq, Kind: "resource.created", OccurredAt: now,
+			Source: owner.source, EntityType: &entityType, EntityID: &resourceID, CreatedAt: now, UpdatedAt: now,
 		}
 		if err := service.repository.CreateLink(ctx, tx, event, resource); err != nil {
 			return err
@@ -312,6 +355,27 @@ func (service *AttachmentService) commitDatabase(
 	return result, err
 }
 
+// validateOwnerForCommit 在最终文件存在后再次确认会议或 Guest session 仍可写。
+func (service *AttachmentService) validateOwnerForCommit(ctx context.Context, tx *gorm.DB, owner attachmentOwner) (*string, error) {
+	if owner.source == "guest" {
+		session, err := service.repository.GetWritableSession(ctx, tx, owner.meetingID, owner.sessionID)
+		if err != nil {
+			return nil, err
+		}
+		return &session.ID, nil
+	}
+	_, err := service.repository.GetWritableMeeting(ctx, tx, owner.meetingID)
+	return nil, err
+}
+
+// findExistingForCommit 按 Host 或 Guest 的幂等范围读取首次提交结果。
+func (service *AttachmentService) findExistingForCommit(ctx context.Context, tx *gorm.DB, owner attachmentOwner, requestID string) (*contentrepository.ExistingContent, error) {
+	if owner.source == "guest" {
+		return service.repository.FindExisting(ctx, tx, owner.sessionID, requestID)
+	}
+	return service.repository.FindExistingHost(ctx, tx, owner.meetingID, requestID)
+}
+
 // buildAttachmentResource 构建只使用会议目录相对路径的 completed Resource。
 func buildAttachmentResource(
 	id string,
@@ -319,7 +383,8 @@ func buildAttachmentResource(
 	safeName string,
 	input AttachmentInput,
 	staged *stagedAttachment,
-	session models.GuestSession,
+	meetingID string,
+	guestSessionID *string,
 	now int64,
 ) models.Resource {
 	relativePath := filepath.ToSlash(filepath.Join("resources", safeName))
@@ -329,7 +394,7 @@ func buildAttachmentResource(
 		descriptionPointer = &description
 	}
 	return models.Resource{
-		ID: id, MeetingID: session.MeetingID, EventID: eventID, GuestSessionID: &session.ID, RequestID: &input.RequestID,
+		ID: id, MeetingID: meetingID, EventID: eventID, GuestSessionID: guestSessionID, RequestID: &input.RequestID,
 		Kind: "attachment", OriginalName: &staged.validation.DisplayName, SafeName: &safeName, RelativePath: &relativePath,
 		MediaType: &staged.validation.MediaType, SizeBytes: &staged.stream.SizeBytes, SHA256: &staged.stream.SHA256,
 		OriginalDescription: descriptionPointer, CurrentDescription: descriptionPointer, DescriptionRevision: 1,

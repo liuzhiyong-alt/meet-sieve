@@ -9,8 +9,8 @@ import (
 // TestStep9Schema_ReachesVersionTenAndAddsLifecycleIndexes 验证 Step 9 migration 与列表索引存在。
 func TestStep9Schema_ReachesVersionTenAndAddsLifecycleIndexes(t *testing.T) {
 	db := openMigratedDatabase(t)
-	if database.CurrentSchemaVersion != 10 {
-		t.Fatalf("当前 schema 版本错误：got %d, want 10", database.CurrentSchemaVersion)
+	if database.CurrentSchemaVersion < 10 {
+		t.Fatalf("当前 schema 版本不得低于 Step 9：got %d", database.CurrentSchemaVersion)
 	}
 	for _, index := range []string{"idx_meetings_started_no", "idx_meeting_participants_snapshot_meeting"} {
 		var count int64

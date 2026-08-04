@@ -73,6 +73,32 @@ func TestAttachmentService_StreamsRenamesAndCommitsResourceEvent(t *testing.T) {
 	assertStagingEmpty(t, meetingDirectory)
 }
 
+// TestAttachmentService_HostUsesSameSafePipeline 验证系统窗口附件以主持人来源进入统一时间线。
+func TestAttachmentService_HostUsesSameSafePipeline(t *testing.T) {
+	db, meetingDirectory := openResourceDatabase(t)
+	_ = insertResourceFixtures(t, db)
+	service, _ := newAttachmentService(db, meetingDirectory)
+	content := []byte("host attachment")
+	result, err := service.UploadHost(context.Background(), meetingID, resourceservice.AttachmentInput{
+		RequestID: "33333333-3333-4333-8333-333333333333", OriginalName: "补充说明.txt",
+		DeclaredSize: int64(len(content)), DeclaredMediaType: "text/plain", Reader: bytes.NewReader(content),
+	})
+	if err != nil {
+		t.Fatalf("主持人附件发送失败：%v", err)
+	}
+	var resource models.Resource
+	if err := db.Where("id = ?", result.ResourceID).Take(&resource).Error; err != nil {
+		t.Fatal(err)
+	}
+	var event models.MeetingEvent
+	if err := db.Where("id = ?", resource.EventID).Take(&event).Error; err != nil {
+		t.Fatal(err)
+	}
+	if resource.GuestSessionID != nil || event.Source != "host" || result.Seq != 1 {
+		t.Fatalf("主持人附件身份或 seq 错误：resource=%#v event=%#v result=%#v", resource, event, result)
+	}
+}
+
 // TestAttachmentService_BlockedMagicLeavesNoFormalFact 验证危险 magic 失败时删除 part 且不占 seq。
 func TestAttachmentService_BlockedMagicLeavesNoFormalFact(t *testing.T) {
 	db, meetingDirectory := openResourceDatabase(t)

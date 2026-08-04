@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -114,7 +115,7 @@ func (verifier *SchemaVerifier) loadIdentity(ctx context.Context, executablePath
 	}
 	version, err := verifier.runner.Version(ctx, executablePath)
 	if err != nil {
-		return "", protocolIncompatible(err, "agent.schema.version")
+		return "", mapSchemaCommandError(err, "agent.schema.version")
 	}
 	return fmt.Sprintf("%s\x00%s\x00%d", executablePath, version, info.ModTime().UnixNano()), nil
 }
@@ -128,12 +129,23 @@ func (verifier *SchemaVerifier) generateAndValidate(ctx context.Context, executa
 	defer func() { _ = os.RemoveAll(directory) }()
 
 	if err := verifier.runner.Generate(ctx, executablePath, directory); err != nil {
-		return protocolIncompatible(err, "agent.schema.generate")
+		return mapSchemaCommandError(err, "agent.schema.generate")
 	}
 	if err := validateRequiredSchemas(directory, verifier.contract.Files); err != nil {
 		return protocolIncompatible(err, "agent.schema.validate")
 	}
 	return nil
+}
+
+// mapSchemaCommandError 区分调用方取消、外部命令超时和真实协议不兼容。
+func mapSchemaCommandError(cause error, operation string) error {
+	if errors.Is(cause, context.Canceled) {
+		return apperr.Biz(apperr.CodeCanceled, apperr.WithOp(operation))
+	}
+	if errors.Is(cause, context.DeadlineExceeded) {
+		return apperr.Dependency(apperr.CodeDependencyTimeout, cause, apperr.WithOp(operation))
+	}
+	return protocolIncompatible(cause, operation)
 }
 
 // validateRequiredSchemas 只校验必要文件，允许 provider 增加与当前实现无关的 schema。

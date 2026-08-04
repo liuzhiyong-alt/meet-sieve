@@ -28,11 +28,19 @@ export interface TimelineEvent {
   entity_id: string
   display_name: string
   text?: string
+  content_format?: 'plain' | 'markdown'
   url?: string
   original_name?: string
   media_type?: string
   size_bytes?: number
   description?: string
+}
+
+export interface TimelineNotification {
+  type: 'timeline.changed'
+  meeting_id: string
+  latest_seq: number
+  reason: string
 }
 
 export interface TimelinePage {

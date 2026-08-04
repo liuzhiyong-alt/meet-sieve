@@ -26,18 +26,19 @@ type TimelinePage struct {
 
 // TimelineEvent 是不包含 payload_json 的 Guest 安全判别投影。
 type TimelineEvent struct {
-	Seq          int64  `json:"seq"`
-	Kind         string `json:"kind"`
-	OccurredAt   int64  `json:"occurred_at"`
-	EntityID     string `json:"entity_id"`
-	DisplayName  string `json:"display_name"`
-	Text         string `json:"text,omitempty"`
-	URL          string `json:"url,omitempty"`
-	OriginalName string `json:"original_name,omitempty"`
-	MediaType    string `json:"media_type,omitempty"`
-	SizeBytes    int64  `json:"size_bytes,omitempty"`
-	SHA256       string `json:"sha256,omitempty"`
-	Description  string `json:"description,omitempty"`
+	Seq           int64  `json:"seq"`
+	Kind          string `json:"kind"`
+	OccurredAt    int64  `json:"occurred_at"`
+	EntityID      string `json:"entity_id"`
+	DisplayName   string `json:"display_name"`
+	Text          string `json:"text,omitempty"`
+	URL           string `json:"url,omitempty"`
+	OriginalName  string `json:"original_name,omitempty"`
+	MediaType     string `json:"media_type,omitempty"`
+	SizeBytes     int64  `json:"size_bytes,omitempty"`
+	SHA256        string `json:"sha256,omitempty"`
+	Description   string `json:"description,omitempty"`
+	ContentFormat string `json:"content_format,omitempty"`
 }
 
 // NewTimelineService 创建 Guest 事件白名单查询服务。
@@ -87,6 +88,7 @@ func projectTimelineRow(row contentrepository.GuestTimelineRow) (TimelineEvent, 
 		return TimelineEvent{
 			Seq: row.Seq, Kind: "message", OccurredAt: row.OccurredAt,
 			EntityID: row.MessageID, DisplayName: row.MessageDisplayName, Text: row.MessageContent,
+			ContentFormat: row.MessageContentFormat,
 		}, true
 	case row.EventKind == "resource.created" && row.ResourceKind == "link" && row.ResourceState == "completed" && row.ResourceID != "":
 		return TimelineEvent{
@@ -103,7 +105,7 @@ func projectTimelineRow(row contentrepository.GuestTimelineRow) (TimelineEvent, 
 	case row.EventKind == "ai.answer" && row.AgentAnswerVisible:
 		return TimelineEvent{
 			Seq: row.Seq, Kind: "ai_answer", OccurredAt: row.OccurredAt,
-			DisplayName: "AI", Text: row.AgentAnswerText,
+			DisplayName: "AI", Text: row.AgentAnswerText, ContentFormat: row.AgentAnswerFormat,
 		}, true
 	default:
 		return TimelineEvent{}, false

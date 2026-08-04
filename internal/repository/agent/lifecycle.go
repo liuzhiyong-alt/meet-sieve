@@ -115,7 +115,13 @@ func (repository *Repository) FailInitialization(ctx context.Context, sessionID 
 	}
 	return repository.transactions.WithinTransaction(ctx, func(tx *gorm.DB) error {
 		var session models.AgentSession
-		if err := tx.WithContext(ctx).Select(sessionColumns()).Where("id = ? AND state = 'starting'", sessionID).Take(&session).Error; err != nil {
+		if err := tx.WithContext(ctx).Select(sessionColumns()).Where("id = ?", sessionID).Take(&session).Error; err != nil {
+			return ErrConflict
+		}
+		if session.State == "failed" && session.LastErrorCode != nil && *session.LastErrorCode == errorCode {
+			return nil
+		}
+		if session.State != "starting" {
 			return ErrConflict
 		}
 		sessionResult := tx.WithContext(ctx).Model(&models.AgentSession{}).Where("id = ? AND state = 'starting'", sessionID).

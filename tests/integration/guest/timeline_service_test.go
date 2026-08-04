@@ -73,8 +73,9 @@ func TestTimelineService_ExposesOnlyVersionedGuestVisibleAIAnswer(t *testing.T) 
 	}{
 		{"91919191-9191-4919-8919-919191919191", 1, "ai.question", `{"v":1,"text":"秘密问题"}`},
 		{"92929292-9292-4929-8929-929292929292", 2, "ai.answer", `{"v":1,"text":"公开回答","guest_visible":true}`},
-		{"93939393-9393-4939-8939-939393939393", 3, "ai.answer", `{"v":1,"text":"内部回答","guest_visible":false}`},
-		{"94949494-9494-4949-8949-949494949494", 4, "ai.failed", `{"v":1,"reason":"failed"}`},
+		{"92929292-9292-4929-8929-929292929293", 3, "ai.answer", `{"v":2,"text":"**Markdown 回答**","content_format":"markdown","guest_visible":true}`},
+		{"93939393-9393-4939-8939-939393939393", 4, "ai.answer", `{"v":1,"text":"内部回答","guest_visible":false}`},
+		{"94949494-9494-4949-8949-949494949494", 5, "ai.failed", `{"v":1,"reason":"failed"}`},
 	}
 	for _, row := range rows {
 		if err := db.Exec(`INSERT INTO meeting_events (
@@ -88,7 +89,7 @@ func TestTimelineService_ExposesOnlyVersionedGuestVisibleAIAnswer(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(page.Events) != 1 || page.Events[0].Kind != "ai_answer" || page.Events[0].Text != "公开回答" || page.Events[0].DisplayName != "AI" || page.NextSeq != 4 {
+	if len(page.Events) != 2 || page.Events[0].Kind != "ai_answer" || page.Events[0].Text != "公开回答" || page.Events[0].ContentFormat != "plain" || page.Events[1].ContentFormat != "markdown" || page.NextSeq != 5 {
 		t.Fatalf("Guest AI 白名单错误：%#v", page)
 	}
 }

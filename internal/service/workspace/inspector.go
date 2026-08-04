@@ -123,12 +123,15 @@ func (inspector *Inspector) inspectMeetSieveDatabase(workspacePath string, datab
 		}
 		return inspector.withDiskWarning(domainworkspace.WorkspaceCandidate{Path: workspacePath, Kind: domainworkspace.CandidateKindMeetSieve, Reason: domainworkspace.CandidateReasonNone, SchemaState: domainworkspace.SchemaStateUpgradeRequired, Writable: true, LocalVolume: true})
 	}
-	if version.Version != database.CurrentSchemaVersion {
-		return invalidCandidate(workspacePath, domainworkspace.CandidateReasonDatabaseInvalid)
-	}
 	identity, err := database.ReadTypedIdentity(db)
 	if err != nil {
 		return invalidCandidate(workspacePath, domainworkspace.CandidateReasonDatabaseInvalid)
+	}
+	if version.Version < database.CurrentSchemaVersion {
+		return inspector.withDiskWarning(domainworkspace.WorkspaceCandidate{
+			Path: workspacePath, Kind: domainworkspace.CandidateKindMeetSieve, Reason: domainworkspace.CandidateReasonNone,
+			SchemaState: domainworkspace.SchemaStateUpgradeRequired, DatabaseID: identity.DatabaseID, Writable: true, LocalVolume: true,
+		})
 	}
 	return inspector.withDiskWarning(domainworkspace.WorkspaceCandidate{Path: workspacePath, Kind: domainworkspace.CandidateKindMeetSieve, Reason: domainworkspace.CandidateReasonNone, SchemaState: domainworkspace.SchemaStateCurrent, DatabaseID: identity.DatabaseID, Writable: true, LocalVolume: true})
 }

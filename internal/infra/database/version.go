@@ -6,7 +6,7 @@ import (
 )
 
 // CurrentSchemaVersion 是当前应用支持的最新 SQLite schema 版本。
-const CurrentSchemaVersion uint = 10
+const CurrentSchemaVersion uint = 11
 
 // SchemaVersion 表示 schema_migrations 中的版本与未完成状态。
 type SchemaVersion struct {

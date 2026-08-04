@@ -21,6 +21,73 @@ const confirmation = ref('')
 const actionError = ref('')
 const tab = computed(() => String(route.query.tab ?? 'overview'))
 
+type DetailStatusAxis =
+  'highest' | 'localSave' | 'realtimeAsr' | 'gap' | 'agent' | 'minute' | 'lan'
+
+const detailStatusLabels: Record<DetailStatusAxis, Record<string, string>> = {
+  highest: {
+    deleting: '删除处理中',
+    recovery_required: '需要恢复',
+    gap_conflict: '缺口冲突',
+    gap_pending: '补转写处理中',
+    minute_candidate: '纪要待确认',
+    agent_unsynced: 'Codex 未同步',
+    minute_confirmed: '纪要已确认',
+    saved: '本地已保存',
+  },
+  localSave: {
+    pending: '等待写入',
+    saving: '正在本地保存',
+    saved: '本地已保存',
+    failed: '本地保存失败',
+  },
+  realtimeAsr: {
+    idle: '尚未启动',
+    connecting: '正在连接',
+    streaming: '实时转写正常',
+    reconnecting: '连接中断，正在重连',
+    unavailable: '暂不可用',
+    stopped: '已停止',
+  },
+  gap: {
+    none: '无缺口',
+    pending: '待处理',
+    processing: '补转写处理中',
+    completed: '已补齐',
+    failed: '补转写失败',
+    conflict: '存在冲突',
+  },
+  agent: {
+    unchecked: '尚未检测',
+    initializing: '正在准备',
+    available: '可参与',
+    busy: '正在参与',
+    busy_long: '处理时间较长',
+    unavailable: '暂不可用',
+    approval_pending: '等待主持人审批',
+    unsynced: '结束同步失败',
+  },
+  minute: {
+    not_generated: '尚未生成',
+    generating: '正在生成',
+    draft: '草稿待确认',
+    confirmed: '已确认',
+    failed: '生成失败',
+  },
+  lan: {
+    disabled: '未开启',
+    starting: '正在启动',
+    serving: '访客页运行中',
+    failed: '访客页启动失败',
+    stopped: '已停止',
+  },
+}
+
+/** detailStatusText 把内部状态码映射为稳定的中文文案。 */
+function detailStatusText(axis: DetailStatusAxis, value: string): string {
+  return detailStatusLabels[axis][value] ?? '状态待确认'
+}
+
 /** loadTab 按 URL 页签懒加载对应长列表。 */
 async function loadTab(): Promise<void> {
   if (tab.value === 'transcript')
@@ -144,7 +211,7 @@ watch(
         </p>
       </div>
       <span class="ms-status-pill">{{
-        query.detail.summary.highest_status
+        detailStatusText('highest', query.detail.summary.highest_status)
       }}</span>
     </section>
     <nav class="ms-tabs" aria-label="会议详情页签">
@@ -165,33 +232,57 @@ watch(
     <p v-if="actionError" class="ms-notice ms-notice--danger" role="alert">
       {{ actionError }}
     </p>
-    <section v-if="tab === 'overview'" class="ms-detail-grid">
+    <section v-if="tab === 'overview'" class="ms-detail-panel ms-detail-grid">
       <article class="ms-card ms-settings-card">
         <h2>状态</h2>
         <dl class="ms-fact-grid">
           <div>
             <dt>本地保存</dt>
-            <dd>{{ query.detail.summary.local_save_state }}</dd>
+            <dd>
+              {{
+                detailStatusText(
+                  'localSave',
+                  query.detail.summary.local_save_state,
+                )
+              }}
+            </dd>
           </div>
           <div>
             <dt>实时转写</dt>
-            <dd>{{ query.detail.summary.realtime_asr_state }}</dd>
+            <dd>
+              {{
+                detailStatusText(
+                  'realtimeAsr',
+                  query.detail.summary.realtime_asr_state,
+                )
+              }}
+            </dd>
           </div>
           <div>
             <dt>缺口</dt>
-            <dd>{{ query.detail.summary.gap_state }}</dd>
+            <dd>
+              {{ detailStatusText('gap', query.detail.summary.gap_state) }}
+            </dd>
           </div>
           <div>
             <dt>Codex</dt>
-            <dd>{{ query.detail.summary.agent_state }}</dd>
+            <dd>
+              {{ detailStatusText('agent', query.detail.summary.agent_state) }}
+            </dd>
           </div>
           <div>
             <dt>纪要</dt>
-            <dd>{{ query.detail.summary.minute_state }}</dd>
+            <dd>
+              {{
+                detailStatusText('minute', query.detail.summary.minute_state)
+              }}
+            </dd>
           </div>
           <div>
             <dt>LAN</dt>
-            <dd>{{ query.detail.summary.lan_state }}</dd>
+            <dd>
+              {{ detailStatusText('lan', query.detail.summary.lan_state) }}
+            </dd>
           </div>
         </dl>
         <p v-if="query.detail.disabled_reason" class="ms-help">
@@ -234,7 +325,10 @@ watch(
         </div>
       </article>
     </section>
-    <section v-else-if="tab === 'transcript'" class="ms-card ms-settings-card">
+    <section
+      v-else-if="tab === 'transcript'"
+      class="ms-detail-panel ms-card ms-settings-card"
+    >
       <div v-if="query.transcript?.items.length" class="ms-transcript-list">
         <article
           v-for="item in query.transcript.items"
@@ -268,7 +362,10 @@ watch(
         </button>
       </div>
     </section>
-    <section v-else-if="tab === 'messages'" class="ms-card ms-settings-card">
+    <section
+      v-else-if="tab === 'messages'"
+      class="ms-detail-panel ms-card ms-settings-card"
+    >
       <div v-if="query.content?.items.length" class="ms-people-list">
         <article
           v-for="item in query.content.items"
@@ -300,7 +397,7 @@ watch(
       </div>
       <div v-else class="ms-empty-state"><h2>没有消息或资料</h2></div>
     </section>
-    <section v-else class="ms-card ms-empty-state">
+    <section v-else class="ms-detail-panel ms-card ms-empty-state">
       <h2>会议纪要</h2>
       <p>纪要版本在独立工作区中编辑和确认。</p>
       <RouterLink

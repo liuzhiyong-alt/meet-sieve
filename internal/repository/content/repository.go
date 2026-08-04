@@ -33,24 +33,26 @@ type ExistingContent struct {
 
 // GuestTimelineRow 是事件表与 message/resource 白名单 join 的安全读取行。
 type GuestTimelineRow struct {
-	Seq                 int64
-	EventKind           string
-	OccurredAt          int64
-	MessageID           string
-	MessageContent      string
-	MessageDisplayName  string
-	ResourceID          string
-	ResourceKind        string
-	ResourceState       string
-	ResourceURL         string
-	ResourceName        string
-	ResourceMediaType   string
-	ResourceSize        int64
-	ResourceSHA256      string
-	ResourceDescription string
-	ResourceDisplayName string
-	AgentAnswerText     string
-	AgentAnswerVisible  bool
+	Seq                  int64
+	EventKind            string
+	OccurredAt           int64
+	MessageID            string
+	MessageContent       string
+	MessageContentFormat string
+	MessageDisplayName   string
+	ResourceID           string
+	ResourceKind         string
+	ResourceState        string
+	ResourceURL          string
+	ResourceName         string
+	ResourceMediaType    string
+	ResourceSize         int64
+	ResourceSHA256       string
+	ResourceDescription  string
+	ResourceDisplayName  string
+	AgentAnswerText      string
+	AgentAnswerVisible   bool
+	AgentAnswerFormat    string
 }
 
 // GetCompletedAttachment 只返回指定会议内已完成的附件，避免跨会议枚举。
@@ -194,6 +196,7 @@ func (repository *Repository) ListGuestTimelineRows(ctx context.Context, meeting
 event.seq, event.kind AS event_kind, event.occurred_at,
 COALESCE(message.id, '') AS message_id,
 COALESCE(message.content, '') AS message_content,
+COALESCE(message.content_format, 'plain') AS message_content_format,
 COALESCE(message.display_name_snapshot, '') AS message_display_name,
 COALESCE(resource.id, '') AS resource_id,
 COALESCE(resource.kind, '') AS resource_kind,
@@ -206,14 +209,18 @@ COALESCE(resource.sha256, '') AS resource_sha256,
 COALESCE(resource.current_description, '') AS resource_description,
 COALESCE(guest.display_name, '') AS resource_display_name,
 CASE WHEN event.kind = 'ai.answer'
-          AND json_extract(event.payload_json, '$.v') = 1
+          AND json_extract(event.payload_json, '$.v') IN (1, 2)
           AND json_extract(event.payload_json, '$.guest_visible') = 1
      THEN COALESCE(json_extract(event.payload_json, '$.text'), '') ELSE '' END AS agent_answer_text,
 CASE WHEN event.kind = 'ai.answer'
-          AND json_extract(event.payload_json, '$.v') = 1
+          AND json_extract(event.payload_json, '$.v') IN (1, 2)
           AND json_extract(event.payload_json, '$.guest_visible') = 1
           AND trim(COALESCE(json_extract(event.payload_json, '$.text'), '')) <> ''
-     THEN 1 ELSE 0 END AS agent_answer_visible
+     THEN 1 ELSE 0 END AS agent_answer_visible,
+CASE WHEN event.kind = 'ai.answer'
+          AND json_extract(event.payload_json, '$.v') = 2
+          AND json_extract(event.payload_json, '$.content_format') = 'markdown'
+     THEN 'markdown' ELSE 'plain' END AS agent_answer_format
 FROM meeting_events AS event
 LEFT JOIN messages AS message
   ON event.kind = 'message.created' AND message.event_id = event.id AND message.meeting_id = event.meeting_id
@@ -294,7 +301,7 @@ func eventColumns() []string {
 func messageColumns() []string {
 	return []string{
 		"id", "meeting_id", "event_id", "author_kind", "member_id", "guest_session_id",
-		"request_id", "display_name_snapshot", "content", "created_at", "updated_at",
+		"request_id", "display_name_snapshot", "content", "content_format", "created_at", "updated_at",
 	}
 }
 
