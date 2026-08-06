@@ -49,6 +49,10 @@ func TestAdapter_UsesFixedProtocolAndNormalizesSegments(t *testing.T) {
 				Bits    int    `json:"bits"`
 				Channel int    `json:"channel"`
 			} `json:"audio"`
+			Request struct {
+				ShowUtterances    bool `json:"show_utterances"`
+				EnableSpeakerInfo bool `json:"enable_speaker_info"`
+			} `json:"request"`
 		}
 		if err := json.Unmarshal(body, &payload); err != nil {
 			t.Errorf("请求 JSON 无效：%v", err)
@@ -60,6 +64,9 @@ func TestAdapter_UsesFixedProtocolAndNormalizesSegments(t *testing.T) {
 		}
 		if payload.Audio.Format != "wav" || payload.Audio.Rate != 16000 || payload.Audio.Bits != 16 || payload.Audio.Channel != 1 {
 			t.Errorf("固定音频参数错误：%+v", payload.Audio)
+		}
+		if !payload.Request.ShowUtterances || !payload.Request.EnableSpeakerInfo {
+			t.Errorf("文件 speaker 请求参数错误：%+v", payload.Request)
 		}
 		writer.Header().Set("X-Api-Status-Code", "20000000")
 		writer.Header().Set("X-Tt-Logid", "private-log-id-12345678")
@@ -84,6 +91,38 @@ func TestAdapter_UsesFixedProtocolAndNormalizesSegments(t *testing.T) {
 	segment := result.Segments[0]
 	if segment.Text != "测试" || segment.StartSample != 0 || segment.EndSample != 16000 || segment.SpeakerID != "1" {
 		t.Fatalf("分句映射错误：%+v", segment)
+	}
+}
+
+// TestParseResponse_NormalizesOfficialSpeakerFields 验证官方字段、历史字段与无标签响应的兼容语义。
+func TestParseResponse_NormalizesOfficialSpeakerFields(t *testing.T) {
+	t.Parallel()
+	request := port.FileTranscriptionRequest{SampleRate: 16000, AudioStartSample: 0, AudioEndSample: 48000}
+	response := &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{"X-Api-Status-Code": []string{"20000000"}},
+		Body: io.NopCloser(strings.NewReader(`{"result":{"utterances":[
+			{"text":"数字","start_time":0,"end_time":1000,"speaker_id":"legacy","additions":{"speaker":1}},
+			{"text":"字符串","start_time":1000,"end_time":2000,"additions":{"speaker":"2"}},
+			{"text":"兼容","start_time":2000,"end_time":3000,"speaker_id":3}
+		]}}`)),
+	}
+	result, err := parseResponse(response, request)
+	if err != nil {
+		t.Fatalf("解析官方 speaker 字段失败：%v", err)
+	}
+	if got := []string{result.Segments[0].SpeakerID, result.Segments[1].SpeakerID, result.Segments[2].SpeakerID}; strings.Join(got, ",") != "1,2,3" {
+		t.Fatalf("speaker 归一化错误：%v", got)
+	}
+
+	response = &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{"X-Api-Status-Code": []string{"20000000"}},
+		Body:       io.NopCloser(strings.NewReader(`{"result":{"utterances":[{"text":"无标签","start_time":0,"end_time":1000}]}}`)),
+	}
+	result, err = parseResponse(response, port.FileTranscriptionRequest{SampleRate: 16000, AudioStartSample: 0, AudioEndSample: 16000})
+	if err != nil || result.Segments[0].SpeakerID != "" {
+		t.Fatalf("无标签不得伪造 speaker：result=%+v err=%v", result, err)
 	}
 }
 

@@ -20,13 +20,6 @@ type DeletionPreviewDTO struct {
 	SizeBytes      int64  `json:"size_bytes"`
 }
 
-// DeleteRecordingDTO 只提交会议和预览事实，不接受路径列表。
-type DeleteRecordingDTO struct {
-	MeetingID string `json:"meeting_id"`
-	Revision  int64  `json:"revision"`
-	Digest    string `json:"digest"`
-}
-
 // DeleteMeetingDTO 额外包含用户手工输入的会议号。
 type DeleteMeetingDTO struct {
 	MeetingID string `json:"meeting_id"`

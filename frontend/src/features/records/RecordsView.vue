@@ -3,12 +3,15 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import type { MeetingSummary } from '../../stores/query'
 import { useQueryStore } from '../../stores/query'
+import MeetingDeleteDialog from '../deletion/MeetingDeleteDialog.vue'
 
 const route = useRoute()
 const router = useRouter()
 const query = useQueryStore()
 const search = ref(String(route.query.search ?? ''))
 const status = ref(String(route.query.status ?? ''))
+const deleteOpen = ref(false)
+const selectedMeeting = ref<MeetingSummary>()
 const pageNumber = computed(() =>
   Math.max(1, Number(route.query.page ?? 1) || 1),
 )
@@ -18,9 +21,9 @@ const statusLabels: Record<string, string> = {
   recovery_required: '需要恢复',
   gap_conflict: '缺口冲突',
   gap_pending: '补转写处理中',
-  minute_candidate: '纪要待确认',
+  minute_candidate: '纪要已生成',
   agent_unsynced: 'Codex 未同步',
-  minute_confirmed: '纪要已确认',
+  minute_confirmed: '纪要已生成',
   saved: '本地已保存',
 }
 
@@ -69,21 +72,38 @@ function turnPage(cursor: string, direction: -1 | 1): void {
   })
 }
 
-/** runPrimaryAction 只解释后端动作种类，不重新解释会议状态。 */
-function runPrimaryAction(item: MeetingSummary): void {
-  const action = item.primary_action
-  if (!action.enabled) return
+/** openMeeting 打开会议内容；删除任务统一进入恢复页。 */
+function openMeeting(item: MeetingSummary): void {
   const meeting = `/meetings/${item.id}`
-  const targets: Record<string, string> = {
-    deletion_recovery: `${meeting}/delete-recovery`,
-    recover_meeting: `${meeting}/recovery`,
-    resolve_gap: `${meeting}/gaps/${action.target_id}`,
-    open_gap: `${meeting}/gaps/${action.target_id}`,
-    confirm_minutes: `${meeting}/minutes`,
-    open_meeting: meeting,
+  void router.push(
+    item.highest_status === 'deleting' ? `${meeting}/delete-recovery` : meeting,
+  )
+}
+
+/** openDelete 打开当前行的整场会议删除确认。 */
+function openDelete(item: MeetingSummary): void {
+  if (!item.can_delete_meeting) return
+  selectedMeeting.value = item
+  deleteOpen.value = true
+}
+
+/** handleDeleted 删除完成后保留筛选条件刷新当前页。 */
+async function handleDeleted(): Promise<void> {
+  const previousCursor = query.previousCursor
+  deleteOpen.value = false
+  selectedMeeting.value = undefined
+  await reload()
+  if (!query.meetings.length && pageNumber.value > 1 && previousCursor) {
+    turnPage(previousCursor, -1)
   }
-  const target = targets[action.kind]
-  if (target) void router.push(target)
+}
+
+/** handleDeleteFailed 跳转到当前会议的删除恢复页。 */
+function handleDeleteFailed(): void {
+  const meetingID = selectedMeeting.value?.id
+  deleteOpen.value = false
+  selectedMeeting.value = undefined
+  if (meetingID) void router.push(`/meetings/${meetingID}/delete-recovery`)
 }
 
 /** statusClass 返回已确认状态色，不承担动作决策。 */
@@ -150,9 +170,7 @@ watch(() => route.fullPath, reload)
           <option value="recovery_required">需要恢复</option>
           <option value="gap_conflict">缺口冲突</option>
           <option value="gap_pending">补转写处理中</option>
-          <option value="minute_candidate">纪要待确认</option>
           <option value="agent_unsynced">Codex 未同步</option>
-          <option value="minute_confirmed">纪要已确认</option>
           <option value="saved">本地已保存</option>
           <option value="deleting">删除处理中</option>
         </select></label
@@ -192,16 +210,24 @@ watch(() => route.fullPath, reload)
               :class="statusClass(item.highest_status)"
               >{{ statusLabels[item.highest_status] || '状态未知' }}</span
             >
-            <button
-              data-primary-action
-              class="ms-button ms-button--quiet ms-record-action"
-              type="button"
-              :disabled="!item.primary_action.enabled"
-              :title="item.primary_action.disabled_reason"
-              @click="runPrimaryAction(item)"
-            >
-              {{ item.primary_action.label }}
-            </button>
+            <div class="ms-record-actions">
+              <button
+                class="ms-button ms-button--quiet"
+                type="button"
+                @click="openMeeting(item)"
+              >
+                打开
+              </button>
+              <button
+                class="ms-button ms-button--danger"
+                type="button"
+                :disabled="!item.can_delete_meeting"
+                :title="item.delete_disabled_reason"
+                @click="openDelete(item)"
+              >
+                删除
+              </button>
+            </div>
           </li>
         </ul>
         <div v-else class="ms-empty-state">
@@ -209,7 +235,7 @@ watch(() => route.fullPath, reload)
           <p>调整搜索或状态筛选后再试。</p>
         </div>
       </div>
-      <div class="ms-records-pagination">
+      <div class="ms-records-pagination ms-cursor-pagination">
         <button
           class="ms-button ms-button--quiet"
           type="button"
@@ -231,5 +257,14 @@ watch(() => route.fullPath, reload)
         </button>
       </div>
     </section>
+    <MeetingDeleteDialog
+      v-if="selectedMeeting"
+      v-model:open="deleteOpen"
+      :meeting-id="selectedMeeting.id"
+      :meeting-no="selectedMeeting.meeting_no"
+      :subject="selectedMeeting.subject"
+      @deleted="handleDeleted"
+      @failed="handleDeleteFailed"
+    />
   </div>
 </template>

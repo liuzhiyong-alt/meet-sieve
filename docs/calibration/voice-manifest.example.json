@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "profile_id": "campplus-1.0.0-ms1-YYYYMMDD",
+  "calibration_record": "docs/calibration/voice-campplus-1.0.0-ms1-YYYYMMDD.md",
+  "evidence": {
+    "min_evidence_ms": 0,
+    "target_evidence_ms": 0
+  },
+  "identity": {
+    "min_score": 0,
+    "min_margin": 0
+  },
+  "unknown_cluster": {
+    "min_score": 0,
+    "min_margin": 0
+  },
+  "samples": [
+    {
+      "speaker_id": "speaker-a",
+      "session_id": "speaker-a-enrollment",
+      "role": "enrollment",
+      "path": "data/speaker-a-enrollment.wav"
+    },
+    {
+      "speaker_id": "speaker-a",
+      "session_id": "speaker-a-evaluation",
+      "role": "evaluation",
+      "path": "data/speaker-a-evaluation-1.wav"
+    },
+    {
+      "speaker_id": "speaker-a",
+      "session_id": "speaker-a-evaluation",
+      "role": "evaluation",
+      "path": "data/speaker-a-evaluation-2.wav"
+    },
+    {
+      "speaker_id": "speaker-b",
+      "session_id": "speaker-b-enrollment",
+      "role": "enrollment",
+      "path": "data/speaker-b-enrollment.wav"
+    },
+    {
+      "speaker_id": "speaker-b",
+      "session_id": "speaker-b-evaluation",
+      "role": "evaluation",
+      "path": "data/speaker-b-evaluation-1.wav"
+    },
+    {
+      "speaker_id": "speaker-b",
+      "session_id": "speaker-b-evaluation",
+      "role": "evaluation",
+      "path": "data/speaker-b-evaluation-2.wav"
+    }
+  ]
+}

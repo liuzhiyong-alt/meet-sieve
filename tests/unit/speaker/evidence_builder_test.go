@@ -34,7 +34,7 @@ func TestEvidenceBuilder_SortsConcatenatesAndCapsTarget(t *testing.T) {
 		{ID: "second", ASRSessionID: "session", SpeakerLabel: "speaker-1", FinalSeq: 2, StartSample: 32, EndSample: 64},
 		{ID: "first", ASRSessionID: "session", SpeakerLabel: "speaker-1", FinalSeq: 1, StartSample: 0, EndSample: 32},
 	}
-	result, err := builder.Build(context.Background(), "meeting", "session", "speaker-1", utterances, 1, 3, false)
+	result, err := builder.Build(context.Background(), "meeting", "session", "speaker-1", "", utterances, 1, 3, false)
 	if err != nil {
 		t.Fatalf("构造证据失败：%v", err)
 	}
@@ -55,7 +55,7 @@ func TestEvidenceBuilder_ExcludesPositiveOverlapAcrossLabels(t *testing.T) {
 		{ID: "other", ASRSessionID: "session", SpeakerLabel: "speaker-2", FinalSeq: 2, StartSample: 16, EndSample: 48},
 		{ID: "safe", ASRSessionID: "session", SpeakerLabel: "speaker-1", FinalSeq: 3, StartSample: 48, EndSample: 80},
 	}
-	result, err := builder.Build(context.Background(), "meeting", "session", "speaker-1", utterances, 1, 2, true)
+	result, err := builder.Build(context.Background(), "meeting", "session", "speaker-1", "", utterances, 1, 2, true)
 	if err != nil {
 		t.Fatalf("构造重叠证据失败：%v", err)
 	}
@@ -74,14 +74,14 @@ func TestEvidenceBuilder_DistinguishesPendingAndInsufficient(t *testing.T) {
 	}
 	pendingReader := &deterministicAudioReader{pending: true}
 	result, err := speakerservice.NewEvidenceBuilder(pendingReader).Build(
-		context.Background(), "meeting", "session", "speaker-1", utterances, 1, 2, false,
+		context.Background(), "meeting", "session", "speaker-1", "", utterances, 1, 2, false,
 	)
 	if err != nil || result.State != speakerservice.EvidencePending {
 		t.Fatalf("音频未 ready 状态错误：result=%+v err=%v", result, err)
 	}
 	readyReader := &deterministicAudioReader{}
 	result, err = speakerservice.NewEvidenceBuilder(readyReader).Build(
-		context.Background(), "meeting", "session", "speaker-1", utterances, 2, 3, true,
+		context.Background(), "meeting", "session", "speaker-1", "", utterances, 2, 3, true,
 	)
 	if err != nil || result.State != speakerservice.EvidenceInsufficient {
 		t.Fatalf("收尾证据不足状态错误：result=%+v err=%v", result, err)
@@ -91,7 +91,7 @@ func TestEvidenceBuilder_DistinguishesPendingAndInsufficient(t *testing.T) {
 // TestEvidenceBuilder_PropagatesUnsafeAudio 验证不把不安全资产降级为 pending 后无限重试。
 func TestEvidenceBuilder_PropagatesUnsafeAudio(t *testing.T) {
 	reader := failingEvidenceReader{err: speakerservice.ErrAudioAssetUnsafe}
-	_, err := speakerservice.NewEvidenceBuilder(reader).Build(context.Background(), "meeting", "session", "speaker-1", []speakerservice.EvidenceUtterance{
+	_, err := speakerservice.NewEvidenceBuilder(reader).Build(context.Background(), "meeting", "session", "speaker-1", "", []speakerservice.EvidenceUtterance{
 		{ID: "one", ASRSessionID: "session", SpeakerLabel: "speaker-1", FinalSeq: 1, StartSample: 0, EndSample: 16},
 	}, 1, 1, true)
 	if !errors.Is(err, speakerservice.ErrAudioAssetUnsafe) {

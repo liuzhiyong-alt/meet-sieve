@@ -28,6 +28,20 @@ func TestParseMatchingProfile_AcceptsStrictTemporaryProfile(t *testing.T) {
 	}
 }
 
+// TestParseMatchingProfile_RequiresContinuityForSchemaV2 验证正式 v2 档案必须完整携带短窗路由门禁。
+func TestParseMatchingProfile_RequiresContinuityForSchemaV2(t *testing.T) {
+	valid := strings.Replace(validProfileJSON(), `"schema_version":1`, `"schema_version":2`, 1)
+	valid = strings.Replace(valid, `,"calibration_record"`, `,"continuity":{"window_ms":3000,"hop_ms":3000,"min_score":0.47,"min_margin":0.21},"calibration_record"`, 1)
+	profile, err := speakerdomain.ParseMatchingProfile([]byte(valid), expectedModel)
+	if err != nil || profile.Continuity == nil || profile.Continuity.WindowMS != 3000 {
+		t.Fatalf("解析 v2 continuity 档案失败：profile=%+v err=%v", profile, err)
+	}
+	missing := strings.Replace(valid, `,"continuity":{"window_ms":3000,"hop_ms":3000,"min_score":0.47,"min_margin":0.21}`, "", 1)
+	if _, err := speakerdomain.ParseMatchingProfile([]byte(missing), expectedModel); err == nil {
+		t.Fatal("schema v2 缺少 continuity 必须被拒绝")
+	}
+}
+
 // TestParseMatchingProfile_RejectsInvalidContracts 验证未知、重复、缺失、越界和尾随字段均被拒绝。
 func TestParseMatchingProfile_RejectsInvalidContracts(t *testing.T) {
 	tests := map[string]string{

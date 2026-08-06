@@ -15,6 +15,9 @@ AGENTS.md
 .cache/
 frontend/node_modules/
 frontend/dist/
+cmd/meetsieve/frontend/dist/*
+!cmd/meetsieve/frontend/dist/.gitkeep
 .pnpm-store/
+.local/voice-calibration/
 build/bin/
 build/windows/installer/tmp/

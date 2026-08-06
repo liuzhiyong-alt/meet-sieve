@@ -102,6 +102,8 @@ type CorrectionEntryDTO struct {
 	SpeakerDisplay           string `json:"speaker_display"`
 	CurrentParticipantID     string `json:"current_participant_id,omitempty"`
 	SpeakerClusterID         string `json:"speaker_cluster_id,omitempty"`
+	ClusterDisplayNo         int    `json:"cluster_display_no,omitempty"`
+	ClusterParticipantID     string `json:"cluster_participant_id,omitempty"`
 	AssignmentSource         string `json:"assignment_source"`
 	TextRevision             int    `json:"text_revision"`
 	SpeakerRevision          int    `json:"speaker_revision"`
@@ -422,7 +424,7 @@ func mapCorrectionPage(value correctionservice.Page) CorrectionPageDTO {
 
 // mapCorrectionEntry 转换单条安全投影。
 func mapCorrectionEntry(entry correctionservice.Entry) CorrectionEntryDTO {
-	return CorrectionEntryDTO{Seq: entry.Seq, UtteranceID: entry.UtteranceID, StartSample: entry.StartSample, EndSample: entry.EndSample, OriginalText: entry.OriginalText, CurrentText: entry.CurrentText, SpeakerDisplay: entry.SpeakerDisplay, CurrentParticipantID: entry.CurrentParticipantID, SpeakerClusterID: entry.SpeakerClusterID, AssignmentSource: entry.AssignmentSource, TextRevision: entry.TextRevision, SpeakerRevision: entry.SpeakerRevision, ClusterRevision: entry.ClusterRevision, ClusterCount: entry.ClusterCount, CanPlay: entry.CanPlay, PlaybackDisabledReason: entry.PlaybackDisabledReason, CanEnroll: entry.CanEnroll, EnrollmentDisabledReason: entry.EnrollmentDisabledReason}
+	return CorrectionEntryDTO{Seq: entry.Seq, UtteranceID: entry.UtteranceID, StartSample: entry.StartSample, EndSample: entry.EndSample, OriginalText: entry.OriginalText, CurrentText: entry.CurrentText, SpeakerDisplay: entry.SpeakerDisplay, CurrentParticipantID: entry.CurrentParticipantID, SpeakerClusterID: entry.SpeakerClusterID, ClusterDisplayNo: entry.ClusterDisplayNo, ClusterParticipantID: entry.ClusterParticipantID, AssignmentSource: entry.AssignmentSource, TextRevision: entry.TextRevision, SpeakerRevision: entry.SpeakerRevision, ClusterRevision: entry.ClusterRevision, ClusterCount: entry.ClusterCount, CanPlay: entry.CanPlay, PlaybackDisabledReason: entry.PlaybackDisabledReason, CanEnroll: entry.CanEnroll, EnrollmentDisabledReason: entry.EnrollmentDisabledReason}
 }
 
 var _ correctionservice.MeetingVoiceEnrollment = (*voiceservice.VoiceEnrollmentService)(nil)

@@ -9,8 +9,8 @@ import (
 )
 
 const (
-	// DefaultEndpoint 是火山大模型双向流式 Seed ASR 的固定入口。
-	DefaultEndpoint = "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel"
+	// DefaultEndpoint 是火山大模型优化双向流式 Seed ASR 的固定入口。
+	DefaultEndpoint = "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async"
 	// DefaultResourceID 是当前方案使用的豆包流式识别时长版资源。
 	DefaultResourceID = "volc.seedasr.sauc.duration"
 )

@@ -5,9 +5,11 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
+	"meet-sieve/internal/infra/apperr"
 	"meet-sieve/internal/infra/clock"
 	"meet-sieve/internal/infra/database"
 	"meet-sieve/internal/infra/identity"
@@ -47,6 +49,43 @@ func TestGenerationService_CommitsOnlyValidatedOutput(t *testing.T) {
 	}
 }
 
+// TestGenerationService_UsesConfiguredPrompt 验证设置页要求进入实际 Codex 纪要输入。
+func TestGenerationService_UsesConfiguredPrompt(t *testing.T) {
+	db, repository := openMinutesDatabase(t)
+	prepareMinuteFact(t, db)
+	if err := db.Exec(`INSERT INTO settings (id, singleton_key, minute_prompt, created_at, updated_at)
+		VALUES ('45454545-4545-4545-8545-454545454545', 1, '优先列出风险与负责人', 0, 0)`).Error; err != nil {
+		t.Fatalf("准备会议纪要设置失败：%v", err)
+	}
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "meetings", "m"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	provider := &minutesProvider{}
+	appClock := clock.NewFixed(time.UnixMilli(100))
+	service := minutesservice.NewGenerationService(minutesservice.GenerationDependencies{
+		Repository: repository, AgentRepository: agentrepository.NewRepository(db, database.NewTransactionManager(db)), Facts: repository,
+		Provider: provider, RawRecord: minutesFlusher{}, Projector: minutesservice.NewMinuteProjector(repository, root),
+		IDs: identity.NewFixedGenerator("46464646-4646-4646-8646-464646464646", "47474747-4747-4747-8747-474747474747"), Clock: appClock,
+		Settings: minutesservice.NewSettingsService(repository, appClock),
+	})
+
+	if _, err := service.Generate(context.Background(), minutesservice.GenerateInput{MeetingID: meetingID, RequestID: "custom-prompt"}); err != nil {
+		t.Fatalf("使用自定义要求生成失败：%v", err)
+	}
+	for _, expected := range []string{
+		"固定系统约束",
+		"不得读取会议目录或其他文件补充事实",
+		"用户业务要求",
+		"优先列出风险与负责人",
+		"本次会议白名单事实",
+	} {
+		if !strings.Contains(provider.lastInput, expected) {
+			t.Fatalf("Codex 输入缺少 %q：%s", expected, provider.lastInput)
+		}
+	}
+}
+
 // TestGenerationService_InvalidOutputCreatesNoVersion 验证非法最终输出保留旧状态且不创建版本。
 func TestGenerationService_InvalidOutputCreatesNoVersion(t *testing.T) {
 	db, repository := openMinutesDatabase(t)
@@ -60,6 +99,28 @@ func TestGenerationService_InvalidOutputCreatesNoVersion(t *testing.T) {
 	if err := db.Model(&models.MinuteVersion{}).Count(&count).Error; err != nil || count != 0 {
 		t.Fatalf("非法输出不得创建版本：count=%d err=%v", count, err)
 	}
+}
+
+// TestGenerationService_ProviderFailureKeepsStableCode 验证 provider 失败不会退化成系统内部错误。
+func TestGenerationService_ProviderFailureKeepsStableCode(t *testing.T) {
+	db, repository := openMinutesDatabase(t)
+	prepareMinuteFact(t, db)
+	service := newTestGenerationService(t, db, repository, &failedMinutesProvider{}, time.Minute)
+
+	_, err := service.Generate(context.Background(), minutesservice.GenerateInput{MeetingID: meetingID, RequestID: "provider-failed"})
+	appErr := apperr.Normalize(err)
+	if appErr.ErrorCode != apperr.CodeAgentInitializeFailed.ErrorCode {
+		t.Fatalf("provider 失败码错误：got %s, want %s", appErr.ErrorCode, apperr.CodeAgentInitializeFailed.ErrorCode)
+	}
+
+	var turn models.AgentTurn
+	if err := db.Where("meeting_id = ? AND kind = 'minutes'", meetingID).Order("created_at DESC").Take(&turn).Error; err != nil {
+		t.Fatalf("读取失败 turn：%v", err)
+	}
+	if turn.LastErrorCode == nil || *turn.LastErrorCode != apperr.CodeAgentInitializeFailed.ErrorCode {
+		t.Fatalf("持久化失败码错误：%v", turn.LastErrorCode)
+	}
+	assertNoMinutesVersion(t, db)
 }
 
 // TestGenerationService_TimeoutAndStopCreateNoVersion 验证超时与主持人停止都收敛 turn 且不创建版本。
@@ -145,10 +206,13 @@ func prepareMinuteFact(t *testing.T, db *gorm.DB) {
 	}
 }
 
-type minutesProvider struct{}
+type minutesProvider struct {
+	lastInput string
+}
 
 // RunTurn 返回引用真实 seq 的结构化纪要。
 func (provider *minutesProvider) RunTurn(_ context.Context, request port.RunAgentTurnRequest) (<-chan port.AgentEvent, error) {
+	provider.lastInput = request.Input
 	events := make(chan port.AgentEvent, 3)
 	events <- port.AgentEvent{Type: port.AgentEventTurnStarted, ProviderTurnID: "minutes-provider-turn"}
 	events <- port.AgentEvent{Type: port.AgentEventFinalOutput, FinalOutput: &port.AgentFinalOutput{JSON: []byte(`{"v":1,"conclusions":[{"text":"确认发布","source_seq":[1]}],"topics":[],"tasks":[],"references":[],"gap_notice":[]}`)}}
@@ -182,6 +246,17 @@ func (*invalidMinutesProvider) RunTurn(context.Context, port.RunAgentTurnRequest
 	events <- port.AgentEvent{Type: port.AgentEventTurnStarted, ProviderTurnID: "invalid-turn"}
 	events <- port.AgentEvent{Type: port.AgentEventFinalOutput, FinalOutput: &port.AgentFinalOutput{JSON: []byte(`{"v":1,"unknown":true}`)}}
 	events <- port.AgentEvent{Type: port.AgentEventCompleted}
+	close(events)
+	return events, nil
+}
+
+type failedMinutesProvider struct{ minutesProvider }
+
+// RunTurn 模拟 Codex 在结构化输出请求阶段返回稳定失败事件。
+func (*failedMinutesProvider) RunTurn(context.Context, port.RunAgentTurnRequest) (<-chan port.AgentEvent, error) {
+	events := make(chan port.AgentEvent, 2)
+	events <- port.AgentEvent{Type: port.AgentEventTurnStarted, ProviderTurnID: "failed-turn"}
+	events <- port.AgentEvent{Type: port.AgentEventFailed, FailureCode: apperr.CodeAgentInitializeFailed.ErrorCode}
 	close(events)
 	return events, nil
 }

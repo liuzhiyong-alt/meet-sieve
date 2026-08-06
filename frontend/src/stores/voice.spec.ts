@@ -65,4 +65,22 @@ describe('voice store', () => {
     expect(store.selectedFileName).toBe('')
     expect(store.errorMessage).toBe('WAV 文件不符合要求')
   })
+
+  it('录音处理完成后明确显示已保存并清理临时计时', async () => {
+    bindings.StopVoiceRecording.mockResolvedValue({ code: 200, data: true })
+    bindings.ListVoiceSamples.mockResolvedValue({
+      code: 200,
+      data: [{ id: 'sample-1', processing_state: 'ready' }],
+    })
+    const store = useVoiceStore()
+    store.memberId = 'member-1'
+    store.recording = true
+    store.recordingDurationMS = 30000
+
+    expect(await store.stopRecording()).toBe(true)
+
+    expect(store.samples).toHaveLength(1)
+    expect(store.recordingDurationMS).toBe(0)
+    expect(store.notice).toBe('声纹样本已保存到本机。')
+  })
 })

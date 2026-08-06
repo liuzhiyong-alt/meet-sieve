@@ -27,12 +27,13 @@ const (
 
 // EvidenceUtterance 是证据构造所需的 final 转写最小投影。
 type EvidenceUtterance struct {
-	ID           string
-	ASRSessionID string
-	SpeakerLabel string
-	FinalSeq     int64
-	StartSample  int64
-	EndSample    int64
+	ID             string
+	SpeakerTrackID string
+	ASRSessionID   string
+	SpeakerLabel   string
+	FinalSeq       int64
+	StartSample    int64
+	EndSample      int64
 }
 
 // EvidenceItem 记录一条 utterance 是否进入 embedding 及实际使用范围。
@@ -75,6 +76,7 @@ func (builder *EvidenceBuilder) Build(
 	meetingID string,
 	sessionID string,
 	label string,
+	trackID string,
 	utterances []EvidenceUtterance,
 	minEvidenceMS int,
 	targetEvidenceMS int,
@@ -87,7 +89,8 @@ func (builder *EvidenceBuilder) Build(
 	targetSamples := int64(targetEvidenceMS) * speakerSampleRate / 1000
 	result := EvidenceResult{Samples: make([]int16, 0, targetSamples)}
 	for _, utterance := range sorted {
-		if utterance.ASRSessionID != sessionID || utterance.SpeakerLabel != label || int64(len(result.Samples)) >= targetSamples {
+		if utterance.ASRSessionID != sessionID || utterance.SpeakerLabel != label ||
+			(trackID != "" && utterance.SpeakerTrackID != trackID) || int64(len(result.Samples)) >= targetSamples {
 			continue
 		}
 		item := buildEvidenceItem(utterance, len(result.Items)+1, sorted)
@@ -115,6 +118,68 @@ func (builder *EvidenceBuilder) Build(
 	result.DurationMS = int64(len(result.Samples)) * 1000 / speakerSampleRate
 	result.State = resolveEvidenceState(result.DurationMS, minEvidenceMS, targetEvidenceMS, finalizing)
 	return result, nil
+}
+
+// BuildLocalUtterance 为无 provider 标签的单条 final 构造本地音频证据。
+// 每条 short final 独立保留，只有达到门槛才会进入匹配或未知聚类，避免伪造稳定身份。
+func (builder *EvidenceBuilder) BuildLocalUtterance(
+	ctx context.Context,
+	meetingID string,
+	sessionID string,
+	sourceUtteranceID string,
+	utterances []EvidenceUtterance,
+	minEvidenceMS int,
+	targetEvidenceMS int,
+	finalizing bool,
+) (EvidenceResult, error) {
+	if err := validateEvidenceRequest(builder, meetingID, sessionID, "local_utterance", minEvidenceMS, targetEvidenceMS); err != nil {
+		return EvidenceResult{}, err
+	}
+	for _, utterance := range sortEvidenceUtterances(utterances) {
+		if utterance.ID != sourceUtteranceID {
+			continue
+		}
+		item := buildLocalEvidenceItem(utterance, sessionID, utterances)
+		result := EvidenceResult{Items: []EvidenceItem{item}}
+		if item.OverlapRisk {
+			result.State = resolveEvidenceState(0, minEvidenceMS, targetEvidenceMS, finalizing)
+			return result, nil
+		}
+		maxSamples := int64(targetEvidenceMS) * speakerSampleRate / 1000
+		item.UsedEndSample = minInt64(utterance.EndSample, utterance.StartSample+maxSamples)
+		samples, err := builder.reader.Read(ctx, meetingID, item.UsedStartSample, item.UsedEndSample)
+		if errors.Is(err, ErrAudioEvidencePending) {
+			result.State = EvidencePending
+			return result, nil
+		}
+		if err != nil {
+			return EvidenceResult{}, err
+		}
+		if int64(len(samples)) != item.UsedEndSample-item.UsedStartSample {
+			return EvidenceResult{}, fmt.Errorf("音频读取器返回样本数不一致")
+		}
+		item.Included, result.Items[0] = true, item
+		result.Samples = samples
+		result.DurationMS = int64(len(samples)) * 1000 / speakerSampleRate
+		result.State = resolveEvidenceState(result.DurationMS, minEvidenceMS, targetEvidenceMS, finalizing)
+		return result, nil
+	}
+	return EvidenceResult{}, fmt.Errorf("本地 speaker 源 utterance 不存在")
+}
+
+// buildLocalEvidenceItem 拒绝与同一 ASR session 中任意 final 重叠的无标签音频。
+func buildLocalEvidenceItem(target EvidenceUtterance, sessionID string, all []EvidenceUtterance) EvidenceItem {
+	item := EvidenceItem{UtteranceID: target.ID, EvidenceOrder: 1, UsedStartSample: target.StartSample, UsedEndSample: target.EndSample}
+	for _, candidate := range all {
+		if candidate.ID == target.ID || candidate.ASRSessionID != sessionID {
+			continue
+		}
+		if target.StartSample < candidate.EndSample && candidate.StartSample < target.EndSample {
+			item.OverlapRisk, item.ExcludedReason = true, "overlap_risk"
+			return item
+		}
+	}
+	return item
 }
 
 // validateEvidenceRequest 校验 builder 依赖和已由 profile 限定的时长关系。

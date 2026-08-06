@@ -24,6 +24,9 @@ cp /work/.cache/third_party/extracted/windows-amd64/onnxruntime-win-x64-1.26.0/l
   /work/build/bin/windows-resources/onnxruntime.dll
 cp /work/.cache/third_party/extracted/windows-amd64/onnxruntime-win-x64-1.26.0/LICENSE \
   /work/build/bin/windows-resources/ONNXRUNTIME-LICENSE.txt
+mkdir -p /work/build/bin/windows-resources/models
+cp /work/models/voice-matching-profile.json \
+  /work/build/bin/windows-resources/models/voice-matching-profile.json
 
 cd /work/cmd/meetsieve
 

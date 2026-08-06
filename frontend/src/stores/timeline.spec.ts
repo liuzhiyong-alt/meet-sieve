@@ -69,6 +69,8 @@ describe('timeline store', () => {
     store.applyPartial({
       data: {
         meeting_id: 'meeting-1',
+        session_id: 'session-1',
+        generation: 1,
         result_id: 'result-1',
         revision: 2,
         text: '较新内容',
@@ -79,6 +81,8 @@ describe('timeline store', () => {
     store.applyPartial({
       data: {
         meeting_id: 'meeting-1',
+        session_id: 'session-1',
+        generation: 1,
         result_id: 'result-1',
         revision: 1,
         text: '旧内容',
@@ -99,5 +103,136 @@ describe('timeline store', () => {
     store.clearCommittedPartials()
 
     expect(store.orderedPartials).toHaveLength(0)
+  })
+
+  it('清除旧 session 后接受新 session 的低 revision，并拒绝旧事件复活', () => {
+    const store = useTimelineStore()
+    store.resetMeeting('meeting-1')
+    store.applyPartial({
+      data: {
+        meeting_id: 'meeting-1',
+        session_id: 'session-old',
+        generation: 1,
+        result_id: 'stream',
+        revision: 9,
+        text: '旧内容',
+        start_sample: 0,
+        end_sample: 100,
+      },
+    })
+    store.applyPartialClear({
+      data: {
+        meeting_id: 'meeting-1',
+        session_id: 'session-old',
+        generation: 1,
+      },
+    })
+    store.applyPartial({
+      data: {
+        meeting_id: 'meeting-1',
+        session_id: 'session-old',
+        generation: 1,
+        result_id: 'stream',
+        revision: 10,
+        text: '迟到旧内容',
+        start_sample: 0,
+        end_sample: 120,
+      },
+    })
+    store.applyPartial({
+      data: {
+        meeting_id: 'meeting-1',
+        session_id: 'session-new',
+        generation: 2,
+        result_id: 'stream',
+        revision: 1,
+        text: '恢复后的内容',
+        start_sample: 200,
+        end_sample: 300,
+      },
+    })
+
+    expect(store.orderedPartials.map((partial) => partial.text)).toEqual([
+      '恢复后的内容',
+    ])
+  })
+
+  it('刷新同一 seq 的更高说话人 revision，并保留已加载历史', async () => {
+    binding.GetMeetingTimeline.mockResolvedValueOnce({
+      code: 200,
+      data: {
+        entries: [
+          {
+            seq: 2,
+            kind: 'utterance',
+            occurred_at: 1,
+            source: 'asr',
+            text: '氢氧化铝抗酸剂不影响其吸收效率。',
+            speaker_label: '刘志勇',
+            speaker_revision: 2,
+          },
+        ],
+        oldest_seq: 2,
+        latest_seq: 2,
+        has_older: true,
+        has_more_after: false,
+      },
+    })
+    const store = useTimelineStore()
+    store.resetMeeting('meeting-1')
+    store.entries = [
+      {
+        seq: 1,
+        kind: 'message',
+        occurred_at: 0,
+        source: 'host',
+        text: '更早内容',
+      },
+      {
+        seq: 2,
+        kind: 'utterance',
+        occurred_at: 1,
+        source: 'asr',
+        text: '氢氧化铝抗酸剂不影响其吸收效率。',
+        speaker_label: '未知说话人 1',
+        speaker_revision: 1,
+      },
+    ]
+    store.latestCursor = 2
+    store.oldestCursor = 1
+
+    await store.refreshLatestProjection()
+
+    expect(store.entries.map((entry) => entry.seq)).toEqual([1, 2])
+    expect(store.entries[1].speaker_label).toBe('刘志勇')
+    expect(store.entries[1].speaker_revision).toBe(2)
+  })
+
+  it('拒绝较旧的说话人 revision 覆盖当前投影', () => {
+    const store = useTimelineStore()
+    store.entries = [
+      {
+        seq: 2,
+        kind: 'utterance',
+        occurred_at: 1,
+        source: 'asr',
+        speaker_label: '刘志勇',
+        speaker_revision: 3,
+      },
+    ]
+
+    store.mergeEntries([
+      {
+        seq: 2,
+        kind: 'utterance',
+        occurred_at: 1,
+        source: 'asr',
+        speaker_label: '未知说话人 1',
+        speaker_revision: 2,
+      },
+    ])
+
+    expect(store.entries[0].speaker_label).toBe('刘志勇')
+    expect(store.entries[0].speaker_revision).toBe(3)
   })
 })

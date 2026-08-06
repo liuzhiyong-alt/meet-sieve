@@ -5,7 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "pnpm typecheck && vite build && vite build --config vite.guest.config.ts",
+    "dev:wails": "pnpm build:guest && pnpm build:embed && pnpm dev",
+    "build:guest": "vite build --config vite.guest.config.ts",
+    "build:embed": "node scripts/sync-go-embed.mjs",
+    "build": "pnpm typecheck && vite build && pnpm build:guest && pnpm build:embed",
     "preview": "vite preview",
     "typecheck": "vue-tsc --noEmit",
     "test": "vitest run",

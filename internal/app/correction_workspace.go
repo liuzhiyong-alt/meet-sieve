@@ -99,10 +99,24 @@ func (workspaceServices *CorrectionWorkspaceServices) Current() (CorrectionWorks
 		evidence: speakerservice.NewEvidenceBuilder(meetingAudio), unknown: unknown, clock: currentClock,
 		onChanged: func(meetingID string, _ string) { _ = rawRecord.MarkDirty(meetingID) },
 	}
+	routingProcessor := &lazyContinuityProcessor{
+		voice: workspaceServices.voice.module, repository: speakerRepository, transactions: transactions,
+		audio: meetingAudio, clock: currentClock,
+		onRouted: func(meetingID string, _ string, _ bool) { _ = rawRecord.MarkDirty(meetingID) },
+	}
 	services := CorrectionWorkspaceBundle{
 		Query: correctionservice.NewQueryService(repository), Commands: commands, Clips: clips, MeetingClip: meetingClip,
 		RetryRawRecord: rawRecord.Flush,
 		RetrySpeaker: func(ctx context.Context, meetingID string) error {
+			evidenceIDs, retryErr := speakerRepository.ListRecoverableMeetingEvidenceIDs(ctx, meetingID, 256)
+			if retryErr != nil {
+				return retryErr
+			}
+			for _, evidenceID := range evidenceIDs {
+				if retryErr = routingProcessor.Process(ctx, evidenceID, true); retryErr != nil {
+					return retryErr
+				}
+			}
 			trackIDs, retryErr := speakerRepository.ListRecoverableMeetingTrackIDs(ctx, meetingID, 256)
 			if retryErr != nil {
 				return retryErr

@@ -31,11 +31,20 @@ export interface ASRTimelineEntry {
 
 export interface ASRPartial {
   meeting_id: string
+  session_id: string
+  generation: number
   result_id: string
   revision: number
   text: string
   start_sample: number
   end_sample: number
+}
+
+export interface ASRPartialClear {
+  meeting_id: string
+  session_id: string
+  generation: number
+  result_id?: string
 }
 
 interface AppEvent<T> {
@@ -55,6 +64,8 @@ export const useASRStore = defineStore('asr', {
     settings: { ...emptySettings },
     timeline: [] as ASRTimelineEntry[],
     partials: {} as Record<string, ASRPartial>,
+    clearedPartialSessions: {} as Record<string, number>,
+    clearedPartialResults: {} as Record<string, number>,
     meetingID: '',
     realtimeState: 'idle',
     realtimeErrorCode: '',
@@ -155,6 +166,8 @@ export const useASRStore = defineStore('asr', {
         this.meetingID = meetingID
         this.timeline = []
         this.partials = {}
+        this.clearedPartialSessions = {}
+        this.clearedPartialResults = {}
       }
       const result = await GetASRTimeline(meetingID, this.latestSeq, 200)
       if (result.code !== 200 || !result.data) {
@@ -182,13 +195,41 @@ export const useASRStore = defineStore('asr', {
       this.rawRecordState = result.data.state
       this.rawRecordErrorCode = result.data.error_code ?? ''
     },
-    /** applyPartial 只接受当前会议更高 revision，不写入持久 Timeline。 */
+    /** applyPartial 按物理 session 接受更高 revision，不写入持久 Timeline。 */
     applyPartial(event: AppEvent<ASRPartial>): void {
       const partial = event.data
       if (!partial || partial.meeting_id !== this.meetingID) return
-      const previous = this.partials[partial.result_id]
+      const key = partialKey(partial.session_id, partial.result_id)
+      if (
+        (this.clearedPartialSessions[partial.session_id] ?? -1) >=
+        partial.generation
+      )
+        return
+      if ((this.clearedPartialResults[key] ?? -1) >= partial.generation) return
+      const previous = this.partials[key]
       if (previous && previous.revision >= partial.revision) return
-      this.partials[partial.result_id] = partial
+      this.partials[key] = partial
+    },
+    /** applyPartialClear 清除 session/result，并阻止旧 generation 的迟到 partial 复活。 */
+    applyPartialClear(event: AppEvent<ASRPartialClear>): void {
+      const cleared = event.data
+      if (!cleared || cleared.meeting_id !== this.meetingID) return
+      if (cleared.result_id) {
+        const key = partialKey(cleared.session_id, cleared.result_id)
+        delete this.partials[key]
+        this.clearedPartialResults[key] = Math.max(
+          this.clearedPartialResults[key] ?? -1,
+          cleared.generation,
+        )
+        return
+      }
+      for (const [key, partial] of Object.entries(this.partials)) {
+        if (partial.session_id === cleared.session_id) delete this.partials[key]
+      }
+      this.clearedPartialSessions[cleared.session_id] = Math.max(
+        this.clearedPartialSessions[cleared.session_id] ?? -1,
+        cleared.generation,
+      )
     },
     /** applyRealtimeState 更新独立实时转写状态，状态变化后由页面补拉持久事件。 */
     applyRealtimeState(
@@ -224,4 +265,9 @@ function credentialChange(value: string): { action: string; value: string } {
   return trimmed
     ? { action: 'replace', value: trimmed }
     : { action: 'keep', value: '' }
+}
+
+/** partialKey 返回跨物理 session 唯一的临时转写键。 */
+function partialKey(sessionID: string, resultID: string): string {
+  return `${sessionID}:${resultID}`
 }

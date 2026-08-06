@@ -10,6 +10,10 @@ export function GenerateMinutes(arg1, arg2, arg3) {
   return window['go']['wails']['MinutesBinding']['GenerateMinutes'](arg1, arg2, arg3);
 }
 
+export function GetMinutesSettings() {
+  return window['go']['wails']['MinutesBinding']['GetMinutesSettings']();
+}
+
 export function GetMinutesState(arg1) {
   return window['go']['wails']['MinutesBinding']['GetMinutesState'](arg1);
 }
@@ -24,6 +28,10 @@ export function RestoreMinuteVersion(arg1, arg2, arg3) {
 
 export function SaveMinuteDraft(arg1, arg2, arg3, arg4) {
   return window['go']['wails']['MinutesBinding']['SaveMinuteDraft'](arg1, arg2, arg3, arg4);
+}
+
+export function SaveMinutesSettings(arg1) {
+  return window['go']['wails']['MinutesBinding']['SaveMinutesSettings'](arg1);
 }
 
 export function StopMinutesGeneration(arg1, arg2) {

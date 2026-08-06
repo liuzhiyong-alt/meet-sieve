@@ -45,6 +45,8 @@ type MeetingSummaryDTO struct {
 	ParticipantMemberIDs []string                `json:"participant_member_ids"`
 	HighestStatus        string                  `json:"highest_status"`
 	PrimaryAction        MeetingPrimaryActionDTO `json:"primary_action"`
+	CanDeleteMeeting     bool                    `json:"can_delete_meeting"`
+	DeleteDisabledReason string                  `json:"delete_disabled_reason,omitempty"`
 }
 
 // MeetingPageDTO 是不含总数的会议记录页。
@@ -63,31 +65,33 @@ type HomeDTO struct {
 
 // MeetingDetailDTO 是会议详情全部状态轴和能力投影。
 type MeetingDetailDTO struct {
-	Summary            MeetingSummaryDTO `json:"summary"`
-	CanPlayAudio       bool              `json:"can_play_audio"`
-	CanRetranscribe    bool              `json:"can_retranscribe"`
-	CanDeleteRecording bool              `json:"can_delete_recording"`
-	CanDeleteMeeting   bool              `json:"can_delete_meeting"`
-	DisabledReason     string            `json:"disabled_reason,omitempty"`
+	Summary          MeetingSummaryDTO `json:"summary"`
+	CanPlayAudio     bool              `json:"can_play_audio"`
+	CanRetranscribe  bool              `json:"can_retranscribe"`
+	CanDeleteMeeting bool              `json:"can_delete_meeting"`
+	DisabledReason   string            `json:"disabled_reason,omitempty"`
 }
 
 // TranscriptItemDTO 是原始记录的有限事实投影。
 type TranscriptItemDTO struct {
-	Seq         int64  `json:"seq"`
-	Kind        string `json:"kind"`
-	OccurredAt  int64  `json:"occurred_at"`
-	Text        string `json:"text,omitempty"`
-	SpeakerName string `json:"speaker_name,omitempty"`
-	StartSample int64  `json:"start_sample,omitempty"`
-	EndSample   int64  `json:"end_sample,omitempty"`
+	Seq            int64  `json:"seq"`
+	Kind           string `json:"kind"`
+	OccurredAt     int64  `json:"occurred_at"`
+	Text           string `json:"text,omitempty"`
+	SpeakerName    string `json:"speaker_name,omitempty"`
+	SpeakerDisplay string `json:"speaker_display,omitempty"`
+	StartSample    int64  `json:"start_sample,omitempty"`
+	EndSample      int64  `json:"end_sample,omitempty"`
 }
 
 // TranscriptPageDTO 是原始记录 seq 页。
 type TranscriptPageDTO struct {
-	Items     []TranscriptItemDTO `json:"items"`
-	HasMore   bool                `json:"has_more"`
-	AfterSeq  int64               `json:"after_seq,omitempty"`
-	BeforeSeq int64               `json:"before_seq,omitempty"`
+	Items       []TranscriptItemDTO `json:"items"`
+	HasMore     bool                `json:"has_more"`
+	HasPrevious bool                `json:"has_previous"`
+	HasNext     bool                `json:"has_next"`
+	AfterSeq    int64               `json:"after_seq,omitempty"`
+	BeforeSeq   int64               `json:"before_seq,omitempty"`
 }
 
 // ContentItemDTO 是消息、附件、链接或公开 AI 回答投影。
@@ -107,10 +111,12 @@ type ContentItemDTO struct {
 
 // ContentPageDTO 是会议内容 seq 页。
 type ContentPageDTO struct {
-	Items     []ContentItemDTO `json:"items"`
-	HasMore   bool             `json:"has_more"`
-	AfterSeq  int64            `json:"after_seq,omitempty"`
-	BeforeSeq int64            `json:"before_seq,omitempty"`
+	Items       []ContentItemDTO `json:"items"`
+	HasMore     bool             `json:"has_more"`
+	HasPrevious bool             `json:"has_previous"`
+	HasNext     bool             `json:"has_next"`
+	AfterSeq    int64            `json:"after_seq,omitempty"`
+	BeforeSeq   int64            `json:"before_seq,omitempty"`
 }
 
 // InterruptedRecoveryDTO 是中断恢复入口的稳定摘要。
@@ -142,6 +148,7 @@ func mapMeetingSummaryDTO(row queryservice.MeetingSummary) MeetingSummaryDTO {
 			Kind: row.PrimaryAction.Kind, Label: row.PrimaryAction.Label, TargetID: row.PrimaryAction.TargetID,
 			Enabled: row.PrimaryAction.Enabled, DisabledReason: row.PrimaryAction.DisabledReason,
 		},
+		CanDeleteMeeting: row.CanDeleteMeeting, DeleteDisabledReason: row.DeleteDisabledReason,
 	}
 }
 

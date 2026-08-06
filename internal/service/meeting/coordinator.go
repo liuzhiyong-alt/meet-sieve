@@ -40,20 +40,84 @@ type PersistedPCMFrameHandler func(frame port.AudioFrame)
 
 // recordingSession 保存一次活动录音的退出信号和完成分片。
 type recordingSession struct {
-	stream         port.AudioStream
-	recorder       *SegmentRecorder
-	cancel         context.CancelFunc
-	done           chan struct{}
-	segments       []CompletedSegment
-	err            error
-	stopOnce       sync.Once
-	stopSegments   []CompletedSegment
-	stopErr        error
-	segmentHandler CompletedSegmentHandler
-	failureHandler RecordingFailureHandler
-	frameHandler   PersistedPCMFrameHandler
-	activate       chan struct{}
-	activateOnce   sync.Once
+	stream          port.AudioStream
+	recorder        *SegmentRecorder
+	cancel          context.CancelFunc
+	done            chan struct{}
+	segments        []CompletedSegment
+	err             error
+	stopOnce        sync.Once
+	stopSegments    []CompletedSegment
+	stopErr         error
+	segmentHandler  CompletedSegmentHandler
+	failureHandler  RecordingFailureHandler
+	frameHandler    PersistedPCMFrameHandler
+	activate        chan struct{}
+	activateOnce    sync.Once
+	control         chan recordingControl
+	paused          bool
+	pauseOwner      string
+	pauseBoundary   RecordingPauseBoundary
+	discarded       int64
+	pauseDiscarded  int64
+	lastResumeOwner string
+	lastResume      RecordingResumeBoundary
+}
+
+// RecordingPauseBoundary 是录音 runner 已确认停止写入的完整帧边界。
+type RecordingPauseBoundary struct {
+	LogicalSample  int64
+	PhysicalSample int64
+}
+
+// RecordingResumeBoundary 是恢复写入时的物理边界和累计丢弃样本。
+type RecordingResumeBoundary struct {
+	LogicalSample    int64
+	PhysicalSample   int64
+	DiscardedSamples int64
+}
+
+type recordingControlKind string
+
+const (
+	recordingControlPause    recordingControlKind = "pause"
+	recordingControlResume   recordingControlKind = "resume"
+	recordingControlBoundary recordingControlKind = "boundary"
+)
+
+type recordingControl struct {
+	kind     recordingControlKind
+	ownerID  string
+	response chan recordingControlResult
+}
+
+// Boundary 在完整 PCM 帧边界读取当前连续录音位置，不改变录音写入状态。
+func (coordinator *RecordingCoordinator) Boundary(ctx context.Context) (RecordingPauseBoundary, error) {
+	if coordinator == nil || ctx == nil {
+		return RecordingPauseBoundary{}, fmt.Errorf("读取会议录音边界参数无效")
+	}
+	session, err := coordinator.activeSession()
+	if err != nil {
+		return RecordingPauseBoundary{}, err
+	}
+	response := make(chan recordingControlResult, 1)
+	if err := sendRecordingControl(ctx, session, recordingControl{kind: recordingControlBoundary, response: response}); err != nil {
+		return RecordingPauseBoundary{}, err
+	}
+	select {
+	case result := <-response:
+		return result.pause, result.err
+	case <-session.done:
+		return RecordingPauseBoundary{}, fmt.Errorf("录音已停止，无法读取边界")
+	case <-ctx.Done():
+		return RecordingPauseBoundary{}, ctx.Err()
+	}
+}
+
+type recordingControlResult struct {
+	pause  RecordingPauseBoundary
+	resume RecordingResumeBoundary
+	err    error
 }
 
 // SetPersistedPCMFrameHandler 在录音开始前设置实时转写的非阻塞旁路。
@@ -174,6 +238,7 @@ func (coordinator *RecordingCoordinator) Start(ctx context.Context, deviceID str
 		segmentHandler: coordinator.segmentHandler, failureHandler: coordinator.failureHandler,
 		frameHandler: coordinator.frameHandler,
 		activate:     make(chan struct{}),
+		control:      make(chan recordingControl, 4),
 	}
 	handlePersistedPCMFrame(session.frameHandler, firstFrame)
 	coordinator.mu.Lock()
@@ -185,6 +250,76 @@ func (coordinator *RecordingCoordinator) Start(ctx context.Context, deviceID str
 	committed = true
 	go coordinator.awaitActivation(sessionContext, session)
 	return nil
+}
+
+// Pause 在下一条完整物理帧写入前关闭录音门；同一 owner 重试幂等。
+func (coordinator *RecordingCoordinator) Pause(ctx context.Context, ownerID string) (RecordingPauseBoundary, error) {
+	if coordinator == nil || ctx == nil || ownerID == "" {
+		return RecordingPauseBoundary{}, fmt.Errorf("暂停会议录音参数无效")
+	}
+	session, err := coordinator.activeSession()
+	if err != nil {
+		return RecordingPauseBoundary{}, err
+	}
+	response := make(chan recordingControlResult, 1)
+	request := recordingControl{kind: recordingControlPause, ownerID: ownerID, response: response}
+	if err = sendRecordingControl(ctx, session, request); err != nil {
+		return RecordingPauseBoundary{}, err
+	}
+	select {
+	case result := <-response:
+		return result.pause, result.err
+	case <-session.done:
+		return RecordingPauseBoundary{}, fmt.Errorf("录音已停止，无法确认暂停")
+	case <-ctx.Done():
+		return RecordingPauseBoundary{}, ctx.Err()
+	}
+}
+
+// Resume 在下一条完整物理帧写入前恢复录音门，并返回累计丢弃样本。
+func (coordinator *RecordingCoordinator) Resume(ctx context.Context, ownerID string) (RecordingResumeBoundary, error) {
+	if coordinator == nil || ctx == nil || ownerID == "" {
+		return RecordingResumeBoundary{}, fmt.Errorf("恢复会议录音参数无效")
+	}
+	session, err := coordinator.activeSession()
+	if err != nil {
+		return RecordingResumeBoundary{}, err
+	}
+	response := make(chan recordingControlResult, 1)
+	request := recordingControl{kind: recordingControlResume, ownerID: ownerID, response: response}
+	if err = sendRecordingControl(ctx, session, request); err != nil {
+		return RecordingResumeBoundary{}, err
+	}
+	select {
+	case result := <-response:
+		return result.resume, result.err
+	case <-session.done:
+		return RecordingResumeBoundary{}, fmt.Errorf("录音已停止，无法确认恢复")
+	case <-ctx.Done():
+		return RecordingResumeBoundary{}, ctx.Err()
+	}
+}
+
+// activeSession 返回当前活动 runner，不允许控制已完成或尚未建立的录音。
+func (coordinator *RecordingCoordinator) activeSession() (*recordingSession, error) {
+	coordinator.mu.Lock()
+	defer coordinator.mu.Unlock()
+	if coordinator.session == nil {
+		return nil, fmt.Errorf("没有活动会议录音")
+	}
+	return coordinator.session, nil
+}
+
+// sendRecordingControl 把有界控制请求交给 runner，调用方等待独立响应。
+func sendRecordingControl(ctx context.Context, session *recordingSession, request recordingControl) error {
+	select {
+	case session.control <- request:
+		return nil
+	case <-session.done:
+		return fmt.Errorf("录音已停止")
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 // Activate 在 recording/saving 状态事务提交后允许 runner 继续读取后续 PCM。
@@ -332,17 +467,85 @@ func runRecording(ctx context.Context, session *recordingSession) {
 			}
 			return
 		}
-		completed, err := session.recorder.WriteFrame(frame)
+		logicalFrame, writeFrame := applyRecordingControls(session, frame)
+		if !writeFrame {
+			continue
+		}
+		completed, err := session.recorder.WriteFrame(logicalFrame)
 		if err != nil {
 			session.err = err
 			return
 		}
-		handlePersistedPCMFrame(session.frameHandler, frame)
+		handlePersistedPCMFrame(session.frameHandler, logicalFrame)
 		if err := handleCompletedSegments(ctx, session.segmentHandler, completed); err != nil {
 			session.err = fmt.Errorf("登记完成录音分片失败: %w", err)
 			return
 		}
 		session.segments = append(session.segments, completed...)
+	}
+}
+
+// applyRecordingControls 在当前物理帧写入前处理全部已排队控制，并决定是否丢弃该帧。
+func applyRecordingControls(session *recordingSession, frame port.AudioFrame) (port.AudioFrame, bool) {
+	for {
+		select {
+		case request := <-session.control:
+			handleRecordingControl(session, frame.StartSample, request)
+		default:
+			if session.paused {
+				session.discarded += int64(len(frame.PCM) / 2)
+				return port.AudioFrame{}, false
+			}
+			logical := frame
+			logical.StartSample = frame.StartSample - session.discarded
+			return logical, true
+		}
+	}
+}
+
+// handleRecordingControl 在 runner 单线程内更新 owner 和样本边界。
+func handleRecordingControl(session *recordingSession, physicalSample int64, request recordingControl) {
+	logicalSample := physicalSample - session.discarded
+	switch request.kind {
+	case recordingControlBoundary:
+		request.response <- recordingControlResult{pause: RecordingPauseBoundary{LogicalSample: logicalSample, PhysicalSample: physicalSample}}
+	case recordingControlPause:
+		if session.paused && session.pauseOwner != request.ownerID {
+			request.response <- recordingControlResult{err: fmt.Errorf("会议录音已由其他任务暂停")}
+			return
+		}
+		if !session.paused {
+			session.paused = true
+			session.pauseOwner = request.ownerID
+			session.pauseDiscarded = session.discarded
+			session.lastResumeOwner = ""
+			session.lastResume = RecordingResumeBoundary{}
+			session.pauseBoundary = RecordingPauseBoundary{LogicalSample: logicalSample, PhysicalSample: physicalSample}
+		}
+		request.response <- recordingControlResult{pause: session.pauseBoundary}
+	case recordingControlResume:
+		if !session.paused {
+			if session.lastResumeOwner == request.ownerID {
+				request.response <- recordingControlResult{resume: session.lastResume}
+				return
+			}
+			request.response <- recordingControlResult{err: fmt.Errorf("会议录音当前未暂停")}
+			return
+		}
+		if session.pauseOwner != request.ownerID {
+			request.response <- recordingControlResult{err: fmt.Errorf("会议录音暂停所有者不匹配")}
+			return
+		}
+		resume := RecordingResumeBoundary{
+			LogicalSample: logicalSample, PhysicalSample: physicalSample,
+			DiscardedSamples: session.discarded - session.pauseDiscarded,
+		}
+		session.paused = false
+		session.lastResumeOwner, session.lastResume = request.ownerID, resume
+		session.pauseOwner = ""
+		request.response <- recordingControlResult{resume: resume}
+	default:
+		request.response <- recordingControlResult{err: fmt.Errorf("未知录音控制命令")}
 	}
 }
 

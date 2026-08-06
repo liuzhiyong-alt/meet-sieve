@@ -1,6 +1,6 @@
 {
   "schemaVersion": "meet-sieve-components/v1",
-  "version": "1.5.0",
+  "version": "1.10.0",
   "source": {
     "css": "docs/UI/assets/meetsieve.css + docs/UI/step*-proposal/*.css",
     "html": "docs/UI/*.html",
@@ -164,6 +164,32 @@
       "variants": ["default", "confirm", "danger", "native-approval"]
     },
     {
+      "id": "codex-handoff-dialog",
+      "name": "CodexHandoffDialog",
+      "maturity": "derived",
+      "evidence": [
+        "detail.html",
+        "frontend/src/features/detail/CodexHandoffDialog.vue"
+      ],
+      "parts": [
+        "fixed-header",
+        "thread-recovery-command",
+        "file-continuation-mode-switch",
+        "active-file-continuation-content",
+        "primary-copy-actions",
+        "copy-feedback",
+        "fixed-footer"
+      ],
+      "states": [
+        "thread-available",
+        "thread-unavailable",
+        "loading",
+        "error",
+        "copy-failed",
+        "closed-during-load"
+      ]
+    },
+    {
       "id": "toast",
       "name": "Toast",
       "maturity": "existing",
@@ -253,26 +279,25 @@
       ]
     },
     {
-      "id": "minute-version",
-      "name": "MinuteVersion",
+      "id": "minute-document",
+      "name": "MinuteDocument",
       "maturity": "existing",
       "evidence": [
         "detail.html#minutes",
-        "step8-proposal/minutes-workspace.html",
-        "step8-proposal/minutes-history.html"
+        "frontend/src/features/detail/MeetingDetailView.vue",
+        "frontend/src/features/minutes/MinutesWorkspaceView.vue"
       ],
       "parts": [
-        "version-summary",
-        "editor-or-preview",
-        "current-version-state",
-        "version-history",
-        "source-anchors"
+        "generation-empty-state",
+        "markdown-preview",
+        "source-editor",
+        "document-actions",
+        "gap-notice"
       ],
       "states": [
-        "ai-draft",
-        "human-draft",
-        "confirmed",
-        "historical-readonly",
+        "not-generated",
+        "generating",
+        "ready",
         "unsaved",
         "generation-failed"
       ]
@@ -288,8 +313,12 @@
       "id": "danger-zone",
       "name": "DangerZone",
       "maturity": "existing",
-      "evidence": ["step9-proposal/meeting-detail.html", ".danger-zone"],
-      "variants": ["recording", "meeting", "group", "voice-samples"],
+      "evidence": [
+        "step9-proposal/group-detail.html",
+        "step9-proposal/member-detail.html",
+        ".danger-zone"
+      ],
+      "variants": ["group", "member", "voice-samples"],
       "states": ["ready", "stopping-jobs", "deleting", "failed", "completed"]
     },
     {

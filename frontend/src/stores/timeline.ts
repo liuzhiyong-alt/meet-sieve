@@ -11,11 +11,20 @@ import {
 
 export interface TimelinePartial {
   meeting_id: string
+  session_id: string
+  generation: number
   result_id: string
   revision: number
   text: string
   start_sample: number
   end_sample: number
+}
+
+export interface TimelinePartialClear {
+  meeting_id: string
+  session_id: string
+  generation: number
+  result_id?: string
 }
 
 export interface AttachmentUploadState {
@@ -47,6 +56,8 @@ export const useTimelineStore = defineStore('timeline', {
     meetingID: '',
     entries: [] as TimelineEntry[],
     partials: {} as Record<string, TimelinePartial>,
+    clearedPartialSessions: {} as Record<string, number>,
+    clearedPartialResults: {} as Record<string, number>,
     uploads: {} as Record<string, AttachmentUploadState>,
     status: emptyStatus(),
     latestCursor: 0,
@@ -74,6 +85,8 @@ export const useTimelineStore = defineStore('timeline', {
       this.meetingID = meetingID
       this.entries = []
       this.partials = {}
+      this.clearedPartialSessions = {}
+      this.clearedPartialResults = {}
       this.uploads = {}
       this.status = emptyStatus()
       this.latestCursor = 0
@@ -138,6 +151,20 @@ export const useTimelineStore = defineStore('timeline', {
       }
       this.clearCommittedPartials()
     },
+    /** refreshLatestProjection 覆盖最新页的可变投影，同时保留已经加载的更早历史。 */
+    async refreshLatestProjection(): Promise<void> {
+      if (!this.meetingID) return
+      const result = await getMeetingTimeline(this.meetingID, 'latest', 0, 100)
+      if (result.code !== 200 || !result.data) {
+        this.errorMessage = result.message
+        return
+      }
+      this.mergeEntries(result.data.entries)
+      this.latestCursor = Math.max(this.latestCursor, result.data.latest_seq)
+      if (!this.oldestCursor && result.data.oldest_seq)
+        this.oldestCursor = result.data.oldest_seq
+      this.clearCommittedPartials()
+    },
     /** refreshStatus 更新右侧独立状态轴。 */
     async refreshStatus(): Promise<void> {
       if (!this.meetingID) return
@@ -177,13 +204,41 @@ export const useTimelineStore = defineStore('timeline', {
       }
       if (!result.data?.cancelled) await this.recoverAfter()
     },
-    /** applyPartial 仅保留相同 result 的更高 revision。 */
+    /** applyPartial 按物理 session 隔离 revision，并拒绝 clear 后迟到的旧事件。 */
     applyPartial(event: AppEvent<TimelinePartial>): void {
       const partial = event.data
       if (!partial || partial.meeting_id !== this.meetingID) return
-      const previous = this.partials[partial.result_id]
+      const key = partialKey(partial.session_id, partial.result_id)
+      if (
+        (this.clearedPartialSessions[partial.session_id] ?? -1) >=
+        partial.generation
+      )
+        return
+      if ((this.clearedPartialResults[key] ?? -1) >= partial.generation) return
+      const previous = this.partials[key]
       if (!previous || previous.revision < partial.revision)
-        this.partials[partial.result_id] = partial
+        this.partials[key] = partial
+    },
+    /** applyPartialClear 删除指定 session/result，并记录 tombstone 拒绝迟到事件。 */
+    applyPartialClear(event: AppEvent<TimelinePartialClear>): void {
+      const cleared = event.data
+      if (!cleared || cleared.meeting_id !== this.meetingID) return
+      if (cleared.result_id) {
+        const key = partialKey(cleared.session_id, cleared.result_id)
+        delete this.partials[key]
+        this.clearedPartialResults[key] = Math.max(
+          this.clearedPartialResults[key] ?? -1,
+          cleared.generation,
+        )
+        return
+      }
+      for (const [key, partial] of Object.entries(this.partials)) {
+        if (partial.session_id === cleared.session_id) delete this.partials[key]
+      }
+      this.clearedPartialSessions[cleared.session_id] = Math.max(
+        this.clearedPartialSessions[cleared.session_id] ?? -1,
+        cleared.generation,
+      )
     },
     /** applyAttachmentState 更新不含本地路径的临时上传行。 */
     applyAttachmentState(event: AppEvent<AttachmentUploadState>): void {
@@ -195,10 +250,19 @@ export const useTimelineStore = defineStore('timeline', {
       }
       this.uploads[upload.request_id] = upload
     },
-    /** mergeEntries 按 seq 去重并维持严格升序。 */
+    /** mergeEntries 按 seq 去重；说话人投影只允许相同或更高 revision 覆盖。 */
     mergeEntries(incoming: TimelineEntry[]): void {
       const entries = new Map(this.entries.map((entry) => [entry.seq, entry]))
-      for (const entry of incoming) entries.set(entry.seq, entry)
+      for (const entry of incoming) {
+        const previous = entries.get(entry.seq)
+        if (
+          previous?.kind === 'utterance' &&
+          entry.kind === 'utterance' &&
+          (entry.speaker_revision ?? 0) < (previous.speaker_revision ?? 0)
+        )
+          continue
+        entries.set(entry.seq, entry)
+      }
       this.entries = [...entries.values()].sort((a, b) => a.seq - b.seq)
     },
     /** clearCommittedPartials 用 final 样本范围替换已经落库的临时转写。 */
@@ -212,3 +276,8 @@ export const useTimelineStore = defineStore('timeline', {
     },
   },
 })
+
+/** partialKey 返回跨物理 session 唯一的临时转写键。 */
+function partialKey(sessionID: string, resultID: string): string {
+  return `${sessionID}:${resultID}`
+}

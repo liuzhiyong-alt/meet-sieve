@@ -56,6 +56,8 @@ describe('asr store', () => {
     store.applyPartial({
       data: {
         meeting_id: 'meeting-1',
+        session_id: 'session-1',
+        generation: 1,
         result_id: 'result-1',
         revision: 2,
         text: '较新文本',
@@ -66,6 +68,8 @@ describe('asr store', () => {
     store.applyPartial({
       data: {
         meeting_id: 'meeting-1',
+        session_id: 'session-1',
+        generation: 1,
         result_id: 'result-1',
         revision: 1,
         text: '旧文本',
@@ -76,6 +80,44 @@ describe('asr store', () => {
 
     expect(store.orderedPartials[0]?.text).toBe('较新文本')
     expect(store.timeline).toHaveLength(0)
+  })
+
+  it('clears a physical session and rejects its late partials', () => {
+    const store = useASRStore()
+    store.meetingID = 'meeting-1'
+    store.applyPartial({
+      data: {
+        meeting_id: 'meeting-1',
+        session_id: 'session-old',
+        generation: 3,
+        result_id: 'stream',
+        revision: 5,
+        text: '旧文本',
+        start_sample: 0,
+        end_sample: 100,
+      },
+    })
+    store.applyPartialClear({
+      data: {
+        meeting_id: 'meeting-1',
+        session_id: 'session-old',
+        generation: 3,
+      },
+    })
+    store.applyPartial({
+      data: {
+        meeting_id: 'meeting-1',
+        session_id: 'session-old',
+        generation: 3,
+        result_id: 'stream',
+        revision: 6,
+        text: '迟到文本',
+        start_sample: 0,
+        end_sample: 120,
+      },
+    })
+
+    expect(store.orderedPartials).toHaveLength(0)
   })
 
   it('saves only APP Key changes and never sends the saved mask', async () => {

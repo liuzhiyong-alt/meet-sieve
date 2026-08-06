@@ -19,9 +19,10 @@ import (
 )
 
 const (
-	maxQuestionBytes   = 10_000
-	defaultTurnTimeout = 10 * time.Minute
-	busyLongAfter      = 30 * time.Second
+	maxQuestionBytes     = 10_000
+	defaultTurnTimeout   = 10 * time.Minute
+	busyLongAfter        = 30 * time.Second
+	mediaRecoveryTimeout = 10 * time.Second
 )
 
 // RawRecordFlusher 保证 provider 读取前 Markdown 已追上 SQLite，并在提交后标脏。
@@ -33,6 +34,13 @@ type RawRecordFlusher interface {
 // TurnEventSink 接收不含 prompt/snapshot/tool output 的轻量运行事件。
 type TurnEventSink interface {
 	PublishAgentEvent(event port.AgentEvent)
+}
+
+// VoiceTurnMediaLifecycle 管理语音唤醒 turn 独占的录音与 ASR 暂停周期。
+type VoiceTurnMediaLifecycle interface {
+	PauseForTurn(ctx context.Context, meetingID string, turnID string) error
+	ResumeAfterTurn(ctx context.Context, meetingID string, turnID string) error
+	FinalizePausedTurn(ctx context.Context, meetingID string, turnID string) error
 }
 
 // TurnEventSinkFunc 让装配层以函数实现轻量事件发布边界。
@@ -66,10 +74,25 @@ type TurnService struct {
 	ids        identity.Generator
 	clock      clock.Clock
 	events     TurnEventSink
+	voiceMedia VoiceTurnMediaLifecycle
 	timeout    time.Duration
 	mu         sync.Mutex
 	current    *activeJob
 	state      AgentRuntimeState
+}
+
+// SetVoiceTurnMediaLifecycle 在应用装配完成且会议开始前绑定语音媒体生命周期。
+func (service *TurnService) SetVoiceTurnMediaLifecycle(lifecycle VoiceTurnMediaLifecycle) error {
+	if service == nil || lifecycle == nil {
+		return fmt.Errorf("语音媒体生命周期无效")
+	}
+	service.mu.Lock()
+	defer service.mu.Unlock()
+	if service.current != nil || service.voiceMedia != nil {
+		return fmt.Errorf("语音媒体生命周期不能重复绑定")
+	}
+	service.voiceMedia = lifecycle
+	return nil
 }
 
 type activeJob struct {
@@ -96,11 +119,13 @@ type AgentRuntimeState struct {
 
 // AskInput 描述主持人机器提交的问题或句首唤醒结果。
 type AskInput struct {
-	MeetingID          string
-	Question           string
-	Trigger            string
-	TriggerUtteranceID *string
-	IdempotencyKey     string
+	MeetingID           string
+	Question            string
+	Trigger             string
+	TriggerUtteranceID  *string
+	TriggerUtteranceIDs []string
+	VoiceCommandID      string
+	IdempotencyKey      string
 }
 
 // AskResult 是已持久化问题和最终公开回答身份。
@@ -149,7 +174,8 @@ func (service *TurnService) Ask(ctx context.Context, input AskInput) (AskResult,
 		},
 		Event: models.MeetingEvent{ID: service.ids.New(), MeetingID: input.MeetingID, OccurredAt: now, CreatedAt: now, UpdatedAt: now},
 		Text:  question, Trigger: normalizeTrigger(input.Trigger), UtteranceID: input.TriggerUtteranceID,
-		Speaker: "你", UpdatedAt: now,
+		UtteranceIDs: input.TriggerUtteranceIDs, VoiceCommandID: input.VoiceCommandID,
+		UpdatedAt: now,
 	})
 	if err != nil {
 		if errors.Is(err, agentrepository.ErrConflict) {
@@ -168,13 +194,44 @@ func (service *TurnService) Ask(ctx context.Context, input AskInput) (AskResult,
 	}
 	defer service.endJob(job)
 	service.startBusyLongTimer(jobContext, job)
+	if err := service.pauseVoiceMedia(jobContext, input, created.Turn.ID); err != nil {
+		service.settleFailure(job, err)
+		return AskResult{}, err
+	}
 
 	result, runErr := service.runQuestion(jobContext, job, session, created, question)
 	if runErr != nil {
 		service.settleFailure(job, runErr)
+	}
+	resumeErr := service.resumeVoiceMedia(input, created.Turn.ID)
+	if runErr != nil {
 		return AskResult{}, runErr
 	}
+	if resumeErr != nil {
+		return result, resumeErr
+	}
 	return result, nil
+}
+
+// pauseVoiceMedia 只为 wake_word turn 建立隐私优先的媒体暂停边界。
+func (service *TurnService) pauseVoiceMedia(ctx context.Context, input AskInput, turnID string) error {
+	if normalizeTrigger(input.Trigger) != "wake_word" {
+		return nil
+	}
+	if service.voiceMedia == nil {
+		return apperr.Dependency(apperr.CodeMeetingMediaPauseFailed, fmt.Errorf("语音媒体生命周期未绑定"), apperr.WithOp("agent.turn.media_pause"))
+	}
+	return service.voiceMedia.PauseForTurn(ctx, input.MeetingID, turnID)
+}
+
+// resumeVoiceMedia 使用独立有界 context，避免 turn 取消阻止录音恢复。
+func (service *TurnService) resumeVoiceMedia(input AskInput, turnID string) error {
+	if normalizeTrigger(input.Trigger) != "wake_word" || service.voiceMedia == nil {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), mediaRecoveryTimeout)
+	defer cancel()
+	return service.voiceMedia.ResumeAfterTurn(ctx, input.MeetingID, turnID)
 }
 
 // Interrupt 幂等停止当前主持人任务，不建立队列。

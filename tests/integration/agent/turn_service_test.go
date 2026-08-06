@@ -3,6 +3,7 @@ package agent_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -99,6 +100,121 @@ func TestTurnService_FlushFailureKeepsQuestionButDoesNotCallProvider(t *testing.
 	if len(kinds) != 2 || kinds[0] != "ai.question" || kinds[1] != "ai.failed" {
 		t.Fatalf("失败事实不正确：%v", kinds)
 	}
+}
+
+// TestTurnService_VoiceQuestionConsumesAllCommandUtterances 验证语音问题与多条候选 final 在同一事务绑定。
+func TestTurnService_VoiceQuestionConsumesAllCommandUtterances(t *testing.T) {
+	db := openAgentDatabase(t)
+	prepareAvailableSession(t, db)
+	prepareVoiceCommandCandidates(t, db)
+	repository := agentrepository.NewRepository(db, database.NewTransactionManager(db))
+	service := serviceagent.NewTurnService(serviceagent.TurnServiceDependencies{
+		Repository: repository, Context: serviceagent.NewContextBuilder(repository), Provider: &turnProvider{},
+		RawRecord: &turnRawRecord{}, Clock: clock.NewFixed(time.UnixMilli(2_000)), IDs: identity.NewFixedGenerator(
+			"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+			"cccccccc-cccc-4ccc-8ccc-cccccccccccc", "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+			"eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+		),
+	})
+	media := &turnMediaLifecycle{}
+	if err := service.SetVoiceTurnMediaLifecycle(media); err != nil {
+		t.Fatal(err)
+	}
+	result, err := service.Ask(context.Background(), serviceagent.AskInput{
+		MeetingID: meetingID, Question: "上面都说什么了？", Trigger: "wake_word",
+		TriggerUtteranceID:  agentStringPointer("77777777-7777-4777-8777-777777777777"),
+		TriggerUtteranceIDs: []string{"77777777-7777-4777-8777-777777777777", "88888888-8888-4888-8888-888888888888"},
+		VoiceCommandID:      "command-1", IdempotencyKey: "wake:command-1",
+	})
+	if err != nil {
+		t.Fatalf("执行语音问题失败：%v", err)
+	}
+	var relations []models.AgentVoiceCommandUtterance
+	if err = db.Where("command_id = ?", "command-1").Order("position ASC").Find(&relations).Error; err != nil {
+		t.Fatal(err)
+	}
+	if len(relations) != 2 || relations[0].State != "consumed" || relations[1].State != "consumed" || relations[0].AgentTurnID == nil || *relations[0].AgentTurnID != result.TurnID {
+		t.Fatalf("语音指令关系未完整消费：%+v", relations)
+	}
+	if media.pauses != 1 || media.resumes != 1 || media.turnID != result.TurnID {
+		t.Fatalf("语音 turn 媒体生命周期错误：%+v", media)
+	}
+}
+
+// TestTurnService_VoicePauseFailureSkipsProvider 验证媒体边界未确认时不会把语音问题发送给 Codex。
+func TestTurnService_VoicePauseFailureSkipsProvider(t *testing.T) {
+	db := openAgentDatabase(t)
+	prepareAvailableSession(t, db)
+	prepareVoiceCommandCandidates(t, db)
+	repository := agentrepository.NewRepository(db, database.NewTransactionManager(db))
+	provider := &turnProvider{}
+	service := serviceagent.NewTurnService(serviceagent.TurnServiceDependencies{
+		Repository: repository, Context: serviceagent.NewContextBuilder(repository), Provider: provider,
+		RawRecord: &turnRawRecord{}, Clock: clock.NewFixed(time.UnixMilli(2_000)), IDs: identity.NewFixedGenerator(
+			"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+			"cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+		),
+	})
+	media := &turnMediaLifecycle{pauseErr: errors.New("pause failed")}
+	if err := service.SetVoiceTurnMediaLifecycle(media); err != nil {
+		t.Fatal(err)
+	}
+	_, err := service.Ask(context.Background(), serviceagent.AskInput{
+		MeetingID: meetingID, Question: "上面都说什么了？", Trigger: "wake_word",
+		TriggerUtteranceID:  agentStringPointer("77777777-7777-4777-8777-777777777777"),
+		TriggerUtteranceIDs: []string{"77777777-7777-4777-8777-777777777777", "88888888-8888-4888-8888-888888888888"},
+		VoiceCommandID:      "command-1", IdempotencyKey: "wake:command-1",
+	})
+	if err == nil || provider.calls != 0 || media.pauses != 1 || media.resumes != 0 {
+		t.Fatalf("暂停失败仍执行了 AI 或恢复流程：err=%v provider=%d media=%+v", err, provider.calls, media)
+	}
+}
+
+// prepareVoiceCommandCandidates 写入两条已由 ASR 持久化的候选指令 final。
+func prepareVoiceCommandCandidates(t *testing.T, db *gorm.DB) {
+	t.Helper()
+	rows := []models.AgentVoiceCommandUtterance{
+		{ID: "99999999-9999-4999-8999-999999999991", MeetingID: meetingID, CommandID: "command-1", UtteranceID: "77777777-7777-4777-8777-777777777777", Position: 0, State: "candidate", CreatedAt: 1, UpdatedAt: 1},
+		{ID: "99999999-9999-4999-8999-999999999992", MeetingID: meetingID, CommandID: "command-1", UtteranceID: "88888888-8888-4888-8888-888888888888", Position: 1, State: "candidate", CreatedAt: 1, UpdatedAt: 1},
+	}
+	if err := db.Create(&models.ASRSession{ID: "66666666-6666-4666-8666-666666666666", MeetingID: meetingID, Provider: "volcano", State: "stopped", StartedAt: 1, TransportMode: "seed_v1", InputStartSample: 0, LastSentSample: 32_000, LastFinalSample: 32_000, CreatedAt: 1, UpdatedAt: 1}).Error; err != nil {
+		t.Fatal(err)
+	}
+	for index, utteranceID := range []string{"77777777-7777-4777-8777-777777777777", "88888888-8888-4888-8888-888888888888"} {
+		eventID := []string{"33333333-3333-4333-8333-333333333331", "33333333-3333-4333-8333-333333333332"}[index]
+		if err := db.Create(&models.MeetingEvent{ID: eventID, MeetingID: meetingID, Seq: int64(index + 1), Kind: "utterance.final", OccurredAt: int64(index), Source: "asr", EntityType: agentStringPointer("utterance"), EntityID: &utteranceID, CreatedAt: 1, UpdatedAt: 1}).Error; err != nil {
+			t.Fatal(err)
+		}
+		if err := db.Create(&models.Utterance{ID: utteranceID, MeetingID: meetingID, EventID: eventID, ASRSessionID: "66666666-6666-4666-8666-666666666666", ProviderResultID: fmt.Sprintf("result-%d", index), OriginalText: "指令", CurrentText: "指令", StartSample: int64(index * 16_000), EndSample: int64((index + 1) * 16_000), SpeakerAssignmentSource: "unassigned", TextRevision: 1, SpeakerRevision: 1, CreatedAt: 1, UpdatedAt: 1}).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := db.Create(&rows).Error; err != nil {
+		t.Fatal(err)
+	}
+}
+
+type turnMediaLifecycle struct {
+	pauses   int
+	resumes  int
+	turnID   string
+	pauseErr error
+}
+
+func (lifecycle *turnMediaLifecycle) PauseForTurn(_ context.Context, _ string, turnID string) error {
+	lifecycle.pauses++
+	lifecycle.turnID = turnID
+	return lifecycle.pauseErr
+}
+
+func (lifecycle *turnMediaLifecycle) ResumeAfterTurn(_ context.Context, _ string, turnID string) error {
+	lifecycle.resumes++
+	lifecycle.turnID = turnID
+	return nil
+}
+
+func (lifecycle *turnMediaLifecycle) FinalizePausedTurn(context.Context, string, string) error {
+	return nil
 }
 
 // prepareAvailableSession 把测试会议和 session 准备为可问答状态。

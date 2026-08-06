@@ -29,12 +29,15 @@ func (repository *Repository) MarkSessionStreaming(ctx context.Context, tx *gorm
 	if providerSessionID != "" {
 		updates["provider_session_id"] = providerSessionID
 	}
-	result := tx.WithContext(ctx).Model(&models.ASRSession{}).Where("id = ? AND meeting_id = ?", sessionID, meetingID).Updates(updates)
+	// 迟到的 provider started 事件不得把已失败或已停止的物理连接复活为 streaming。
+	result := tx.WithContext(ctx).Model(&models.ASRSession{}).
+		Where("id = ? AND meeting_id = ? AND state IN ?", sessionID, meetingID, []string{"connecting", "streaming"}).
+		Updates(updates)
 	if result.Error != nil {
 		return fmt.Errorf("更新 ASR session streaming 失败：%w", result.Error)
 	}
 	if result.RowsAffected != 1 {
-		return fmt.Errorf("更新 ASR session streaming 失败：session 不存在")
+		return fmt.Errorf("更新 ASR session streaming 失败：session 不存在或已终结")
 	}
 	return repository.UpdateMeetingASRState(ctx, tx, meetingID, "streaming", updatedAt)
 }

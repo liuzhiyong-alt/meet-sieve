@@ -35,8 +35,8 @@ type MeetingSummaryRow struct {
 	AgentState           string
 	MinuteState          string
 	LANState             string
-	Participants         []string
-	ParticipantMemberIDs []string
+	Participants         []string `gorm:"-"`
+	ParticipantMemberIDs []string `gorm:"-"`
 	HighestStatus        querydomain.MeetingStatus
 	PendingGapID         string
 	HasReadyAudio        bool

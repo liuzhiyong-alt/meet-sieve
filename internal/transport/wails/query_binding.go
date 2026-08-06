@@ -160,8 +160,8 @@ func mapSeqInput(input SeqPageInputDTO) queryservice.SeqPageInput {
 func mapMeetingDetailDTO(detail queryservice.MeetingDetail) MeetingDetailDTO {
 	return MeetingDetailDTO{
 		Summary: mapMeetingSummaryDTO(detail.Summary), CanPlayAudio: detail.CanPlayAudio,
-		CanRetranscribe: detail.CanRetranscribe, CanDeleteRecording: detail.CanDeleteRecording,
-		CanDeleteMeeting: detail.CanDeleteMeeting, DisabledReason: detail.DisabledReason,
+		CanRetranscribe: detail.CanRetranscribe, CanDeleteMeeting: detail.CanDeleteMeeting,
+		DisabledReason: detail.DisabledReason,
 	}
 }
 
@@ -171,10 +171,14 @@ func mapTranscriptPageDTO(page queryservice.TranscriptPage) TranscriptPageDTO {
 	for _, item := range page.Items {
 		items = append(items, TranscriptItemDTO{
 			Seq: item.Seq, Kind: item.Kind, OccurredAt: item.OccurredAt, Text: item.Text,
-			SpeakerName: item.SpeakerName, StartSample: item.StartSample, EndSample: item.EndSample,
+			SpeakerName: item.SpeakerName, SpeakerDisplay: item.SpeakerDisplay,
+			StartSample: item.StartSample, EndSample: item.EndSample,
 		})
 	}
-	return TranscriptPageDTO{Items: items, HasMore: page.HasMore, AfterSeq: page.AfterSeq, BeforeSeq: page.BeforeSeq}
+	return TranscriptPageDTO{
+		Items: items, HasMore: page.HasMore, HasPrevious: page.HasPrevious, HasNext: page.HasNext,
+		AfterSeq: page.AfterSeq, BeforeSeq: page.BeforeSeq,
+	}
 }
 
 // mapContentPageDTO 转换安全内容页。
@@ -188,5 +192,8 @@ func mapContentPageDTO(page queryservice.ContentPage) ContentPageDTO {
 			Hostname: item.Hostname, DisplayURL: item.DisplayURL,
 		})
 	}
-	return ContentPageDTO{Items: items, HasMore: page.HasMore, AfterSeq: page.AfterSeq, BeforeSeq: page.BeforeSeq}
+	return ContentPageDTO{
+		Items: items, HasMore: page.HasMore, HasPrevious: page.HasPrevious, HasNext: page.HasNext,
+		AfterSeq: page.AfterSeq, BeforeSeq: page.BeforeSeq,
+	}
 }

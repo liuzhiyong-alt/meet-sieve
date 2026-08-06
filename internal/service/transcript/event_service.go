@@ -11,6 +11,7 @@ import (
 	"meet-sieve/internal/infra/clock"
 	"meet-sieve/internal/infra/database"
 	"meet-sieve/internal/infra/identity"
+	"meet-sieve/internal/port"
 	transcriptrepository "meet-sieve/internal/repository/transcript"
 	"meet-sieve/models"
 
@@ -23,6 +24,8 @@ type EventServiceDependencies struct {
 	Transactions *database.TransactionManager
 	IDs          identity.Generator
 	Clock        clock.Clock
+	// Classifier 在 final 与用途关系的同一事务前准备语音指令分类。
+	Classifier port.TranscriptFinalClassifier
 	// OnPersisted 在事务提交后通知文件投影；回调不得执行阻塞文件 I/O。
 	OnPersisted func(meetingID string, event PersistedEvent)
 }
@@ -61,6 +64,7 @@ type EventService struct {
 	transactions *database.TransactionManager
 	ids          identity.Generator
 	clock        clock.Clock
+	classifier   port.TranscriptFinalClassifier
 	onPersisted  func(meetingID string, event PersistedEvent)
 }
 
@@ -68,7 +72,8 @@ type EventService struct {
 func NewEventService(dependencies EventServiceDependencies) *EventService {
 	return &EventService{
 		repository: dependencies.Repository, transactions: dependencies.Transactions,
-		ids: dependencies.IDs, clock: dependencies.Clock, onPersisted: dependencies.OnPersisted,
+		ids: dependencies.IDs, clock: dependencies.Clock, classifier: dependencies.Classifier,
+		onPersisted: dependencies.OnPersisted,
 	}
 }
 
@@ -81,14 +86,22 @@ func (service *EventService) PersistFinal(ctx context.Context, input FinalInput)
 		return PersistedEvent{}, err
 	}
 
+	var classification port.TranscriptFinalClassification
 	var result PersistedEvent
 	err := service.transactions.WithinTransaction(ctx, func(tx *gorm.DB) error {
-		return service.persistFinalInTransaction(ctx, tx, input, &result)
+		return service.persistFinalInTransaction(ctx, tx, input, &classification, &result)
 	})
 	if err != nil {
+		service.rollbackFinalClassification(classification)
 		return PersistedEvent{}, mapPersistError(err, "transcript.final.persist")
 	}
-	service.notifyPersisted(input.MeetingID, result)
+	if result.Duplicate {
+		service.rollbackFinalClassification(classification)
+	} else {
+		// 先让原始记录投影失效，再允许分类器分发 Codex，避免 Flush 读到旧上下文。
+		service.notifyPersisted(input.MeetingID, result)
+		service.commitFinalClassification(classification)
+	}
 	return result, nil
 }
 
@@ -120,7 +133,7 @@ func (service *EventService) notifyPersisted(meetingID string, event PersistedEv
 }
 
 // persistFinalInTransaction 在一个写事务中完成幂等检查、事件创建与游标推进。
-func (service *EventService) persistFinalInTransaction(ctx context.Context, tx *gorm.DB, input FinalInput, result *PersistedEvent) error {
+func (service *EventService) persistFinalInTransaction(ctx context.Context, tx *gorm.DB, input FinalInput, classification *port.TranscriptFinalClassification, result *PersistedEvent) error {
 	meeting, err := service.repository.GetMeetingForEvent(ctx, tx, input.MeetingID)
 	if err != nil {
 		return err
@@ -131,14 +144,14 @@ func (service *EventService) persistFinalInTransaction(ctx context.Context, tx *
 	if _, err = service.repository.GetSessionForEvent(ctx, tx, input.MeetingID, input.ASRSessionID); err != nil {
 		return err
 	}
-	if err = service.repository.AdvanceSessionSentSample(ctx, tx, input.MeetingID, input.ASRSessionID, input.LastSentSample, service.clock.Now().UnixMilli()); err != nil {
-		return err
-	}
 	previous, err := service.repository.FindUtteranceByProviderResult(ctx, tx, input.ASRSessionID, input.ProviderResultID)
 	if err != nil {
 		return err
 	}
 	if previous != nil {
+		if err = service.repository.AdvanceSessionSentSample(ctx, tx, input.MeetingID, input.ASRSessionID, input.LastSentSample, service.clock.Now().UnixMilli()); err != nil {
+			return err
+		}
 		return service.resolveFinalDuplicate(ctx, tx, previous, input, result)
 	}
 
@@ -147,12 +160,28 @@ func (service *EventService) persistFinalInTransaction(ctx context.Context, tx *
 	if err != nil {
 		return err
 	}
+	*classification = service.prepareFinalClassification(ctx, input, ids[1])
+	if classification.Candidate {
+		relationIDs, idErr := service.newIDs(1)
+		if idErr != nil {
+			return idErr
+		}
+		ids = append(ids, relationIDs[0])
+	}
+	// 分类器可能读取设置；必须在首个 SQLite 写操作前完成，避免持有写锁时等待旁路读取。
+	if err = service.repository.AdvanceSessionSentSample(ctx, tx, input.MeetingID, input.ASRSessionID, input.LastSentSample, now); err != nil {
+		return err
+	}
 	eventID, utteranceID := ids[0], ids[1]
 	seq, err := service.repository.NextEventSeq(ctx, tx, input.MeetingID)
 	if err != nil {
 		return err
 	}
-	event := models.MeetingEvent{ID: eventID, MeetingID: input.MeetingID, Seq: seq, Kind: "utterance.final", OccurredAt: eventOccurredAt(meeting, input.Range), Source: "asr", EntityType: pointer("utterance"), EntityID: pointer(utteranceID), CreatedAt: now, UpdatedAt: now}
+	discarded, err := service.repository.SumDiscardedSamplesBefore(ctx, tx, input.MeetingID, input.Range.Start)
+	if err != nil {
+		return err
+	}
+	event := models.MeetingEvent{ID: eventID, MeetingID: input.MeetingID, Seq: seq, Kind: "utterance.final", OccurredAt: eventOccurredAt(meeting, input.Range, discarded), Source: "asr", EntityType: pointer("utterance"), EntityID: pointer(utteranceID), CreatedAt: now, UpdatedAt: now}
 	utterance := models.Utterance{
 		ID: utteranceID, MeetingID: input.MeetingID, EventID: eventID, ASRSessionID: input.ASRSessionID,
 		ProviderResultID: input.ProviderResultID, OriginalText: input.Text, CurrentText: input.Text,
@@ -162,6 +191,16 @@ func (service *EventService) persistFinalInTransaction(ctx context.Context, tx *
 	}
 	if err = service.repository.CreateFinal(ctx, tx, event, utterance); err != nil {
 		return err
+	}
+	if classification.Candidate {
+		relation := models.AgentVoiceCommandUtterance{
+			ID: ids[2], MeetingID: input.MeetingID, CommandID: classification.CommandID,
+			UtteranceID: utteranceID, Position: classification.Position, State: "candidate",
+			CreatedAt: now, UpdatedAt: now,
+		}
+		if err = service.repository.CreateVoiceCommandCandidate(ctx, tx, relation); err != nil {
+			return err
+		}
 	}
 	if err = service.repository.UpdateLastFinalSample(ctx, tx, input.MeetingID, input.ASRSessionID, input.Range.End, now); err != nil {
 		return err
@@ -206,7 +245,11 @@ func (service *EventService) persistGapInTransaction(ctx context.Context, tx *go
 	if err != nil {
 		return err
 	}
-	event := models.MeetingEvent{ID: eventID, MeetingID: input.MeetingID, Seq: seq, Kind: "asr.gap", OccurredAt: eventOccurredAt(meeting, input.Range), Source: "system", EntityType: pointer("asr_gap"), EntityID: pointer(gapID), CreatedAt: now, UpdatedAt: now}
+	discarded, err := service.repository.SumDiscardedSamplesBefore(ctx, tx, input.MeetingID, input.Range.Start)
+	if err != nil {
+		return err
+	}
+	event := models.MeetingEvent{ID: eventID, MeetingID: input.MeetingID, Seq: seq, Kind: "asr.gap", OccurredAt: eventOccurredAt(meeting, input.Range, discarded), Source: "system", EntityType: pointer("asr_gap"), EntityID: pointer(gapID), CreatedAt: now, UpdatedAt: now}
 	gap := models.ASRGap{ID: gapID, MeetingID: input.MeetingID, EventID: eventID, ASRSessionID: input.ASRSessionID, StartSample: input.Range.Start, EndSample: input.Range.End, Reason: string(input.Reason), OriginKey: originKey, State: "pending", CreatedAt: now, UpdatedAt: now}
 	if err = service.repository.CreateGap(ctx, tx, event, gap); err != nil {
 		return err
@@ -274,6 +317,31 @@ func (service *EventService) validateDependencies() error {
 	return nil
 }
 
+// prepareFinalClassification 让分类器使用预分配 utterance ID 建立稳定 command ID。
+func (service *EventService) prepareFinalClassification(ctx context.Context, input FinalInput, utteranceID string) port.TranscriptFinalClassification {
+	if service.classifier == nil {
+		return port.TranscriptFinalClassification{}
+	}
+	return service.classifier.PrepareFinal(ctx, port.TranscriptFinalCandidate{
+		UtteranceID: utteranceID, MeetingID: input.MeetingID, Text: input.Text,
+		StartSample: input.Range.Start, EndSample: input.Range.End,
+	})
+}
+
+// commitFinalClassification 在 SQLite 成功后推进收集器并允许触发 Codex。
+func (service *EventService) commitFinalClassification(classification port.TranscriptFinalClassification) {
+	if service.classifier != nil && classification.Token != "" {
+		service.classifier.CommitFinal(classification.Token)
+	}
+}
+
+// rollbackFinalClassification 撤销失败事务对应的收集器临时状态。
+func (service *EventService) rollbackFinalClassification(classification port.TranscriptFinalClassification) {
+	if service.classifier != nil && classification.Token != "" {
+		service.classifier.RollbackFinal(classification.Token)
+	}
+}
+
 // newIDs 分配固定数量 ID，并防止测试替身耗尽时写入空主键。
 func (service *EventService) newIDs(count int) ([]string, error) {
 	ids := make([]string, 0, count)
@@ -293,11 +361,11 @@ func acceptsTranscriptEvents(meeting models.Meeting) bool {
 }
 
 // eventOccurredAt 将全局样本时间线映射到会议开始的毫秒时间线。
-func eventOccurredAt(meeting models.Meeting, sampleRange transcriptdomain.SampleRange) int64 {
+func eventOccurredAt(meeting models.Meeting, sampleRange transcriptdomain.SampleRange, discardedSamples int64) int64 {
 	if meeting.StartedAt == nil {
 		return 0
 	}
-	return *meeting.StartedAt + sampleRange.Start*1000/transcriptdomain.SampleRate
+	return *meeting.StartedAt + (sampleRange.Start+discardedSamples)*1000/transcriptdomain.SampleRate
 }
 
 // mapPersistError 保留明确的业务错误，其余数据库错误统一变为安全的持久化失败。

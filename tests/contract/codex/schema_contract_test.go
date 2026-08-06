@@ -18,8 +18,8 @@ type schemaMetadata struct {
 	Files        map[string]string `json:"files"`
 }
 
-// TestGeneratedSchema_HashesMatchMetadata 验证握手所需 schema 与已核验 Codex 版本保持一致。
-func TestGeneratedSchema_HashesMatchMetadata(t *testing.T) {
+// TestGeneratedSchema_SemanticHashesMatchMetadata 验证握手所需 schema 与已核验 Codex 版本保持一致。
+func TestGeneratedSchema_SemanticHashesMatchMetadata(t *testing.T) {
 	t.Parallel()
 
 	contractDir := filepath.Join(projectRoot(t), "tests", "contract", "codex")
@@ -39,19 +39,22 @@ func TestGeneratedSchema_HashesMatchMetadata(t *testing.T) {
 		t.Fatalf("metadata 与运行时必要契约不一致：metadata=%d runtime=%d", len(metadata.Files), len(contract.Files))
 	}
 
-	for relativePath, expected := range metadata.Files {
+	for relativePath, rawExpected := range metadata.Files {
 		content, err := os.ReadFile(filepath.Join(contractDir, relativePath))
 		if err != nil {
 			t.Fatalf("读取 schema %s 失败：%v", relativePath, err)
 		}
-		digest := sha256.Sum256(content)
-		actual := hex.EncodeToString(digest[:])
-		if actual != expected {
-			t.Fatalf("schema %s 哈希漂移：got %s, want %s", relativePath, actual, expected)
+		rawDigest := sha256.Sum256(content)
+		if rawActual := hex.EncodeToString(rawDigest[:]); rawActual != rawExpected {
+			t.Fatalf("schema %s 原始归档哈希漂移：got=%s want=%s", relativePath, rawActual, rawExpected)
+		}
+		actual, err := codex.CanonicalSchemaDigest(content)
+		if err != nil {
+			t.Fatalf("计算 schema %s 语义摘要失败：%v", relativePath, err)
 		}
 		runtimeExpected, exists := contract.Files[filepath.ToSlash(strings.TrimPrefix(relativePath, "schema/"))]
-		if !exists || runtimeExpected != expected {
-			t.Fatalf("schema %s 未进入运行时必要契约或哈希不一致", relativePath)
+		if !exists || runtimeExpected != actual {
+			t.Fatalf("schema %s 未进入运行时必要契约或语义哈希不一致: got=%s want=%s", relativePath, actual, runtimeExpected)
 		}
 	}
 }

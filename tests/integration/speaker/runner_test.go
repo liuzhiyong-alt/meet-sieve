@@ -147,6 +147,9 @@ func observeRunnerUtterance(t *testing.T, db *gorm.DB) string {
 	if err != nil {
 		t.Fatalf("准备 runner track 失败：%v", err)
 	}
+	if err := db.Exec("UPDATE speaker_track_evidence SET routing_state='routed' WHERE id=?", result.EvidenceID).Error; err != nil {
+		t.Fatalf("准备已路由 runner evidence 失败：%v", err)
+	}
 	return result.TrackID
 }
 

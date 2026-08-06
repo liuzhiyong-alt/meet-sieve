@@ -29,15 +29,15 @@ func TestRenderRawRecord_IsDeterministic(t *testing.T) {
 	}
 }
 
-// TestConvertRawRecordRows_UsesCurrentSpeakerPriority 验证成员、unknown cluster、session fallback 展示优先级。
+// TestConvertRawRecordRows_UsesCurrentSpeakerPriority 验证成员、unknown cluster、匿名 track 展示优先级。
 func TestConvertRawRecordRows_UsesCurrentSpeakerPriority(t *testing.T) {
 	rows := []transcriptrepository.RawRecordRow{
 		{Seq: 1, Kind: "utterance.final", StartSample: 0, EndSample: 16, CurrentText: "成员", ASRSessionID: "session", ParticipantDisplayName: "张三", ClusterDisplayNo: 9},
 		{Seq: 2, Kind: "utterance.final", StartSample: 16, EndSample: 32, CurrentText: "未知", ASRSessionID: "session", ClusterDisplayNo: 2},
-		{Seq: 3, Kind: "utterance.final", StartSample: 32, EndSample: 48, CurrentText: "待识别", ASRSessionID: "session"},
+		{Seq: 3, Kind: "utterance.final", StartSample: 32, EndSample: 48, CurrentText: "待识别", ASRSessionID: "session", TrackDisplayNo: 3},
 	}
 	entries, _ := convertRawRecordRows(rows, []models.ASRSession{{ID: "session"}})
-	if entries[0].Speaker != "张三" || entries[1].Speaker != "未知说话人 2" || rawRecordSpeaker(entries[2]) != "未知说话人（ASR Session 1）" {
+	if entries[0].Speaker != "张三" || entries[1].Speaker != "未知说话人 2" || entries[2].Speaker != "说话人 3" {
 		t.Fatalf("说话人展示优先级错误：%+v", entries)
 	}
 }

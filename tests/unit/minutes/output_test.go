@@ -1,11 +1,100 @@
 package minutes_test
 
 import (
+	"bytes"
+	"encoding/json"
 	"strings"
 	"testing"
 
 	"meet-sieve/internal/domain/minutes"
 )
+
+// TestOutputSchema_UsesCodexSupportedKeywords 验证发送给 Codex 的 schema 不包含 response format 禁用的关键字。
+func TestOutputSchema_UsesCodexSupportedKeywords(t *testing.T) {
+	t.Parallel()
+	schema, err := minutes.OutputSchema()
+	if err != nil {
+		t.Fatalf("生成纪要 schema 失败：%v", err)
+	}
+	if bytes.Contains(schema, []byte(`"uniqueItems"`)) {
+		t.Fatalf("纪要 schema 包含 Codex 不支持的 uniqueItems：%s", schema)
+	}
+	var document struct {
+		Properties map[string]struct {
+			Type string `json:"type"`
+			Enum []int  `json:"enum"`
+		} `json:"properties"`
+	}
+	if err := json.Unmarshal(schema, &document); err != nil {
+		t.Fatalf("解析纪要 schema 失败：%v", err)
+	}
+	version := document.Properties["v"]
+	if version.Type != "integer" || len(version.Enum) != 1 || version.Enum[0] != 1 {
+		t.Fatalf("纪要 schema 的 v 必须是固定整数 1：%s", schema)
+	}
+}
+
+// TestOutputSchemaForResources_RestrictsReferences 验证资料引用只能使用本次 resource 白名单。
+func TestOutputSchemaForResources_RestrictsReferences(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name          string
+		resources     map[int64]struct{}
+		wantMaxItems  int
+		wantSequences []int64
+	}{
+		{name: "没有资料", resources: map[int64]struct{}{}, wantMaxItems: 0},
+		{name: "限定资料序号", resources: map[int64]struct{}{25: {}, 7: {}}, wantMaxItems: 1000, wantSequences: []int64{7, 25}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			schema, err := minutes.OutputSchemaForResources(test.resources)
+			if err != nil {
+				t.Fatalf("生成纪要 schema 失败：%v", err)
+			}
+			var document referenceSchemaDocument
+			if err := json.Unmarshal(schema, &document); err != nil {
+				t.Fatalf("解析纪要 schema 失败：%v", err)
+			}
+			references := document.Properties.References
+			if references.MaxItems != test.wantMaxItems {
+				t.Fatalf("资料数量约束错误：got %d, want %d", references.MaxItems, test.wantMaxItems)
+			}
+			got := references.Items.Properties.ResourceEventSeq.Enum
+			if len(got) != len(test.wantSequences) || !equalSequences(got, test.wantSequences) {
+				t.Fatalf("资料序号约束错误：got %v, want %v", got, test.wantSequences)
+			}
+		})
+	}
+}
+
+type referenceSchemaDocument struct {
+	Properties struct {
+		References struct {
+			MaxItems int `json:"maxItems"`
+			Items    struct {
+				Properties struct {
+					ResourceEventSeq struct {
+						Enum []int64 `json:"enum"`
+					} `json:"resource_event_seq"`
+				} `json:"properties"`
+			} `json:"items"`
+		} `json:"references"`
+	} `json:"properties"`
+}
+
+// equalSequences 比较已按稳定顺序输出的资料序号。
+func equalSequences(left []int64, right []int64) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for index := range left {
+		if left[index] != right[index] {
+			return false
+		}
+	}
+	return true
+}
 
 // TestParseAndValidateOutput_AcceptsWhitelistedSourcesAndExactGaps 验证合法结构只引用固定事实。
 func TestParseAndValidateOutput_AcceptsWhitelistedSourcesAndExactGaps(t *testing.T) {
@@ -43,6 +132,7 @@ func TestParseAndValidateOutput_RejectsUnknownDuplicateOrUntrustedFacts(t *testi
 		`{"v":1,"v":1,"conclusions":[],"topics":[],"tasks":[],"references":[],"gap_notice":[{"start_sample":100,"end_sample":200,"state":"failed"}]}`,
 		`{"v":1,"unknown":true,"conclusions":[],"topics":[],"tasks":[],"references":[],"gap_notice":[{"start_sample":100,"end_sample":200,"state":"failed"}]}`,
 		`{"v":1,"conclusions":[{"text":"AI 猜测","source_seq":[999]}],"topics":[],"tasks":[],"references":[],"gap_notice":[{"start_sample":100,"end_sample":200,"state":"failed"}]}`,
+		`{"v":1,"conclusions":[{"text":"重复来源","source_seq":[12,12]}],"topics":[],"tasks":[],"references":[],"gap_notice":[{"start_sample":100,"end_sample":200,"state":"failed"}]}`,
 		`{"v":1,"conclusions":[],"topics":[],"tasks":[],"references":[],"gap_notice":[]}`,
 	}
 	for _, content := range tests {

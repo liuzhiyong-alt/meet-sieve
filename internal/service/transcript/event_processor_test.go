@@ -2,10 +2,12 @@ package transcript
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"testing"
 	"time"
 
+	"meet-sieve/internal/infra/apperr"
 	"meet-sieve/internal/port"
 )
 
@@ -54,14 +56,51 @@ func TestFinalProcessorAcceptsCapacityAndDrainsInOrder(t *testing.T) {
 	}
 }
 
+// TestFinalProcessorRetriesOnlyRetryableFailures 验证短暂持久化失败在单条超时内自动恢复。
+func TestFinalProcessorRetriesOnlyRetryableFailures(t *testing.T) {
+	var attempts int
+	failures := make(chan error, 1)
+	processor := NewFinalProcessor(FinalProcessorDependencies{
+		Capacity: 1, PersistTimeout: time.Second,
+		Persist: func(context.Context, port.TranscriptionEvent) error {
+			attempts++
+			if attempts == 1 {
+				return apperr.Dependency(apperr.CodeASREventPersistFailed, errors.New("temporary"))
+			}
+			return nil
+		},
+		OnFailure: func(_ port.TranscriptionEvent, err error) { failures <- err },
+	})
+	if err := processor.Start(context.Background()); err != nil {
+		t.Fatalf("启动 final processor 失败：%v", err)
+	}
+	if !processor.TrySubmit(port.TranscriptionEvent{Type: port.TranscriptionFinal}) {
+		t.Fatal("提交 final 失败")
+	}
+	if err := processor.CloseAndWait(context.Background()); err != nil {
+		t.Fatalf("排空 final processor 失败：%v", err)
+	}
+	if attempts != 2 {
+		t.Fatalf("可恢复错误重试次数错误：%d", attempts)
+	}
+	select {
+	case err := <-failures:
+		t.Fatalf("重试成功后不应上报失败：%v", err)
+	default:
+	}
+}
+
 // TestPartialProjectorKeepsRevisionAndLimitsPublishRate 验证 partial 只接受更高 revision 且最多每 100ms 发布一次。
 func TestPartialProjectorKeepsRevisionAndLimitsPublishRate(t *testing.T) {
 	now := time.Unix(0, 0)
 	var published []port.TranscriptionEvent
+	var cleared []PartialClearEvent
 	projector := NewPartialProjector(func() time.Time { return now }, func(event port.TranscriptionEvent) {
 		published = append(published, event)
-	})
-	projector.Accept(partialEvent("same", 1, "一"))
+	}, func(event PartialClearEvent) { cleared = append(cleared, event) })
+	first := partialEvent("same", 1, "一")
+	first.MeetingID, first.SessionID, first.Generation = "meeting-1", "session-1", 1
+	projector.Accept(first)
 	now = now.Add(50 * time.Millisecond)
 	projector.Accept(partialEvent("same", 2, "二"))
 	projector.Accept(partialEvent("same", 1, "旧"))
@@ -70,9 +109,13 @@ func TestPartialProjectorKeepsRevisionAndLimitsPublishRate(t *testing.T) {
 	if len(published) != 2 || published[0].Text != "一" || published[1].Text != "三" {
 		t.Fatalf("partial revision/限频错误：%+v", published)
 	}
-	projector.Clear("same")
+	final := port.TranscriptionEvent{MeetingID: "meeting-1", SessionID: "session-1", ResultID: "same", Generation: 1}
+	projector.Clear(final)
 	if projector.Size() != 0 {
 		t.Fatal("final 后必须清除 partial")
+	}
+	if len(cleared) != 1 || cleared[0].ResultID != "same" || cleared[0].Generation != 1 {
+		t.Fatalf("partial 清除事件错误：%+v", cleared)
 	}
 }
 

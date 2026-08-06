@@ -73,6 +73,7 @@ func verifyInstallerScript(path string) error {
 		{name: "阻断提示", fragment: "MessageBox MB_ICONEXCLAMATION|MB_OK"},
 		{name: "安装入口", fragment: "Function .onInit\n    !insertmacro EnsureMeetSieveNotRunning"},
 		{name: "卸载入口", fragment: "Function un.onInit\n    !insertmacro EnsureMeetSieveNotRunning"},
+		{name: "正式声纹档案", fragment: `File "/oname=voice-matching-profile.json"`},
 	}
 	for _, required := range requiredFragments {
 		if !strings.Contains(source, required.fragment) {
@@ -129,9 +130,9 @@ func verifyExecutable(path string) error {
 	return nil
 }
 
-// verifyResources 校验安装包依赖的 ONNX Runtime 动态库和许可证文件。
+// verifyResources 校验安装包依赖的运行时、许可证和正式声纹档案。
 func verifyResources(directory string) error {
-	for _, filename := range []string{"onnxruntime.dll", "ONNXRUNTIME-LICENSE.txt"} {
+	for _, filename := range []string{"onnxruntime.dll", "ONNXRUNTIME-LICENSE.txt", filepath.Join("models", "voice-matching-profile.json")} {
 		info, err := os.Stat(filepath.Join(directory, filename))
 		if err != nil {
 			return fmt.Errorf("Windows 资源缺失 %s: %w", filename, err)

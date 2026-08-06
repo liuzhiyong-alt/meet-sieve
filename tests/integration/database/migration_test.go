@@ -189,10 +189,14 @@ func TestMigrate_CreatesAudioAndAgentSchema(t *testing.T) {
 	for _, table := range []string{
 		"audio_assets", "asr_sessions", "asr_gaps", "voice_samples", "voice_embeddings", "speaker_clusters",
 		"agent_sessions", "agent_turns", "sync_batches", "context_snapshots", "minute_versions", "deletion_jobs",
+		"agent_voice_command_utterances", "meeting_media_pauses",
 	} {
 		if !db.Migrator().HasTable(table) {
 			t.Fatalf("%s 未创建", table)
 		}
+	}
+	if !db.Migrator().HasColumn("settings", "minute_prompt") {
+		t.Fatal("settings 缺少会议纪要要求字段")
 	}
 }
 
@@ -226,6 +230,26 @@ func TestMigrate_AddsRealtimeASRFoundation(t *testing.T) {
 		'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'record_only', 0, 0
 	)`).Error; err == nil {
 		t.Fatal("asr_gaps 必须保留 meeting/event 外键约束，不能接受不存在的会议")
+	}
+}
+
+// TestMigrate_AddsStableSpeakerTrackDisplayNumber 验证匿名 track 编号字段与会议级唯一索引存在。
+func TestMigrate_AddsStableSpeakerTrackDisplayNumber(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "speaker-track-display.db")
+	if err := database.Migrate(path); err != nil {
+		t.Fatalf("执行 migration 失败：%v", err)
+	}
+	db, err := database.Open(path)
+	if err != nil {
+		t.Fatalf("打开迁移数据库失败：%v", err)
+	}
+	t.Cleanup(func() { _ = database.Close(db) })
+	if !db.Migrator().HasColumn("speaker_tracks", "display_no") {
+		t.Fatal("speaker_tracks 缺少稳定展示编号")
+	}
+	var indexCount int64
+	if err := db.Raw("SELECT COUNT(*) FROM pragma_index_list('speaker_tracks') WHERE name = 'idx_speaker_tracks_meeting_display_no' AND [unique] = 1").Scan(&indexCount).Error; err != nil || indexCount != 1 {
+		t.Fatalf("speaker track 会议级唯一索引缺失：count=%d err=%v", indexCount, err)
 	}
 }
 

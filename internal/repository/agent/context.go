@@ -27,6 +27,8 @@ SELECT event.seq, event.kind, event.occurred_at, event.source,
 FROM meeting_events AS event
 LEFT JOIN utterances AS utterance
   ON utterance.event_id = event.id AND utterance.meeting_id = event.meeting_id
+LEFT JOIN agent_voice_command_utterances AS voice_command
+  ON voice_command.utterance_id = utterance.id
 LEFT JOIN messages AS message
   ON message.event_id = event.id AND message.meeting_id = event.meeting_id
 LEFT JOIN resources AS resource
@@ -37,11 +39,15 @@ LEFT JOIN corrections AS correction
   ON correction.id = event.entity_id AND correction.meeting_id = event.meeting_id
 LEFT JOIN utterances AS corrected_utterance
   ON correction.target_kind = 'utterance' AND corrected_utterance.id = correction.target_id
+LEFT JOIN agent_voice_command_utterances AS corrected_voice_command
+  ON corrected_voice_command.utterance_id = corrected_utterance.id
 LEFT JOIN resources AS corrected_resource
   ON correction.target_kind = 'resource' AND corrected_resource.id = correction.target_id
 LEFT JOIN guest_sessions AS guest
   ON guest.id = COALESCE(resource.guest_session_id, corrected_resource.guest_session_id)
 WHERE event.meeting_id = ? AND event.seq > ? AND event.seq <= ?
+  AND (voice_command.id IS NULL OR voice_command.state = 'released')
+  AND (corrected_voice_command.id IS NULL OR corrected_voice_command.state = 'released')
 ORDER BY event.seq ASC`
 	var events []domainagent.ContextEvent
 	if err := repository.reader.WithContext(ctx).Raw(statement, meetingID, afterSeq, cutoffSeq).Scan(&events).Error; err != nil {

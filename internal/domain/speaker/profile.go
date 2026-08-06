@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	matchingProfileSchemaVersion = 1
+	matchingProfileSchemaVersion = 2
 	// MaxEvidenceDurationMS 是 rolling buffer 与单次说话人推理共享的 120 秒上限。
 	MaxEvidenceDurationMS = 120_000
 )
@@ -44,25 +44,35 @@ type ScoreThresholds struct {
 	MinMargin float64 `json:"min_margin"`
 }
 
+// ContinuityProfile 约束 provider 通道内短窗声学分轨，不参与正式成员身份判断。
+type ContinuityProfile struct {
+	WindowMS  int     `json:"window_ms"`
+	HopMS     int     `json:"hop_ms"`
+	MinScore  float64 `json:"min_score"`
+	MinMargin float64 `json:"min_margin"`
+}
+
 // MatchingProfile 是经过真实校准且精确绑定模型身份的自动识别档案。
 type MatchingProfile struct {
-	SchemaVersion     int             `json:"schema_version"`
-	ProfileID         string          `json:"profile_id"`
-	Model             ModelIdentity   `json:"model"`
-	Evidence          EvidenceProfile `json:"evidence"`
-	Identity          ScoreThresholds `json:"identity"`
-	UnknownCluster    ScoreThresholds `json:"unknown_cluster"`
-	CalibrationRecord string          `json:"calibration_record"`
+	SchemaVersion     int                `json:"schema_version"`
+	ProfileID         string             `json:"profile_id"`
+	Model             ModelIdentity      `json:"model"`
+	Evidence          EvidenceProfile    `json:"evidence"`
+	Identity          ScoreThresholds    `json:"identity"`
+	UnknownCluster    ScoreThresholds    `json:"unknown_cluster"`
+	Continuity        *ContinuityProfile `json:"continuity,omitempty"`
+	CalibrationRecord string             `json:"calibration_record"`
 }
 
 type matchingProfileWire struct {
-	SchemaVersion     *int                 `json:"schema_version"`
-	ProfileID         *string              `json:"profile_id"`
-	Model             *modelIdentityWire   `json:"model"`
-	Evidence          *evidenceProfileWire `json:"evidence"`
-	Identity          *scoreThresholdsWire `json:"identity"`
-	UnknownCluster    *scoreThresholdsWire `json:"unknown_cluster"`
-	CalibrationRecord *string              `json:"calibration_record"`
+	SchemaVersion     *int                   `json:"schema_version"`
+	ProfileID         *string                `json:"profile_id"`
+	Model             *modelIdentityWire     `json:"model"`
+	Evidence          *evidenceProfileWire   `json:"evidence"`
+	Identity          *scoreThresholdsWire   `json:"identity"`
+	UnknownCluster    *scoreThresholdsWire   `json:"unknown_cluster"`
+	Continuity        *continuityProfileWire `json:"continuity"`
+	CalibrationRecord *string                `json:"calibration_record"`
 }
 
 type modelIdentityWire struct {
@@ -78,6 +88,13 @@ type evidenceProfileWire struct {
 }
 
 type scoreThresholdsWire struct {
+	MinScore  *float64 `json:"min_score"`
+	MinMargin *float64 `json:"min_margin"`
+}
+
+type continuityProfileWire struct {
+	WindowMS  *int     `json:"window_ms"`
+	HopMS     *int     `json:"hop_ms"`
 	MinScore  *float64 `json:"min_score"`
 	MinMargin *float64 `json:"min_margin"`
 }
@@ -131,10 +148,26 @@ func (wire matchingProfileWire) build() (MatchingProfile, error) {
 	if err != nil {
 		return MatchingProfile{}, err
 	}
+	var continuity *ContinuityProfile
+	if wire.Continuity != nil {
+		value, err := wire.Continuity.build()
+		if err != nil {
+			return MatchingProfile{}, err
+		}
+		continuity = &value
+	}
 	return MatchingProfile{
 		SchemaVersion: *wire.SchemaVersion, ProfileID: *wire.ProfileID, Model: model, Evidence: evidence,
-		Identity: identity, UnknownCluster: unknownCluster, CalibrationRecord: *wire.CalibrationRecord,
+		Identity: identity, UnknownCluster: unknownCluster, Continuity: continuity, CalibrationRecord: *wire.CalibrationRecord,
 	}, nil
+}
+
+// build 将完整的 continuity wire 转换为短窗路由配置。
+func (wire continuityProfileWire) build() (ContinuityProfile, error) {
+	if wire.WindowMS == nil || wire.HopMS == nil || wire.MinScore == nil || wire.MinMargin == nil {
+		return ContinuityProfile{}, fmt.Errorf("%w: continuity 缺少必填字段", ErrProfileInvalid)
+	}
+	return ContinuityProfile{WindowMS: *wire.WindowMS, HopMS: *wire.HopMS, MinScore: *wire.MinScore, MinMargin: *wire.MinMargin}, nil
 }
 
 // build 将完整的 wire 模型身份转换成值对象。
@@ -163,7 +196,7 @@ func (wire scoreThresholdsWire) build() (ScoreThresholds, error) {
 
 // validateMatchingProfile 校验字段完整性与数学安全边界，不提供任何生产阈值默认值。
 func validateMatchingProfile(profile MatchingProfile) error {
-	if profile.SchemaVersion != matchingProfileSchemaVersion {
+	if profile.SchemaVersion != 1 && profile.SchemaVersion != matchingProfileSchemaVersion {
 		return fmt.Errorf("%w: schema_version 不受支持", ErrProfileInvalid)
 	}
 	if strings.TrimSpace(profile.ProfileID) == "" || len(profile.ProfileID) > 128 {
@@ -181,6 +214,17 @@ func validateMatchingProfile(profile MatchingProfile) error {
 	}
 	if err := validateThresholds(profile.UnknownCluster); err != nil {
 		return err
+	}
+	if profile.SchemaVersion == matchingProfileSchemaVersion {
+		if profile.Continuity == nil || profile.Continuity.WindowMS < 1000 || profile.Continuity.WindowMS > 8000 ||
+			profile.Continuity.HopMS != profile.Continuity.WindowMS {
+			return fmt.Errorf("%w: continuity 窗口不合法", ErrProfileInvalid)
+		}
+		if err := validateThresholds(ScoreThresholds{MinScore: profile.Continuity.MinScore, MinMargin: profile.Continuity.MinMargin}); err != nil {
+			return err
+		}
+	} else if profile.Continuity != nil {
+		return fmt.Errorf("%w: schema v1 不接受 continuity", ErrProfileInvalid)
 	}
 	if !isSafeCalibrationRecord(profile.CalibrationRecord) {
 		return fmt.Errorf("%w: calibration_record 不合法", ErrProfileInvalid)

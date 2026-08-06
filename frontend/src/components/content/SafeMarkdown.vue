@@ -26,29 +26,33 @@ markdown.renderer.rules.image = (tokens, index) => {
   return `<span class="ms-markdown-image-placeholder">[图片：${alt}]</span>`
 }
 
+// Markdown 标题嵌入业务页面时从二级开始，避免与页面唯一 H1 冲突。
+markdown.renderer.rules.heading_open = (tokens, index) => {
+  const sourceLevel = Number(tokens[index].tag.slice(1)) || 1
+  const level = Math.min(sourceLevel + 1, 6)
+  return `<div class="ms-markdown-heading ms-markdown-heading--${level}" role="heading" aria-level="${level}">`
+}
+markdown.renderer.rules.heading_close = () => '</div>\n'
+
+// 外层容器只为 DOMPurify 提供稳定解析根，返回值仍是内部 Markdown 内容。
 const rendered = computed(() =>
-  DOMPurify.sanitize(markdown.render(props.content), {
-    ALLOWED_TAGS: [
-      'p',
-      'br',
-      'strong',
-      'em',
-      's',
-      'blockquote',
-      'ul',
-      'ol',
-      'li',
-      'code',
-      'pre',
-      'a',
-      'hr',
-      'h1',
-      'h2',
-      'h3',
-      'h4',
-      'span',
+  DOMPurify.sanitize(`<div>${markdown.render(props.content)}</div>`, {
+    USE_PROFILES: { html: true },
+    FORBID_TAGS: [
+      'img',
+      'audio',
+      'video',
+      'source',
+      'iframe',
+      'form',
+      'input',
+      'button',
+      'select',
+      'option',
+      'textarea',
+      'style',
     ],
-    ALLOWED_ATTR: ['href', 'title', 'class'],
+    FORBID_ATTR: ['style'],
     ALLOW_DATA_ATTR: false,
   }),
 )

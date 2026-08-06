@@ -9,7 +9,7 @@
   <body>
     <main class="preview">
       <header class="preview-head">
-        <p class="meta">MEETSIEVE DESIGN SYSTEM · V1.5.0</p>
+        <p class="meta">MEETSIEVE DESIGN SYSTEM · V1.6.0</p>
         <h1>Product Patterns</h1>
         <p>没有 UI 图时，先匹配成熟度，再使用现有组件表达业务状态。</p>
         <nav class="preview-nav" aria-label="设计系统预览">
@@ -170,33 +170,32 @@
       </section>
 
       <section class="preview-section">
-        <h2>会议纪要版本</h2>
+        <h2>单份会议纪要</h2>
         <div class="grid grid-2">
           <div class="card stack">
             <div class="row-between">
               <div>
-                <strong>当前版本 v3</strong>
-                <div class="meta">人工草稿 · 基于 AI 草稿 v2 修改</div>
+                <strong>会议纪要</strong>
+                <div class="meta">Markdown 直接渲染</div>
               </div>
-              <span class="status warning">有未保存修改</span>
+              <button class="btn">编辑</button>
             </div>
             <div class="notice warning">
               <span>补转写失败范围未作为会议事实生成结论。</span>
             </div>
-            <button class="btn btn-primary" disabled>确认当前版本</button>
+            <p><strong>会议结论</strong></p>
+            <p class="muted">Alpha 功能范围保持不变。</p>
           </div>
           <div class="card stack">
             <div class="row-between">
-              <strong>历史版本 v1</strong>
-              <span class="status success">已确认</span>
+              <strong>尚未生成会议纪要</strong>
             </div>
-            <p class="muted">历史内容保持只读。恢复会复制出新的当前版本。</p>
-            <button class="btn btn-primary">恢复为新版本</button>
+            <p class="muted">生成时使用设置中的会议纪要业务要求。</p>
+            <button class="btn btn-primary">生成会议纪要</button>
           </div>
         </div>
         <p class="maturity">
-          existing · step8-proposal/minutes-workspace.html ·
-          step8-proposal/minutes-history.html
+          existing · MeetingDetailView.vue · MinutesWorkspaceView.vue
         </p>
       </section>
 

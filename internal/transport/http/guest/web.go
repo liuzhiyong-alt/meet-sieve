@@ -1,15 +1,40 @@
 package guest
 
 import (
+	"fmt"
 	"io/fs"
 	"net/http"
 	"path"
+	"regexp"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 )
 
 const guestWebCSP = "default-src 'self'; connect-src 'self'; img-src 'self' data:; style-src 'self'; script-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'"
+
+var guestAssetReference = regexp.MustCompile(`(?:src|href)=["'](?:/guest-assets/)?(assets/[^"']+)["']`)
+
+// ValidateWebAssets 验证 Guest 入口和其静态引用已被完整嵌入当前桌面应用。
+func ValidateWebAssets(assets fs.FS) error {
+	if assets == nil {
+		return fmt.Errorf("访客页面资源不可用")
+	}
+	index, err := fs.ReadFile(assets, "guest.html")
+	if err != nil {
+		return fmt.Errorf("读取访客页面入口: %w", err)
+	}
+	for _, match := range guestAssetReference.FindAllSubmatch(index, -1) {
+		assetPath := path.Clean(string(match[1]))
+		if assetPath == "." || !strings.HasPrefix(assetPath, "assets/") {
+			return fmt.Errorf("访客页面资源路径无效")
+		}
+		if _, err := fs.ReadFile(assets, assetPath); err != nil {
+			return fmt.Errorf("读取访客页面资源 %s: %w", assetPath, err)
+		}
+	}
+	return nil
+}
 
 // registerWebRoutes 只公开 Guest 构建产物，不把桌面应用资源暴露给局域网。
 func registerWebRoutes(engine *gin.Engine, assets fs.FS) {

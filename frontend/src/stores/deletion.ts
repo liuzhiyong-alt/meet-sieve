@@ -2,10 +2,8 @@ import { defineStore } from 'pinia'
 
 import {
   DeleteMeeting,
-  DeleteRecording,
   GetDeletionJob,
   PreviewMeetingDeletion,
-  PreviewRecordingDeletion,
   RetryDeletion,
 } from '../../wailsjs/go/wails/DeletionBinding'
 import type { wails } from '../../wailsjs/go/models'
@@ -19,46 +17,27 @@ export const useDeletionStore = defineStore('deletion', {
     errorMessage: '',
   }),
   actions: {
-    /** previewRecording 请求后端扫描录音范围。 */
-    async previewRecording(meetingID: string): Promise<boolean> {
-      this.begin()
-      return this.consume(await PreviewRecordingDeletion(meetingID), (data) => {
-        this.preview = data
-      })
-    },
     /** previewMeeting 请求后端扫描整个规范会议目录。 */
     async previewMeeting(meetingID: string): Promise<boolean> {
-      this.begin()
-      return this.consume(await PreviewMeetingDeletion(meetingID), (data) => {
-        this.preview = data
-      })
-    },
-    /** deleteRecording 只回传预览 revision/digest。 */
-    async deleteRecording(): Promise<boolean> {
-      if (!this.preview) return false
-      this.begin()
-      return this.consume(
-        await DeleteRecording({
-          meeting_id: this.preview.meeting_id,
-          revision: this.preview.revision,
-          digest: this.preview.digest,
-        }),
+      return this.invoke(
+        () => PreviewMeetingDeletion(meetingID),
         (data) => {
-          this.job = data
+          this.preview = data
         },
       )
     },
     /** deleteMeeting 额外传递用户手工输入的会议号。 */
     async deleteMeeting(meetingNo: string): Promise<boolean> {
-      if (!this.preview) return false
-      this.begin()
-      return this.consume(
-        await DeleteMeeting({
-          meeting_id: this.preview.meeting_id,
-          meeting_no: meetingNo,
-          revision: this.preview.revision,
-          digest: this.preview.digest,
-        }),
+      const preview = this.preview
+      if (!preview) return false
+      return this.invoke(
+        () =>
+          DeleteMeeting({
+            meeting_id: preview.meeting_id,
+            meeting_no: meetingNo,
+            revision: preview.revision,
+            digest: preview.digest,
+          }),
         (data) => {
           this.job = data
         },
@@ -66,18 +45,36 @@ export const useDeletionStore = defineStore('deletion', {
     },
     /** loadJob 从 SQLite 重建删除失败恢复状态。 */
     async loadJob(meetingID: string): Promise<boolean> {
-      this.begin()
-      return this.consume(await GetDeletionJob(meetingID), (data) => {
-        this.job = data
-      })
+      return this.invoke(
+        () => GetDeletionJob(meetingID),
+        (data) => {
+          this.job = data
+        },
+      )
     },
     /** retry 只让后端继续原 manifest 剩余项。 */
     async retry(): Promise<boolean> {
       if (!this.job) return false
+      return this.invoke(
+        () => RetryDeletion(this.job!.job_id),
+        (data) => {
+          this.job = data
+        },
+      )
+    },
+    /** invoke 保证 Wails Promise 拒绝时也会恢复按钮状态。 */
+    async invoke<T>(
+      call: () => Promise<{ code: number; message: string; data?: T }>,
+      apply: (data: T) => void,
+    ): Promise<boolean> {
       this.begin()
-      return this.consume(await RetryDeletion(this.job.job_id), (data) => {
-        this.job = data
-      })
+      try {
+        return this.consume(await call(), apply)
+      } catch {
+        this.loading = false
+        this.errorMessage = '无法完成删除操作'
+        return false
+      }
     },
     /** consume 统一处理删除命令状态。 */
     async consume<T>(

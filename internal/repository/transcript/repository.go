@@ -26,6 +26,7 @@ type RawRecordRow struct {
 	ASRSessionID           string
 	ParticipantDisplayName string
 	ClusterDisplayNo       int
+	TrackDisplayNo         int
 	GuestDisplayName       string
 	SourceURL              string
 	OriginalName           string
@@ -140,6 +141,20 @@ func (repository *Repository) NextEventSeq(ctx context.Context, tx *gorm.DB, mee
 	return next, nil
 }
 
+// SumDiscardedSamplesBefore 汇总逻辑样本边界之前已经完成的媒体暂停样本。
+func (repository *Repository) SumDiscardedSamplesBefore(ctx context.Context, tx *gorm.DB, meetingID string, logicalSample int64) (int64, error) {
+	if tx == nil || meetingID == "" || logicalSample < 0 {
+		return 0, fmt.Errorf("读取媒体暂停样本：参数无效")
+	}
+	var discarded int64
+	if err := tx.WithContext(ctx).Raw(`SELECT COALESCE(SUM(discarded_samples), 0)
+FROM meeting_media_pauses
+WHERE meeting_id = ? AND state = 'completed' AND logical_sample <= ?`, meetingID, logicalSample).Scan(&discarded).Error; err != nil {
+		return 0, fmt.Errorf("读取媒体暂停样本失败：%w", err)
+	}
+	return discarded, nil
+}
+
 // CreateFinal 在调用方事务中同时插入 event header 和 final utterance。
 func (repository *Repository) CreateFinal(ctx context.Context, tx *gorm.DB, event models.MeetingEvent, utterance models.Utterance) error {
 	if tx == nil {
@@ -150,6 +165,17 @@ func (repository *Repository) CreateFinal(ctx context.Context, tx *gorm.DB, even
 	}
 	if err := tx.WithContext(ctx).Create(&utterance).Error; err != nil {
 		return fmt.Errorf("写入 final 发言失败：%w", err)
+	}
+	return nil
+}
+
+// CreateVoiceCommandCandidate 在 final 事务中写入语音指令候选用途关系。
+func (repository *Repository) CreateVoiceCommandCandidate(ctx context.Context, tx *gorm.DB, relation models.AgentVoiceCommandUtterance) error {
+	if tx == nil || relation.ID == "" || relation.CommandID == "" || relation.UtteranceID == "" {
+		return fmt.Errorf("创建语音指令候选：参数无效")
+	}
+	if err := tx.WithContext(ctx).Create(&relation).Error; err != nil {
+		return fmt.Errorf("创建语音指令候选失败：%w", err)
 	}
 	return nil
 }
@@ -230,8 +256,10 @@ COALESCE(utterance.asr_session_id, gap.asr_session_id, '') AS asr_session_id,
 COALESCE(gap.reason, '') AS gap_reason
 FROM meeting_events AS event
 LEFT JOIN utterances AS utterance ON utterance.event_id = event.id
+LEFT JOIN agent_voice_command_utterances AS voice_command ON voice_command.utterance_id = utterance.id
 LEFT JOIN asr_gaps AS gap ON gap.event_id = event.id
 WHERE event.meeting_id = ? AND event.seq > ? AND event.kind IN ('utterance.final', 'asr.gap')
+  AND (voice_command.id IS NULL OR voice_command.state = 'released')
 ORDER BY event.seq ASC LIMIT ?`
 	var rows []TimelineRow
 	if err := repository.reader.WithContext(ctx).Raw(statement, meetingID, afterSeq, limit).Scan(&rows).Error; err != nil {
@@ -253,6 +281,7 @@ SELECT event.seq, event.kind, event.occurred_at,
        COALESCE(utterance.asr_session_id, '') AS asr_session_id,
        COALESCE(participant.display_name_snapshot, '') AS participant_display_name,
        COALESCE(cluster.display_no, 0) AS cluster_display_no,
+	   COALESCE(track.display_no, 0) AS track_display_no,
        COALESCE(message.display_name_snapshot, guest.display_name, '') AS guest_display_name,
        COALESCE(resource.source_url, '') AS source_url,
        COALESCE(resource.original_name, '') AS original_name,
@@ -264,14 +293,17 @@ SELECT event.seq, event.kind, event.occurred_at,
             THEN COALESCE(json_extract(event.payload_json, '$.text'), '') ELSE '' END AS agent_text
 FROM meeting_events AS event
 LEFT JOIN utterances AS utterance ON utterance.event_id = event.id AND utterance.meeting_id = event.meeting_id
+LEFT JOIN agent_voice_command_utterances AS voice_command ON voice_command.utterance_id = utterance.id
 LEFT JOIN asr_gaps AS gap ON gap.event_id = event.id AND gap.meeting_id = event.meeting_id
 LEFT JOIN meeting_participants AS participant ON participant.id = utterance.current_participant_id
 LEFT JOIN speaker_clusters AS cluster ON cluster.id = utterance.speaker_cluster_id
+LEFT JOIN speaker_tracks AS track ON track.id = utterance.speaker_track_id
 LEFT JOIN messages AS message ON message.event_id = event.id AND message.meeting_id = event.meeting_id
 LEFT JOIN resources AS resource ON resource.event_id = event.id AND resource.meeting_id = event.meeting_id AND resource.state = 'completed'
 LEFT JOIN guest_sessions AS guest ON guest.id = resource.guest_session_id AND guest.meeting_id = event.meeting_id
 WHERE event.meeting_id = ?
   AND event.kind IN ('utterance.final', 'asr.gap', 'message.created', 'resource.created', 'ai.question', 'ai.answer', 'ai.cancelled', 'ai.failed')
+  AND (voice_command.id IS NULL OR voice_command.state = 'released')
   AND (event.kind <> 'resource.created' OR resource.id IS NOT NULL)
 ORDER BY event.seq ASC`
 	var rows []RawRecordRow

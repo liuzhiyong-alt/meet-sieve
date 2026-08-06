@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	speakerdomain "meet-sieve/internal/domain/speaker"
 	correctionrepository "meet-sieve/internal/repository/correction"
 )
 
@@ -18,6 +19,8 @@ type Entry struct {
 	SpeakerDisplay           string
 	CurrentParticipantID     string
 	SpeakerClusterID         string
+	ClusterDisplayNo         int
+	ClusterParticipantID     string
 	AssignmentSource         string
 	TextRevision             int
 	SpeakerRevision          int
@@ -108,16 +111,12 @@ func mapEntries(rows []correctionrepository.EntryRow, participants []correctionr
 			Seq: row.Seq, UtteranceID: row.UtteranceID, StartSample: row.StartSample, EndSample: row.EndSample,
 			OriginalText: row.OriginalText, CurrentText: row.CurrentText,
 			SpeakerDisplay: row.ParticipantDisplayName, CurrentParticipantID: row.CurrentParticipantID,
-			SpeakerClusterID: row.SpeakerClusterID, AssignmentSource: row.AssignmentSource,
+			SpeakerClusterID: row.SpeakerClusterID, ClusterDisplayNo: row.ClusterDisplayNo,
+			ClusterParticipantID: row.ClusterParticipantID, AssignmentSource: row.AssignmentSource,
 			TextRevision: row.TextRevision, SpeakerRevision: row.SpeakerRevision,
 			ClusterRevision: row.ClusterRevision, ClusterCount: row.ClusterCount, CanPlay: row.AudioReady,
 		}
-		if entry.SpeakerDisplay == "" && row.ClusterDisplayNo > 0 {
-			entry.SpeakerDisplay = fmt.Sprintf("未知说话人 %d", row.ClusterDisplayNo)
-		}
-		if entry.SpeakerDisplay == "" {
-			entry.SpeakerDisplay = "未知说话人"
-		}
+		entry.SpeakerDisplay = speakerdomain.DisplayName(row.ParticipantDisplayName, row.ClusterDisplayNo, row.TrackDisplayNo)
 		if !entry.CanPlay {
 			entry.PlaybackDisabledReason = "对应录音不可回放"
 		}

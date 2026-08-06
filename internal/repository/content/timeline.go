@@ -20,13 +20,24 @@ type TimelineRow struct {
 	PayloadJSON              string
 	UtteranceID              string
 	UtteranceText            string
+	SpeakerRevision          int
 	StartSample              int64
 	EndSample                int64
 	ParticipantID            string
 	ParticipantName          string
 	SpeakerClusterID         string
+	ClusterDisplayNo         int
+	SpeakerTrackID           string
+	TrackDisplayNo           int
 	ASRSessionID             string
 	ASRSpeakerLabel          string
+	AgentTriggerID           string
+	AgentParticipantID       string
+	AgentParticipantName     string
+	AgentClusterID           string
+	AgentClusterDisplayNo    int
+	AgentTrackID             string
+	AgentTrackDisplayNo      int
 	MessageID                string
 	MessageAuthorKind        string
 	MessageDisplayName       string
@@ -60,13 +71,24 @@ event.seq, event.kind AS event_kind, event.occurred_at, event.source,
 COALESCE(event.entity_id, '') AS entity_id, COALESCE(event.payload_json, '') AS payload_json,
 COALESCE(utterance.id, '') AS utterance_id,
 COALESCE(utterance.current_text, '') AS utterance_text,
+COALESCE(utterance.speaker_revision, 0) AS speaker_revision,
 COALESCE(utterance.start_sample, 0) AS start_sample,
 COALESCE(utterance.end_sample, 0) AS end_sample,
 COALESCE(utterance.current_participant_id, '') AS participant_id,
 COALESCE(participant.display_name_snapshot, '') AS participant_name,
 COALESCE(utterance.speaker_cluster_id, '') AS speaker_cluster_id,
+COALESCE(cluster.display_no, 0) AS cluster_display_no,
+COALESCE(utterance.speaker_track_id, '') AS speaker_track_id,
+COALESCE(track.display_no, 0) AS track_display_no,
 COALESCE(utterance.asr_session_id, '') AS asr_session_id,
 COALESCE(utterance.asr_speaker_label, '') AS asr_speaker_label,
+COALESCE(agent_trigger.id, '') AS agent_trigger_id,
+COALESCE(agent_participant.id, '') AS agent_participant_id,
+COALESCE(agent_participant.display_name_snapshot, '') AS agent_participant_name,
+COALESCE(agent_trigger.speaker_cluster_id, '') AS agent_cluster_id,
+COALESCE(agent_cluster.display_no, 0) AS agent_cluster_display_no,
+COALESCE(agent_trigger.speaker_track_id, '') AS agent_track_id,
+COALESCE(agent_track.display_no, 0) AS agent_track_display_no,
 COALESCE(message.id, '') AS message_id,
 COALESCE(message.author_kind, '') AS message_author_kind,
 COALESCE(message.display_name_snapshot, '') AS message_display_name,
@@ -87,8 +109,25 @@ COALESCE(gap.reason, '') AS gap_reason
 FROM meeting_events AS event
 LEFT JOIN utterances AS utterance
   ON event.kind = 'utterance.final' AND utterance.event_id = event.id AND utterance.meeting_id = event.meeting_id
+LEFT JOIN agent_voice_command_utterances AS voice_command
+  ON voice_command.utterance_id = utterance.id
 LEFT JOIN meeting_participants AS participant
   ON participant.id = utterance.current_participant_id AND participant.meeting_id = event.meeting_id
+LEFT JOIN speaker_clusters AS cluster
+  ON cluster.id = utterance.speaker_cluster_id AND cluster.meeting_id = event.meeting_id
+LEFT JOIN speaker_tracks AS track
+  ON track.id = utterance.speaker_track_id AND track.meeting_id = event.meeting_id
+LEFT JOIN utterances AS agent_trigger
+  ON event.kind = 'ai.question' AND agent_trigger.id = CASE
+       WHEN json_valid(event.payload_json) THEN json_extract(event.payload_json, '$.trigger_utterance_id')
+       ELSE NULL
+     END AND agent_trigger.meeting_id = event.meeting_id
+LEFT JOIN meeting_participants AS agent_participant
+  ON agent_participant.id = agent_trigger.current_participant_id AND agent_participant.meeting_id = event.meeting_id
+LEFT JOIN speaker_clusters AS agent_cluster
+  ON agent_cluster.id = agent_trigger.speaker_cluster_id AND agent_cluster.meeting_id = event.meeting_id
+LEFT JOIN speaker_tracks AS agent_track
+  ON agent_track.id = agent_trigger.speaker_track_id AND agent_track.meeting_id = event.meeting_id
 LEFT JOIN messages AS message
   ON event.kind = 'message.created' AND message.event_id = event.id AND message.meeting_id = event.meeting_id
 LEFT JOIN resources AS resource
@@ -97,7 +136,8 @@ LEFT JOIN guest_sessions AS guest
   ON guest.id = resource.guest_session_id AND guest.meeting_id = event.meeting_id
 LEFT JOIN asr_gaps AS gap
   ON event.kind = 'asr.gap' AND gap.event_id = event.id AND gap.meeting_id = event.meeting_id
-WHERE event.meeting_id = ? %s
+WHERE event.meeting_id = ?
+  AND (voice_command.id IS NULL OR voice_command.state = 'released') %s
 ORDER BY event.seq %s
 LIMIT ?`, operator, order)
 	arguments := []any{meetingID}

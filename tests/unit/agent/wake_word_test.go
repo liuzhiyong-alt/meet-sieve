@@ -43,3 +43,19 @@ func TestWakeMatcher_MatchesOnlySentenceStartWithQuestion(t *testing.T) {
 		}
 	}
 }
+
+// TestWakeMatcher_FoldsPunctuationInsideWakeWord 验证配置与 ASR 的中英文标点差异不影响匹配。
+func TestWakeMatcher_FoldsPunctuationInsideWakeWord(t *testing.T) {
+	wake, err := agent.NormalizeWakeWord("哈喽,会议助手")
+	if err != nil {
+		t.Fatal(err)
+	}
+	matcher := agent.NewWakeMatcher(wake)
+	matched, question := matcher.MatchPrefix("哈喽，会议助手。")
+	if !matched || question != "" {
+		t.Fatalf("标点归一化后应匹配纯唤醒 final：matched=%v question=%q", matched, question)
+	}
+	if got := matcher.Match("哈喽会议助手：总结结论"); got != "总结结论" {
+		t.Fatalf("省略内部标点时匹配错误：%q", got)
+	}
+}

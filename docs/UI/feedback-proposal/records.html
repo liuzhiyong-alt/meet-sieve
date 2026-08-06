@@ -55,9 +55,7 @@
                   <option value="recovery_required">需要恢复</option>
                   <option value="gap_conflict">缺口冲突</option>
                   <option value="gap_pending">补转写处理中</option>
-                  <option value="minute_candidate">纪要待确认</option>
                   <option value="agent_unsynced">Codex 未同步</option>
-                  <option value="minute_confirmed">纪要已确认</option>
                   <option value="saved">本地已保存</option>
                   <option value="deleting">删除处理中</option>
                 </select></label
@@ -155,13 +153,13 @@
                   </div>
                 </div>
                 <div class="row">
-                  <span class="status warn">纪要待确认</span
+                  <span class="status warn">纪要已生成</span
                   ><button
                     class="btn"
                     type="button"
                     data-prototype-feedback="原型：打开会议纪要"
                   >
-                    确认纪要
+                    打开
                   </button>
                 </div>
               </li>
@@ -339,13 +337,13 @@
                   </div>
                 </div>
                 <div class="row">
-                  <span class="status warn">纪要待确认</span
+                  <span class="status warn">纪要已生成</span
                   ><button
                     class="btn"
                     type="button"
                     data-prototype-feedback="原型：打开会议纪要"
                   >
-                    确认纪要
+                    打开
                   </button>
                 </div>
               </li>
@@ -361,5 +359,23 @@
         </div>
       </main>
     </div>
+    <script>
+      /** normalizeRecordActions 把增量金标的每行操作固定为打开和删除。 */
+      function normalizeRecordActions() {
+        document.querySelectorAll('[data-record] .row').forEach((actions) => {
+          const open = actions.querySelector('button')
+          if (!open) return
+          open.textContent = '打开'
+          open.dataset.prototypeFeedback = '原型：打开会议详情'
+          const remove = document.createElement('button')
+          remove.className = 'btn btn-danger'
+          remove.type = 'button'
+          remove.textContent = '删除'
+          remove.dataset.prototypeFeedback = '原型：预览并确认删除整场会议'
+          actions.append(remove)
+        })
+      }
+      normalizeRecordActions()
+    </script>
   </body>
 </html>

@@ -39,7 +39,8 @@ func (coordinator *RealtimeCoordinator) connect(inputStart int64, reconnectCount
 		coordinator.finishSession(sessionID, "failed", "reconnecting", pointerString(apperr.CodeASRStreamInterrupted.ErrorCode))
 		return fmt.Errorf("实时转写 adapter 不可用")
 	}
-	remote, err := transcriber.Start(runContext, port.RealtimeTranscriptionRequest{MeetingID: meetingID, Format: port.AudioFormat{SampleRate: 16000, BitsPerSample: 16, Channels: 1}, StartSample: inputStart})
+	request := port.RealtimeTranscriptionRequest{MeetingID: meetingID, Format: port.AudioFormat{SampleRate: 16000, BitsPerSample: 16, Channels: 1}, StartSample: inputStart}
+	remote, err := coordinator.startTranscriber(runContext, transcriber, request)
 	if err != nil {
 		coordinator.finishSession(sessionID, "failed", "reconnecting", pointerString(errorCodeOf(err)))
 		return err
@@ -65,6 +66,42 @@ func (coordinator *RealtimeCoordinator) connect(inputStart int64, reconnectCount
 	return nil
 }
 
+type transcriberStartResult struct {
+	remote port.RealtimeTranscriptionSession
+	err    error
+}
+
+// startTranscriber 为完整 adapter Start 设置硬边界；迟到成功的连接会立即关闭，避免资源泄漏。
+func (coordinator *RealtimeCoordinator) startTranscriber(ctx context.Context, transcriber port.RealtimeTranscriber, request port.RealtimeTranscriptionRequest) (port.RealtimeTranscriptionSession, error) {
+	attemptContext, cancel := context.WithTimeout(ctx, coordinator.dependencies.ConnectTimeout)
+	defer cancel()
+	result := make(chan transcriberStartResult)
+	go func() {
+		remote, err := transcriber.Start(attemptContext, request)
+		select {
+		case result <- transcriberStartResult{remote: remote, err: err}:
+		case <-attemptContext.Done():
+			stopLateTranscriber(remote)
+		}
+	}()
+	select {
+	case started := <-result:
+		return started.remote, started.err
+	case <-attemptContext.Done():
+		return nil, apperr.Dependency(apperr.CodeASRConnectTimeout, attemptContext.Err(), apperr.WithOp("transcript.realtime.connect"))
+	}
+}
+
+// stopLateTranscriber 回收在超时后才返回的物理连接，且不阻塞重连监督器。
+func stopLateTranscriber(remote port.RealtimeTranscriptionSession) {
+	if remote == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	_ = remote.Stop(ctx)
+}
+
 // sendFrames 是当前物理连接唯一 PCM 消费者和 writer。
 func (coordinator *RealtimeCoordinator) sendFrames(current *physicalSession) {
 	defer close(current.senderDone)
@@ -88,19 +125,21 @@ func (coordinator *RealtimeCoordinator) sendFrames(current *physicalSession) {
 // readEvents 归一化处理 lifecycle、partial、final 与安全失败事件。
 func (coordinator *RealtimeCoordinator) readEvents(current *physicalSession) {
 	for event := range current.remote.Events() {
+		if !coordinator.isCurrentGeneration(current) {
+			return
+		}
+		event.MeetingID, event.SessionID, event.Generation = coordinator.meetingID, current.id, current.generation
 		switch event.Type {
 		case port.TranscriptionSessionStarted:
 			coordinator.markStreaming(current, event.ProviderSessionID)
 		case port.TranscriptionPartial:
-			event.MeetingID = coordinator.meetingID
 			coordinator.partials.Accept(event)
 		case port.TranscriptionFinal:
-			event.SessionID = current.id
 			if !coordinator.finals.TrySubmit(event) {
 				coordinator.reportFailure(realtimeFailure{generation: current.generation, code: apperr.CodeASREventBackpressure.ErrorCode, reason: transcriptdomain.GapBackpressure, cause: fmt.Errorf("final 处理队列已满")})
 				return
 			}
-			coordinator.partials.Clear(event.ResultID)
+			coordinator.partials.Clear(event)
 		case port.TranscriptionFailed:
 			failure := realtimeFailure{generation: current.generation, code: apperr.CodeASRStreamInterrupted.ErrorCode, retryable: true, reason: transcriptdomain.GapDisconnected}
 			if event.Failure != nil {
@@ -116,6 +155,13 @@ func (coordinator *RealtimeCoordinator) readEvents(current *physicalSession) {
 	if !stopping {
 		coordinator.reportFailure(realtimeFailure{generation: current.generation, code: apperr.CodeASRStreamInterrupted.ErrorCode, retryable: true, reason: transcriptdomain.GapDisconnected, cause: fmt.Errorf("ASR 事件流已关闭")})
 	}
+}
+
+// isCurrentGeneration 拒绝旧物理 session 在重连或暂停后到达的迟到事件。
+func (coordinator *RealtimeCoordinator) isCurrentGeneration(current *physicalSession) bool {
+	coordinator.mu.Lock()
+	defer coordinator.mu.Unlock()
+	return current != nil && coordinator.current == current && coordinator.generation == current.generation
 }
 
 // supervise 串行取得物理 session 失败处理权，避免 reader/writer 双重重连。
@@ -146,6 +192,11 @@ func (coordinator *RealtimeCoordinator) handleFailure(failure realtimeFailure) {
 	}
 	startAttempt := coordinator.reconnectCount
 	coordinator.mu.Unlock()
+	sessionID := ""
+	if current != nil {
+		sessionID = current.id
+	}
+	coordinator.publishFailureReport(failure, sessionID, startAttempt)
 	if current != nil {
 		closeContext, cancel := context.WithTimeout(context.Background(), time.Second)
 		_ = current.remote.Stop(closeContext)
@@ -153,7 +204,9 @@ func (coordinator *RealtimeCoordinator) handleFailure(failure realtimeFailure) {
 		coordinator.finishSession(current.id, "failed", "reconnecting", pointerString(failure.code))
 		coordinator.openGap(lastSent, failure.reason, &current.id)
 	}
-	coordinator.partials.ClearAll()
+	if current != nil {
+		coordinator.partials.ClearAll(coordinator.meetingID, current.id, current.generation)
+	}
 	if !failure.retryable {
 		coordinator.markUnavailable(failure.code)
 		return
@@ -170,6 +223,17 @@ func (coordinator *RealtimeCoordinator) handleFailure(failure realtimeFailure) {
 		}
 	}
 	coordinator.markUnavailable(failure.code)
+}
+
+// publishFailureReport 只上报已经取得状态机处理权的失败，避免 reader/writer 重复记录。
+func (coordinator *RealtimeCoordinator) publishFailureReport(failure realtimeFailure, sessionID string, reconnectCount int) {
+	if coordinator.dependencies.ReportFailure == nil {
+		return
+	}
+	coordinator.dependencies.ReportFailure(RealtimeFailureReport{
+		MeetingID: coordinator.meetingID, SessionID: sessionID, ReconnectCount: reconnectCount,
+		ErrorCode: failure.code, Cause: failure.cause,
+	})
 }
 
 // reportFailure 无阻塞提交安全失败；队列异常饱和时直接标记不可用。

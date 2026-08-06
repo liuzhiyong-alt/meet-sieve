@@ -21,14 +21,21 @@ func TestEncodeFullClientRequest(t *testing.T) {
 	}
 }
 
-// TestEncodeAudioOnlyRequest 验证最后一包使用负 sequence 且不改变 PCM 内容语义。
+// TestEncodeAudioOnlyRequest 验证普通音频无 sequence，最后一包使用空尾包标记。
 func TestEncodeAudioOnlyRequest(t *testing.T) {
-	frame, err := EncodeAudioOnlyRequest(7, true, []byte{1, 0, 2, 0})
+	frame, err := EncodeAudioOnlyRequest(false, []byte{1, 0, 2, 0})
+	if err != nil {
+		t.Fatalf("编码普通音频包失败：%v", err)
+	}
+	if !bytes.Equal(frame[:4], []byte{0x11, 0x20, 0x01, 0x00}) {
+		t.Fatalf("普通音频 Header 错误：%x", frame[:4])
+	}
+	last, err := EncodeAudioOnlyRequest(true, nil)
 	if err != nil {
 		t.Fatalf("编码尾音频包失败：%v", err)
 	}
-	if !bytes.Equal(frame[:4], []byte{0x11, 0x23, 0x01, 0x00}) || int32(binary.BigEndian.Uint32(frame[4:8])) != -7 {
-		t.Fatalf("尾音频 Header 或 sequence 错误：%x", frame[:8])
+	if !bytes.Equal(last[:4], []byte{0x11, 0x22, 0x01, 0x00}) {
+		t.Fatalf("尾音频 Header 错误：%x", last[:4])
 	}
 }
 
@@ -55,5 +62,19 @@ func TestDecodeServerFrame(t *testing.T) {
 	wire[1] = 0xE0
 	if _, err = DecodeServerFrame(wire); err == nil {
 		t.Fatal("未知消息类型必须失败")
+	}
+}
+
+// TestDecodeUnsequencedServerFrame 验证优化流式端点的无 sequence 响应可被解析。
+func TestDecodeUnsequencedServerFrame(t *testing.T) {
+	payload := []byte(`{"result":{"text":"fixture"}}`)
+	compressed, err := gzipPayload(payload)
+	if err != nil {
+		t.Fatalf("准备压缩响应失败：%v", err)
+	}
+	wire := encodePayloadFrame(messageFullServerResponse, flagNoSequence, serializationJSON, compressionGzip, nil, compressed)
+	frame, err := DecodeServerFrame(wire)
+	if err != nil || frame.Sequence != 0 || !bytes.Equal(frame.Payload, payload) {
+		t.Fatalf("无 sequence 响应解析错误：frame=%+v err=%v", frame, err)
 	}
 }

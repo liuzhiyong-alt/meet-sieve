@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
+import type { wails } from '../../../wailsjs/go/models'
 import {
   OpenExternalLink,
   OpenResource,
@@ -8,84 +9,53 @@ import {
 } from '../../../wailsjs/go/wails/ResourceBinding'
 import { useQueryStore } from '../../stores/query'
 import { useDeletionStore } from '../../stores/deletion'
+import { useMinutesStore } from '../../stores/minutes'
 import { setBreadcrumbTitles } from '../../router/breadcrumb'
+import SafeMarkdown from '../../components/content/SafeMarkdown.vue'
+import CodexHandoffDialog from './CodexHandoffDialog.vue'
+import SeqCursorPagination from './SeqCursorPagination.vue'
 
 const props = defineProps<{ id: string }>()
 const route = useRoute()
 const router = useRouter()
 const query = useQueryStore()
 const deletion = useDeletionStore()
-const deleteKind = ref<'recording' | 'meeting'>('recording')
-const deleteOpen = ref(false)
-const confirmation = ref('')
+const minutes = useMinutesStore()
 const actionError = ref('')
-const tab = computed(() => String(route.query.tab ?? 'overview'))
+const codexHandoffOpen = ref(false)
+const detailTabs = ['transcript', 'minutes', 'messages'] as const
+const tab = computed(() => {
+  const value = String(route.query.tab ?? 'transcript')
+  return detailTabs.includes(value as (typeof detailTabs)[number])
+    ? value
+    : 'transcript'
+})
+const pageNumber = computed(() =>
+  Math.max(1, Number(route.query.page ?? 1) || 1),
+)
 
-type DetailStatusAxis =
-  'highest' | 'localSave' | 'realtimeAsr' | 'gap' | 'agent' | 'minute' | 'lan'
-
-const detailStatusLabels: Record<DetailStatusAxis, Record<string, string>> = {
-  highest: {
-    deleting: '删除处理中',
-    recovery_required: '需要恢复',
-    gap_conflict: '缺口冲突',
-    gap_pending: '补转写处理中',
-    minute_candidate: '纪要待确认',
-    agent_unsynced: 'Codex 未同步',
-    minute_confirmed: '纪要已确认',
-    saved: '本地已保存',
-  },
-  localSave: {
-    pending: '等待写入',
-    saving: '正在本地保存',
-    saved: '本地已保存',
-    failed: '本地保存失败',
-  },
-  realtimeAsr: {
-    idle: '尚未启动',
-    connecting: '正在连接',
-    streaming: '实时转写正常',
-    reconnecting: '连接中断，正在重连',
-    unavailable: '暂不可用',
-    stopped: '已停止',
-  },
-  gap: {
-    none: '无缺口',
-    pending: '待处理',
-    processing: '补转写处理中',
-    completed: '已补齐',
-    failed: '补转写失败',
-    conflict: '存在冲突',
-  },
-  agent: {
-    unchecked: '尚未检测',
-    initializing: '正在准备',
-    available: '可参与',
-    busy: '正在参与',
-    busy_long: '处理时间较长',
-    unavailable: '暂不可用',
-    approval_pending: '等待主持人审批',
-    unsynced: '结束同步失败',
-  },
-  minute: {
-    not_generated: '尚未生成',
-    generating: '正在生成',
-    draft: '草稿待确认',
-    confirmed: '已确认',
-    failed: '生成失败',
-  },
-  lan: {
-    disabled: '未开启',
-    starting: '正在启动',
-    serving: '访客页运行中',
-    failed: '访客页启动失败',
-    stopped: '已停止',
-  },
+const transcriptKindLabels: Record<string, string> = {
+  'asr.gap': '转写缺口',
+  'message.created': '会议消息',
+  'resource.created': '会议资料',
+  'ai.question': 'AI 问题',
+  'ai.answer': 'AI 回答',
+  'ai.cancelled': 'AI 回答已取消',
+  'ai.failed': 'AI 回答失败',
 }
 
-/** detailStatusText 把内部状态码映射为稳定的中文文案。 */
-function detailStatusText(axis: DetailStatusAxis, value: string): string {
-  return detailStatusLabels[axis][value] ?? '状态待确认'
+const resourceStateLabels: Record<string, string> = {
+  ready: '等待上传',
+  uploading: '正在上传',
+  processing: '正在校验',
+  completed: '可打开',
+  verified: '完整性已验证',
+  missing: '文件缺失',
+  changed: '文件内容已变化',
+  outside_workspace: '文件位置异常',
+  unavailable: '文件暂不可用',
+  cancelled: '上传已取消',
+  failed: '上传失败',
 }
 
 /** loadTab 按 URL 页签懒加载对应长列表。 */
@@ -102,6 +72,7 @@ async function loadTab(): Promise<void> {
       Number(route.query.after ?? 0),
       Number(route.query.before ?? 0),
     )
+  if (tab.value === 'minutes') await minutes.refresh(props.id)
 }
 /** load 先读摘要，不存在时回记录页并携带一次性提示。 */
 async function load(): Promise<void> {
@@ -127,32 +98,21 @@ async function load(): Promise<void> {
 function selectTab(value: string): void {
   void router.push({
     path: route.path,
-    query: value === 'overview' ? {} : { tab: value },
+    query: value === 'transcript' ? {} : { tab: value },
   })
 }
-/** previewDelete 从后端获取不可扩大的真实清单摘要。 */
-async function previewDelete(kind: 'recording' | 'meeting'): Promise<void> {
-  deleteKind.value = kind
-  confirmation.value = ''
+
+/** generateMinutes 主动生成首份纪要并刷新详情状态。 */
+async function generateMinutes(): Promise<void> {
+  const gapState = query.detail?.summary.gap_state ?? 'none'
   if (
-    await (kind === 'recording'
-      ? deletion.previewRecording(props.id)
-      : deletion.previewMeeting(props.id))
-  )
-    deleteOpen.value = true
-}
-/** confirmDelete 二次确认后执行删除；整场必须手工输入会议号。 */
-async function confirmDelete(): Promise<void> {
-  const ok =
-    deleteKind.value === 'recording'
-      ? await deletion.deleteRecording()
-      : await deletion.deleteMeeting(confirmation.value.trim())
-  if (!ok) return
-  deleteOpen.value = false
-  if (deletion.job?.state === 'failed')
-    await router.push(`/meetings/${props.id}/delete-recovery`)
-  else if (deleteKind.value === 'meeting') await router.replace('/meetings')
-  else await query.loadDetail(props.id)
+    await minutes.generate(
+      props.id,
+      gapState !== 'none' && gapState !== 'completed',
+    )
+  ) {
+    await query.loadDetail(props.id)
+  }
 }
 /** openResource 只响应用户点击，并由后端重读完整性事实。 */
 async function openResource(
@@ -169,16 +129,70 @@ async function openResource(
   actionError.value = result.code === 200 ? '' : result.message
   if (result.code !== 200) await query.loadContent(props.id)
 }
-/** turnSeq 使用真实 seq 边界，不在前端猜测 offset。 */
-function turnSeq(after: number, before: number): void {
+/** turnSeq 使用真实 seq 边界翻页，并记录仅用于展示的当前页码。 */
+function turnSeq(after: number, before: number, direction: -1 | 1): void {
   void router.push({
     path: route.path,
     query: {
       tab: tab.value,
       after: after || undefined,
       before: before || undefined,
+      page: Math.max(1, pageNumber.value + direction),
     },
   })
+}
+
+/** transcriptItemLabel 返回说话人或中文事件名称，不暴露内部 kind。 */
+function transcriptItemLabel(item: wails.TranscriptItemDTO): string {
+  if (item.kind === 'utterance.final')
+    return item.speaker_display || '未识别说话人'
+  return transcriptKindLabels[item.kind] ?? '会议事件'
+}
+
+/** meetingOffset 把事件绝对时间转换为会议内 HH:MM:SS。 */
+function meetingOffset(occurredAt: number): string {
+  const startedAt = query.detail?.summary.started_at ?? occurredAt
+  const seconds = Math.max(0, Math.floor((occurredAt - startedAt) / 1000))
+  const hours = Math.floor(seconds / 3600)
+  const minutes = Math.floor((seconds % 3600) / 60)
+  return [hours, minutes, seconds % 60]
+    .map((value) => String(value).padStart(2, '0'))
+    .join(':')
+}
+
+/** contentTitle 根据会议内容类型生成稳定的中文标题。 */
+function contentTitle(item: wails.ContentItemDTO): string {
+  if (item.kind === 'ai.answer') return 'AI 回答'
+  if (item.resource_kind === 'attachment') return item.resource_name || '附件'
+  if (item.resource_kind === 'link') return item.hostname || '链接'
+  return item.display_name || '会议消息'
+}
+
+/** contentDetail 返回正文、脱敏链接或中文资料状态。 */
+function contentDetail(item: wails.ContentItemDTO): string {
+  return (
+    item.text ||
+    item.display_url ||
+    resourceStateLabels[item.resource_state ?? ''] ||
+    '没有可展示的内容'
+  )
+}
+
+/** contentMeta 组合内容类型、可选发送人和会议内时间。 */
+function contentMeta(item: wails.ContentItemDTO): string {
+  const type =
+    item.kind === 'ai.answer'
+      ? 'AI 回答'
+      : item.resource_kind === 'attachment'
+        ? '附件'
+        : item.resource_kind === 'link'
+          ? '链接'
+          : '会议消息'
+  const sender =
+    item.resource_kind && item.display_name ? item.display_name : ''
+  return [type, sender, meetingOffset(item.occurred_at)]
+    .filter(Boolean)
+    .join(' · ')
 }
 onMounted(load)
 watch(
@@ -210,17 +224,22 @@ watch(
           {{ query.detail.summary.participants.join('、') || '未登记参会人' }}
         </p>
       </div>
-      <span class="ms-status-pill">{{
-        detailStatusText('highest', query.detail.summary.highest_status)
-      }}</span>
+      <div class="ms-page-head__actions">
+        <button
+          class="ms-button ms-button--quiet"
+          type="button"
+          @click="codexHandoffOpen = true"
+        >
+          用 Codex 继续
+        </button>
+      </div>
     </section>
     <nav class="ms-tabs" aria-label="会议详情页签">
       <button
         v-for="item in [
-          ['overview', '概览'],
           ['transcript', '原始记录'],
-          ['messages', '消息与资料'],
           ['minutes', '会议纪要'],
+          ['messages', '消息与资料'],
         ]"
         :key="item[0]"
         :class="{ 'is-current': tab === item[0] }"
@@ -232,153 +251,76 @@ watch(
     <p v-if="actionError" class="ms-notice ms-notice--danger" role="alert">
       {{ actionError }}
     </p>
-    <section v-if="tab === 'overview'" class="ms-detail-panel ms-detail-grid">
-      <article class="ms-card ms-settings-card">
-        <h2>状态</h2>
-        <dl class="ms-fact-grid">
-          <div>
-            <dt>本地保存</dt>
-            <dd>
-              {{
-                detailStatusText(
-                  'localSave',
-                  query.detail.summary.local_save_state,
-                )
-              }}
-            </dd>
-          </div>
-          <div>
-            <dt>实时转写</dt>
-            <dd>
-              {{
-                detailStatusText(
-                  'realtimeAsr',
-                  query.detail.summary.realtime_asr_state,
-                )
-              }}
-            </dd>
-          </div>
-          <div>
-            <dt>缺口</dt>
-            <dd>
-              {{ detailStatusText('gap', query.detail.summary.gap_state) }}
-            </dd>
-          </div>
-          <div>
-            <dt>Codex</dt>
-            <dd>
-              {{ detailStatusText('agent', query.detail.summary.agent_state) }}
-            </dd>
-          </div>
-          <div>
-            <dt>纪要</dt>
-            <dd>
-              {{
-                detailStatusText('minute', query.detail.summary.minute_state)
-              }}
-            </dd>
-          </div>
-          <div>
-            <dt>LAN</dt>
-            <dd>
-              {{ detailStatusText('lan', query.detail.summary.lan_state) }}
-            </dd>
-          </div>
-        </dl>
-        <p v-if="query.detail.disabled_reason" class="ms-help">
-          {{ query.detail.disabled_reason }}
-        </p>
-      </article>
-      <article class="ms-card ms-settings-card">
-        <h2>会议内容</h2>
-        <div class="ms-actions">
-          <RouterLink
-            class="ms-button ms-button--quiet"
-            :to="{ path: route.path, query: { tab: 'transcript' } }"
-            >查看原始记录</RouterLink
-          ><RouterLink
-            class="ms-button ms-button--quiet"
-            :to="`/meetings/${props.id}/minutes?no=${encodeURIComponent(query.detail.summary.meeting_no)}`"
-            >打开会议纪要</RouterLink
-          >
+    <section v-if="tab === 'transcript'" class="ms-detail-panel ms-card">
+      <div class="ms-detail-panel__head">
+        <div>
+          <h2>原始记录</h2>
+          <p>按会议时间顺序</p>
         </div>
-      </article>
-      <article class="ms-card ms-settings-card ms-danger-zone">
-        <h2>危险操作</h2>
-        <p class="ms-help">
-          删除不会进入废纸篓。录音删除会保留逐字稿、纪要和资料。
-        </p>
-        <div class="ms-actions">
-          <button
-            class="ms-button ms-button--quiet"
-            :disabled="!query.detail.can_delete_recording"
-            @click="previewDelete('recording')"
-          >
-            删除录音</button
-          ><button
-            class="ms-button ms-button--danger"
-            :disabled="!query.detail.can_delete_meeting"
-            @click="previewDelete('meeting')"
-          >
-            永久删除整场会议
-          </button>
-        </div>
-      </article>
-    </section>
-    <section
-      v-else-if="tab === 'transcript'"
-      class="ms-detail-panel ms-card ms-settings-card"
-    >
-      <div v-if="query.transcript?.items.length" class="ms-transcript-list">
+        <RouterLink
+          class="ms-button ms-button--quiet"
+          :to="{
+            name: 'meeting-transcript',
+            params: { id: props.id },
+            query: {
+              no: query.detail.summary.meeting_no,
+              subject: query.detail.summary.subject,
+            },
+          }"
+          >编辑原始记录</RouterLink
+        >
+      </div>
+      <div
+        v-if="query.transcript?.items.length"
+        class="ms-detail-list ms-transcript-list"
+      >
         <article
           v-for="item in query.transcript.items"
           :key="item.seq"
           class="ms-list-item"
         >
-          <span
-            ><strong>{{ item.speaker_name || item.kind }}</strong
-            ><small class="ms-muted">序号 {{ item.seq }}</small></span
-          >
-          <p>{{ item.text || '无文字事件' }}</p>
+          <span>
+            <strong>{{ transcriptItemLabel(item) }}</strong>
+            <small class="ms-muted">{{
+              item.text || '该事件没有可展示的文字内容'
+            }}</small>
+            <small class="ms-status">{{
+              meetingOffset(item.occurred_at)
+            }}</small>
+          </span>
         </article>
       </div>
-      <div v-else class="ms-empty-state">
+      <div v-else class="ms-detail-panel__empty">
         <h2>没有原始记录</h2>
         <p>录音仍可能已保存在本地。</p>
       </div>
-      <div class="ms-card-foot">
-        <button
-          class="ms-button ms-button--quiet"
-          :disabled="!query.transcript?.before_seq"
-          @click="turnSeq(0, query.transcript?.before_seq || 0)"
-        >
-          较新</button
-        ><button
-          class="ms-button ms-button--quiet"
-          :disabled="!query.transcript?.has_more"
-          @click="turnSeq(query.transcript?.after_seq || 0, 0)"
-        >
-          更早
-        </button>
-      </div>
+      <SeqCursorPagination
+        :has-previous="query.transcript?.has_previous ?? false"
+        :has-next="query.transcript?.has_next ?? false"
+        :page-number="pageNumber"
+        :current-count="query.transcript?.items.length ?? 0"
+        :loading="query.loading"
+        @previous="turnSeq(0, query.transcript?.before_seq || 0, -1)"
+        @next="turnSeq(query.transcript?.after_seq || 0, 0, 1)"
+      />
     </section>
-    <section
-      v-else-if="tab === 'messages'"
-      class="ms-detail-panel ms-card ms-settings-card"
-    >
-      <div v-if="query.content?.items.length" class="ms-people-list">
+    <section v-else-if="tab === 'messages'" class="ms-detail-panel ms-card">
+      <div class="ms-detail-panel__head">
+        <div>
+          <h2>消息与资料</h2>
+          <p>会议消息、AI 回答、链接与附件</p>
+        </div>
+      </div>
+      <div v-if="query.content?.items.length" class="ms-detail-list">
         <article
           v-for="item in query.content.items"
           :key="`${item.kind}-${item.entity_id}`"
           class="ms-list-item"
         >
           <span
-            ><strong>{{
-              item.display_name || item.resource_name || item.kind
-            }}</strong
-            ><small class="ms-muted">{{
-              item.text || item.display_url || item.resource_state
-            }}</small></span
+            ><strong>{{ contentTitle(item) }}</strong
+            ><small class="ms-muted">{{ contentDetail(item) }}</small
+            ><small class="ms-status">{{ contentMeta(item) }}</small></span
           ><span v-if="item.resource_kind" class="ms-actions-inline"
             ><button
               class="ms-button ms-button--quiet"
@@ -395,75 +337,77 @@ watch(
           >
         </article>
       </div>
-      <div v-else class="ms-empty-state"><h2>没有消息或资料</h2></div>
+      <div v-else class="ms-detail-panel__empty">
+        <h2>没有消息或资料</h2>
+      </div>
+      <SeqCursorPagination
+        :has-previous="query.content?.has_previous ?? false"
+        :has-next="query.content?.has_next ?? false"
+        :page-number="pageNumber"
+        :current-count="query.content?.items.length ?? 0"
+        :loading="query.loading"
+        @previous="turnSeq(0, query.content?.before_seq || 0, -1)"
+        @next="turnSeq(query.content?.after_seq || 0, 0, 1)"
+      />
     </section>
-    <section v-else class="ms-detail-panel ms-card ms-empty-state">
-      <h2>会议纪要</h2>
-      <p>纪要版本在独立工作区中编辑和确认。</p>
-      <RouterLink
-        class="ms-button ms-button--primary"
-        :to="`/meetings/${props.id}/minutes?no=${encodeURIComponent(query.detail.summary.meeting_no)}`"
-        >打开纪要</RouterLink
-      >
-    </section>
-  </template>
-
-  <Teleport to="body"
-    ><div
-      v-if="deleteOpen && deletion.preview"
-      class="ms-modal-backdrop"
-      @click.self="deleteOpen = false"
-    >
-      <section
-        class="ms-modal"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="delete-title"
-      >
-        <h2 id="delete-title">
-          {{ deleteKind === 'meeting' ? '永久删除整场会议' : '删除本地录音' }}
-        </h2>
-        <p>
-          将删除 {{ deletion.preview.file_count }} 个文件，共
-          {{ (deletion.preview.size_bytes / 1048576).toFixed(1) }} MB<span
-            v-if="deletion.preview.unknown_count"
-            >，其中 {{ deletion.preview.unknown_count }} 项不是已登记资产</span
-          >。
-        </p>
-        <label v-if="deleteKind === 'meeting'" class="ms-field"
-          ><span>输入会议号 {{ deletion.preview.meeting_no }} 确认</span
-          ><input
-            v-model="confirmation"
-            class="ms-input ms-input--mono"
-            autocomplete="off"
-        /></label>
-        <p
-          v-if="deletion.errorMessage"
-          class="ms-notice ms-notice--danger"
-          role="alert"
+    <section v-else class="ms-detail-panel ms-card">
+      <div class="ms-detail-panel__head">
+        <div>
+          <h2>会议纪要</h2>
+          <p>Markdown 预览</p>
+        </div>
+        <RouterLink
+          v-if="minutes.projection.current"
+          class="ms-button ms-button--quiet"
+          :to="`/meetings/${props.id}/minutes?no=${encodeURIComponent(query.detail.summary.meeting_no)}`"
+          >编辑</RouterLink
         >
-          {{ deletion.errorMessage }}
-        </p>
-        <div class="ms-modal-actions">
+      </div>
+      <p
+        v-if="minutes.errorMessage"
+        class="ms-notice ms-notice--danger"
+        role="alert"
+      >
+        {{ minutes.errorMessage }}
+      </p>
+      <template v-if="minutes.projection.current">
+        <SafeMarkdown :content="minutes.projection.current.content_markdown" />
+      </template>
+      <div v-else class="ms-detail-panel__empty">
+        <h2>尚未生成会议纪要</h2>
+        <p>生成时会使用设置中保存的会议纪要要求。</p>
+        <div class="ms-detail-panel__empty-actions">
           <button
-            class="ms-button ms-button--quiet"
-            autofocus
-            @click="deleteOpen = false"
-          >
-            取消</button
-          ><button
-            class="ms-button ms-button--danger"
+            class="ms-button ms-button--primary"
+            type="button"
             :disabled="
-              deletion.loading ||
-              (deleteKind === 'meeting' &&
-                confirmation.trim() !== deletion.preview.meeting_no)
+              query.detail.summary.gap_state === 'processing' ||
+              minutes.processing
             "
-            @click="confirmDelete"
+            @click="generateMinutes"
           >
-            确认删除
+            {{ minutes.processing ? '正在生成…' : '生成会议纪要' }}
+          </button>
+          <button
+            v-if="minutes.processing"
+            class="ms-button ms-button--quiet"
+            type="button"
+            @click="minutes.stop()"
+          >
+            停止生成
           </button>
         </div>
-      </section>
-    </div></Teleport
-  >
+        <p
+          v-if="query.detail.summary.gap_state === 'processing'"
+          class="ms-help"
+        >
+          补转写仍在处理，暂时不能生成会议纪要。
+        </p>
+      </div>
+    </section>
+    <CodexHandoffDialog
+      v-model:open="codexHandoffOpen"
+      :meeting-id="props.id"
+    />
+  </template>
 </template>

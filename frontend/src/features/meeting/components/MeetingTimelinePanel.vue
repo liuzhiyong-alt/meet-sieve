@@ -10,6 +10,7 @@ const props = defineProps<{
   subject: string
   agentPartial?: string
   agentAvailable: boolean
+  transcriptionPaused: boolean
   ended: boolean
 }>()
 const emit = defineEmits<{ askAgent: []; interruptAgent: [] }>()
@@ -192,10 +193,12 @@ function sourceLabel(entry: TimelineEntry): string {
   return '会议事件'
 }
 
-/** displayName 返回事件来源快照，不从当前成员资料反查覆盖历史。 */
+/** displayName 返回后端投影的事件来源；AI 问题随说话人校对更新，AI 回答固定为助手。 */
 function displayName(entry: TimelineEntry): string {
   if (entry.kind.startsWith('ai_'))
-    return entry.kind === 'ai_question' ? '你' : 'AI 助手'
+    return entry.kind === 'ai_question'
+      ? entry.display_name || '未识别说话人'
+      : 'AI 助手'
   return entry.display_name || (entry.source === 'host' ? '你' : '访客')
 }
 
@@ -348,8 +351,10 @@ async function openAttachment(resourceID?: string): Promise<void> {
           </li>
 
           <li
-            v-for="partial in timeline.orderedPartials"
-            :key="partial.result_id"
+            v-for="partial in transcriptionPaused
+              ? []
+              : timeline.orderedPartials"
+            :key="`${partial.session_id}:${partial.result_id}`"
             class="conversation-item is-partial"
           >
             <span class="avatar speaker-avatar" aria-hidden="true">…</span>

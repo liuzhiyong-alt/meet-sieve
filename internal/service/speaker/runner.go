@@ -83,13 +83,26 @@ func (runner *Runner) buildEvidence(ctx context.Context, snapshot speakerreposit
 	utterances := make([]EvidenceUtterance, 0, len(snapshot.Utterances))
 	for _, utterance := range snapshot.Utterances {
 		utterances = append(utterances, EvidenceUtterance{
-			ID: utterance.ID, ASRSessionID: utterance.ASRSessionID, SpeakerLabel: utterance.ASRSpeakerLabel,
+			ID: utterance.ID, SpeakerTrackID: utterance.SpeakerTrackID,
+			ASRSessionID: utterance.ASRSessionID, SpeakerLabel: utterance.ASRSpeakerLabel,
 			FinalSeq: utterance.FinalSeq, StartSample: utterance.StartSample, EndSample: utterance.EndSample,
 		})
 	}
+	if snapshot.Track.Source == "local_utterance" {
+		if snapshot.Track.SourceUtteranceID == nil {
+			return EvidenceResult{}, fmt.Errorf("本地 speaker track 缺少源 utterance")
+		}
+		return runner.evidence.BuildLocalUtterance(
+			ctx, snapshot.Track.MeetingID, snapshot.Track.ASRSessionID, *snapshot.Track.SourceUtteranceID,
+			utterances, runner.profile.Evidence.MinEvidenceMS, runner.profile.Evidence.TargetEvidenceMS, finalizing,
+		)
+	}
+	if snapshot.Track.ASRSpeakerLabel == nil {
+		return EvidenceResult{}, fmt.Errorf("provider speaker track 缺少标签")
+	}
 	return runner.evidence.Build(
-		ctx, snapshot.Track.MeetingID, snapshot.Track.ASRSessionID, snapshot.Track.ASRSpeakerLabel,
-		utterances, runner.profile.Evidence.MinEvidenceMS, runner.profile.Evidence.TargetEvidenceMS, finalizing,
+		ctx, snapshot.Track.MeetingID, snapshot.Track.ASRSessionID, *snapshot.Track.ASRSpeakerLabel,
+		snapshot.Track.ID, utterances, runner.profile.Evidence.MinEvidenceMS, runner.profile.Evidence.TargetEvidenceMS, finalizing,
 	)
 }
 

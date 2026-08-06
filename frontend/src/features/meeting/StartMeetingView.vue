@@ -22,13 +22,13 @@ const meetingNo = ref('')
 const microphoneID = ref('')
 const advanced = ref(false)
 const asrMode = ref<'realtime' | 'record_only'>('record_only')
+const lanFeatureAvailable = false
 
 const canStart = computed(
   () =>
     !meeting.loading &&
     !meeting.saving &&
     Boolean(microphoneID.value) &&
-    (!lan.enabled || Boolean(lan.selectedInterfaceID)) &&
     selectedMemberIDs.value.length + temporaryNames.value.length > 0,
 )
 
@@ -66,7 +66,6 @@ watch(selectedGroupID, (groupID) => {
         .map((member) => member.id)
         .filter((memberID) => activeMemberIDs.has(memberID))
     : []
-  if (group) lan.enabled = group.default_lan_enabled
 })
 
 /** addTemporaryParticipant 把已去除首尾空白的临时姓名加入当前 UI 顺序。 */
@@ -128,8 +127,8 @@ async function submit(
     temporaryNames: temporaryNames.value,
     microphoneId: microphoneID.value,
     asrMode: mode,
-    lanEnabled: lan.enabled,
-    lanInterfaceId: lan.enabled ? lan.selectedInterfaceID : '',
+    lanEnabled: lanFeatureAvailable,
+    lanInterfaceId: '',
   })
 }
 
@@ -313,25 +312,19 @@ function cancelRecordingRetry(): void {
               <span>允许同一私有网络访问</span>
               <label class="ms-switch-label">
                 <input
-                  v-model="lan.enabled"
                   class="ms-switch-input"
                   type="checkbox"
                   role="switch"
                   aria-label="允许同一私有网络访问"
-                  @keydown.space.prevent="lan.enabled = !lan.enabled"
+                  aria-describedby="lan-create-help"
+                  :checked="lanFeatureAvailable"
+                  disabled
                 />
                 <span class="ms-switch-track" aria-hidden="true"></span>
               </label>
             </div>
-            <p class="ms-help">
-              {{
-                lan.enabled && !lan.selectedInterfaceID
-                  ? lan.errorMessage ||
-                    (lan.selectionReason === 'ambiguous'
-                      ? '检测到多个私有网络，暂时无法自动选择，请关闭访客页后开始会议。'
-                      : '未检测到可用的私有网络，请连接私有网络或关闭访客页。')
-                  : '开启后，同一局域网内的设备可以访问访客页。仅在可信的私有网络使用。'
-              }}
+            <p id="lan-create-help" class="ms-help">
+              开启后，同一局域网内的设备可以访问访客页。仅在可信的私有网络使用（暂未开放）。
             </p>
           </section>
         </div>
@@ -352,7 +345,9 @@ function cancelRecordingRetry(): void {
           <span
             ><strong>录音并实时转写</strong
             ><small>{{
-              asr.apiKeyReady ? '使用已保存的火山 APP Key' : '请先在设置中保存 APP Key'
+              asr.apiKeyReady
+                ? '使用已保存的火山 APP Key'
+                : '请先在设置中保存 APP Key'
             }}</small></span
           >
         </label>

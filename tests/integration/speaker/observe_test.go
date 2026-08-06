@@ -82,6 +82,45 @@ func TestObserver_PersistsIdempotentSessionScopedTracks(t *testing.T) {
 
 	assertRowCount(t, db, "speaker_tracks", 2)
 	assertRowCount(t, db, "speaker_track_evidence", 3)
+	var firstDisplayNo, thirdDisplayNo int
+	if err := db.Raw("SELECT display_no FROM speaker_tracks WHERE id = ?", first.TrackID).Scan(&firstDisplayNo).Error; err != nil {
+		t.Fatalf("读取首个匿名编号失败：%v", err)
+	}
+	if err := db.Raw("SELECT display_no FROM speaker_tracks WHERE id = ?", third.TrackID).Scan(&thirdDisplayNo).Error; err != nil {
+		t.Fatalf("读取跨 session 匿名编号失败：%v", err)
+	}
+	if firstDisplayNo != 1 || thirdDisplayNo != 2 {
+		t.Fatalf("匿名 track 编号不稳定：first=%d third=%d", firstDisplayNo, thirdDisplayNo)
+	}
+}
+
+// TestObserver_CreatesLocalTrackWithoutProviderSpeaker 验证无标签 final 进入本地证据链且可幂等重放。
+func TestObserver_CreatesLocalTrackWithoutProviderSpeaker(t *testing.T) {
+	db := prepareObserveDatabase(t)
+	if err := db.Exec("UPDATE utterances SET asr_speaker_label = NULL WHERE id = ?", "77777777-7777-4777-8777-777777777777").Error; err != nil {
+		t.Fatalf("准备无说话人 final 失败：%v", err)
+	}
+	queue := make(chan string, 1)
+	observer := newObserver(db, queue,
+		"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+	)
+	result, err := observer.Observe(context.Background(), "77777777-7777-4777-8777-777777777777")
+	if err != nil || result.TrackID == "" || result.Skipped || !result.Notified {
+		t.Fatalf("无标签 final 应创建本地 track：result=%+v err=%v", result, err)
+	}
+	duplicate, err := observer.Observe(context.Background(), "77777777-7777-4777-8777-777777777777")
+	if err != nil || !duplicate.Duplicate || duplicate.TrackID != result.TrackID {
+		t.Fatalf("无标签 final 重放必须幂等：result=%+v err=%v", duplicate, err)
+	}
+	var source, sourceUtteranceID string
+	if err := db.Raw("SELECT source, source_utterance_id FROM speaker_tracks WHERE id = ?", result.TrackID).Row().Scan(&source, &sourceUtteranceID); err != nil {
+		t.Fatalf("读取本地 track 来源失败：%v", err)
+	}
+	if source != "local_utterance" || sourceUtteranceID != "77777777-7777-4777-8777-777777777777" {
+		t.Fatalf("本地 track 来源错误：source=%s utterance=%s", source, sourceUtteranceID)
+	}
+	assertRowCount(t, db, "speaker_tracks", 1)
+	assertRowCount(t, db, "speaker_track_evidence", 1)
 }
 
 // TestObserver_QueueBackpressureKeepsSQLiteRecoveryFact 验证队列满只丢唤醒，恢复查询仍按最早 final seq 找到 track。
@@ -100,14 +139,14 @@ func TestObserver_QueueBackpressureKeepsSQLiteRecoveryFact(t *testing.T) {
 		t.Fatal("队列满时不得阻塞或伪称已通知")
 	}
 	repository := speakerrepository.NewRepository(db)
-	tracks, err := repository.ListRecoverableTrackIDs(context.Background(), 10)
-	if err != nil || len(tracks) != 1 || tracks[0] != result.TrackID {
-		t.Fatalf("SQLite 恢复事实缺失：tracks=%v result=%+v err=%v", tracks, result, err)
+	evidenceIDs, err := repository.ListRecoverableEvidenceIDs(context.Background(), 10)
+	if err != nil || len(evidenceIDs) != 1 || evidenceIDs[0] != result.EvidenceID {
+		t.Fatalf("SQLite 恢复事实缺失：evidence=%v result=%+v err=%v", evidenceIDs, result, err)
 	}
 }
 
-// TestObserver_InheritsManualClusterForNewUtterance 验证人工分配 cluster 后的新 final 不会退回自动识别。
-func TestObserver_InheritsManualClusterForNewUtterance(t *testing.T) {
+// TestObserver_DefersTerminalProjectionUntilRouting 验证同 label 新 final 不会在声学路由前继承终态。
+func TestObserver_DefersTerminalProjectionUntilRouting(t *testing.T) {
 	db := prepareObserveDatabase(t)
 	observer := newObserver(db, make(chan string, 2),
 		"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
@@ -133,12 +172,49 @@ func TestObserver_InheritsManualClusterForNewUtterance(t *testing.T) {
 	if _, err := observer.Observe(context.Background(), "88888888-8888-4888-8888-888888888888"); err != nil {
 		t.Fatalf("Observe 新 final 失败：%v", err)
 	}
-	var participantID, clusterID, source string
+	var source string
+	var participantID, clusterID *string
 	if err := db.Raw("SELECT current_participant_id, speaker_cluster_id, speaker_assignment_source FROM utterances WHERE id=?", "88888888-8888-4888-8888-888888888888").Row().Scan(&participantID, &clusterID, &source); err != nil {
 		t.Fatalf("读取新 final 投影失败：%v", err)
 	}
-	if participantID != "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee" || clusterID != "ffffffff-ffff-4fff-8fff-ffffffffffff" || source != "manual_cluster" {
-		t.Fatalf("未继承人工 cluster：participant=%s cluster=%s source=%s", participantID, clusterID, source)
+	if participantID != nil || clusterID != nil || source != "unassigned" {
+		t.Fatalf("路由前不得继承终态：participant=%v cluster=%v source=%s", participantID, clusterID, source)
+	}
+}
+
+// TestObserver_StagesMatchedTrackEvidence 验证 matched track 的新 final 先进入 pending routing。
+func TestObserver_StagesMatchedTrackEvidence(t *testing.T) {
+	db := prepareObserveDatabase(t)
+	observer := newObserver(db, make(chan string, 2),
+		"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+		"cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+	)
+	first, err := observer.Observe(context.Background(), "77777777-7777-4777-8777-777777777777")
+	if err != nil {
+		t.Fatalf("准备已匹配 track 失败：%v", err)
+	}
+	statements := []string{
+		`INSERT INTO members(id, name, name_normalized, created_at, updated_at) VALUES ('dddddddd-dddd-4ddd-8ddd-dddddddddddd', '刘志勇', 'liu-zhi-yong', 0, 0)`,
+		`INSERT INTO meeting_participants(id, meeting_id, member_id, participant_kind, display_name_snapshot, sort_order, created_at, updated_at) VALUES ('eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee', '11111111-1111-4111-8111-111111111111', 'dddddddd-dddd-4ddd-8ddd-dddddddddddd', 'member', '刘志勇', 0, 0, 0)`,
+	}
+	for _, statement := range statements {
+		if err := db.Exec(statement).Error; err != nil {
+			t.Fatalf("准备已匹配成员失败：%v", err)
+		}
+	}
+	if err := db.Exec("UPDATE speaker_tracks SET state='matched', automatic_participant_id=?, top_score=0.92 WHERE id=?", "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee", first.TrackID).Error; err != nil {
+		t.Fatalf("设置 track 匹配结果失败：%v", err)
+	}
+	result, err := observer.Observe(context.Background(), "88888888-8888-4888-8888-888888888888")
+	if err != nil || result.ProjectionChanged {
+		t.Fatalf("新 final 在 continuity 路由前不得报告投影变化：result=%+v err=%v", result, err)
+	}
+	var routingState string
+	if err := db.Raw("SELECT routing_state FROM speaker_track_evidence WHERE id=?", result.EvidenceID).Scan(&routingState).Error; err != nil {
+		t.Fatalf("读取 continuity pending 失败：%v", err)
+	}
+	if routingState != "pending" {
+		t.Fatalf("新 final 必须等待 continuity 路由：state=%s", routingState)
 	}
 }
 

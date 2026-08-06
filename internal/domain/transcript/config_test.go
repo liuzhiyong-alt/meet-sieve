@@ -4,7 +4,7 @@ import "testing"
 
 // TestAuthModeAndRuntimeConfig 验证已冻结的 transport 与运行时容量不允许隐式降级。
 func TestAuthModeAndRuntimeConfig(t *testing.T) {
-	config := RuntimeConfig{Endpoint: "wss://example.invalid", ResourceID: "resource", PCMQueueSamples: 32000, FinalQueueCapacity: 128, FinalPersistTimeoutMS: 5000, TailTimeoutMS: 15000, ReconnectBackoffMS: []int64{1000, 2000, 4000, 8000, 15000}}
+	config := RuntimeConfig{Endpoint: "wss://example.invalid", ResourceID: "resource", PCMQueueSamples: 240000, FinalQueueCapacity: 128, FinalPersistTimeoutMS: 5000, TailTimeoutMS: 15000, ReconnectBackoffMS: []int64{1000, 2000, 4000, 8000, 15000}}
 	if err := config.Validate(); err != nil {
 		t.Fatalf("冻结配置应通过：%v", err)
 	}

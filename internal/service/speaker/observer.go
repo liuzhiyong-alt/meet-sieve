@@ -3,7 +3,6 @@ package speaker
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"meet-sieve/internal/infra/clock"
 	"meet-sieve/internal/infra/database"
@@ -26,9 +25,12 @@ type ObserverDependencies struct {
 
 // ObserveResult 返回持久 track、幂等与内存唤醒结果。
 type ObserveResult struct {
-	TrackID   string
-	Duplicate bool
-	Notified  bool
+	TrackID           string
+	EvidenceID        string
+	Duplicate         bool
+	Notified          bool
+	Skipped           bool
+	ProjectionChanged bool
 }
 
 // Observer 把已提交 final 幂等归入 session-scoped track，再尝试非阻塞唤醒后台任务。
@@ -60,9 +62,9 @@ func (observer *Observer) Observe(ctx context.Context, utteranceID string) (Obse
 	if err != nil {
 		return ObserveResult{}, fmt.Errorf("持久化 speaker Observe 失败：%w", err)
 	}
-	if !result.Duplicate {
+	if !result.Duplicate && !result.Skipped {
 		select {
-		case observer.queue <- result.TrackID:
+		case observer.queue <- result.EvidenceID:
 			result.Notified = true
 		default:
 		}
@@ -77,42 +79,77 @@ func (observer *Observer) observeInTransaction(ctx context.Context, tx *gorm.DB,
 		return err
 	}
 	if existing != nil {
-		*result = ObserveResult{TrackID: existing.SpeakerTrackID, Duplicate: true}
+		*result = ObserveResult{TrackID: existing.SpeakerTrackID, EvidenceID: existing.ID, Duplicate: true}
 		return nil
 	}
 	fact, err := observer.repository.GetObserveFact(ctx, tx, utteranceID)
 	if err != nil {
 		return err
 	}
-	if fact.Utterance.ASRSpeakerLabel == nil || strings.TrimSpace(*fact.Utterance.ASRSpeakerLabel) == "" {
-		return fmt.Errorf("final 缺少匿名 speaker label")
-	}
 	track, err := observer.findOrCreateTrack(ctx, tx, fact)
 	if err != nil {
 		return err
 	}
-	if err := observer.createEvidence(ctx, tx, fact, track.ID); err != nil {
+	evidenceID, projectionChanged, err := observer.createEvidence(ctx, tx, fact, track.ID)
+	if err != nil {
 		return err
 	}
-	*result = ObserveResult{TrackID: track.ID}
+	*result = ObserveResult{TrackID: track.ID, EvidenceID: evidenceID, ProjectionChanged: projectionChanged}
 	return nil
 }
 
-// findOrCreateTrack 以 session/label 为唯一键复用或创建 collecting track。
+// findOrCreateTrack 按来源选择 provider session/label 或本地 utterance 幂等键。
 func (observer *Observer) findOrCreateTrack(ctx context.Context, tx *gorm.DB, fact speakerrepository.ObserveFact) (*models.SpeakerTrack, error) {
+	if fact.Utterance.ASRSpeakerLabel != nil && *fact.Utterance.ASRSpeakerLabel != "" {
+		return observer.findOrCreateProviderTrack(ctx, tx, fact)
+	}
+	return observer.findOrCreateLocalTrack(ctx, tx, fact)
+}
+
+// findOrCreateProviderTrack 保留 provider session/label 的既有 track 归并语义。
+func (observer *Observer) findOrCreateProviderTrack(ctx context.Context, tx *gorm.DB, fact speakerrepository.ObserveFact) (*models.SpeakerTrack, error) {
 	label := *fact.Utterance.ASRSpeakerLabel
 	track, err := observer.repository.FindTrackBySessionLabel(ctx, tx, fact.Utterance.ASRSessionID, label)
 	if err != nil || track != nil {
 		return track, err
 	}
+	segmentNo := 1
+	return observer.createTrack(ctx, tx, fact, "provider_label", &label, &segmentNo, nil)
+}
+
+// findOrCreateLocalTrack 让无标签 final 以 source_utterance_id 幂等进入本地证据链。
+func (observer *Observer) findOrCreateLocalTrack(ctx context.Context, tx *gorm.DB, fact speakerrepository.ObserveFact) (*models.SpeakerTrack, error) {
+	track, err := observer.repository.FindTrackBySourceUtterance(ctx, tx, fact.Utterance.ID)
+	if err != nil || track != nil {
+		return track, err
+	}
+	utteranceID := fact.Utterance.ID
+	return observer.createTrack(ctx, tx, fact, "local_utterance", nil, nil, &utteranceID)
+}
+
+// createTrack 分配会议内展示编号，并写入来源专属的幂等字段。
+func (observer *Observer) createTrack(
+	ctx context.Context,
+	tx *gorm.DB,
+	fact speakerrepository.ObserveFact,
+	source string,
+	label *string,
+	providerSegmentNo *int,
+	sourceUtteranceID *string,
+) (*models.SpeakerTrack, error) {
 	id, err := observer.newUUID()
 	if err != nil {
 		return nil, err
 	}
+	displayNo, err := observer.repository.NextTrackDisplayNo(ctx, tx, fact.Utterance.MeetingID)
+	if err != nil {
+		return nil, err
+	}
 	now := observer.clock.Now().UnixMilli()
-	track = &models.SpeakerTrack{
+	track := &models.SpeakerTrack{
 		ID: id, MeetingID: fact.Utterance.MeetingID, ASRSessionID: fact.Utterance.ASRSessionID,
-		ASRSpeakerLabel: label, State: "collecting", Revision: 1, CreatedAt: now, UpdatedAt: now,
+		Source: source, ASRSpeakerLabel: label, ProviderSegmentNo: providerSegmentNo, SourceUtteranceID: sourceUtteranceID,
+		DisplayNo: displayNo, State: "collecting", RoutingRevision: 1, Revision: 1, CreatedAt: now, UpdatedAt: now,
 	}
 	if err := observer.repository.CreateTrack(ctx, tx, *track); err != nil {
 		return nil, err
@@ -121,20 +158,21 @@ func (observer *Observer) findOrCreateTrack(ctx context.Context, tx *gorm.DB, fa
 }
 
 // createEvidence 分配稳定顺序，并在同一事务中更新 utterance 反向关联。
-func (observer *Observer) createEvidence(ctx context.Context, tx *gorm.DB, fact speakerrepository.ObserveFact, trackID string) error {
+func (observer *Observer) createEvidence(ctx context.Context, tx *gorm.DB, fact speakerrepository.ObserveFact, trackID string) (string, bool, error) {
 	order, err := observer.repository.NextEvidenceOrder(ctx, tx, trackID)
 	if err != nil {
-		return err
+		return "", false, err
 	}
 	id, err := observer.newUUID()
 	if err != nil {
-		return err
+		return "", false, err
 	}
 	now := observer.clock.Now().UnixMilli()
-	return observer.repository.AttachEvidence(ctx, tx, models.SpeakerTrackEvidence{
+	changed, err := observer.repository.AttachEvidence(ctx, tx, models.SpeakerTrackEvidence{
 		ID: id, SpeakerTrackID: trackID, UtteranceID: fact.Utterance.ID,
-		EvidenceOrder: order, CreatedAt: now, UpdatedAt: now,
+		EvidenceOrder: order, RoutingState: "pending", CreatedAt: now, UpdatedAt: now,
 	}, now)
+	return id, changed, err
 }
 
 // newUUID 只接受生成器给出的 UUID v4，避免不稳定主键进入事实表。

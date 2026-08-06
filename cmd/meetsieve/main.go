@@ -96,8 +96,10 @@ func run() error {
 		defer cancel()
 		return meetingModule.HasUnsafeWorkspaceChange(ctx)
 	})
-	if guestAssets, guestAssetsErr := fs.Sub(assets, "frontend/dist/guest"); guestAssetsErr == nil {
-		_ = meetingModule.SetGuestAssets(guestAssets)
+	if guestAssets, guestAssetsErr := fs.Sub(assets, "frontend/dist/guest"); guestAssetsErr != nil {
+		bootstrap.Logger.Component("guest_assets").Warn("访客页面资源未嵌入，局域网访客页不可用", zap.Error(guestAssetsErr))
+	} else if err := meetingModule.SetGuestAssets(guestAssets); err != nil {
+		bootstrap.Logger.Component("guest_assets").Warn("访客页面资源校验失败，局域网访客页不可用", zap.Error(err))
 	}
 	_ = meetingModule.SetTranscriptPublishers(
 		func(event port.TranscriptionEvent) {
@@ -106,8 +108,20 @@ func run() error {
 			}
 			runtime.EventsEmit(wailsContext, "meeting.asr.partial", wailstransport.NewEvent(
 				"meeting.asr.partial", time.Now(), 0, wailstransport.ASRPartialEventDTO{
-					MeetingID: event.MeetingID, ResultID: event.ResultID, Revision: event.Revision,
+					MeetingID: event.MeetingID, SessionID: event.SessionID, Generation: event.Generation,
+					ResultID: event.ResultID, Revision: event.Revision,
 					Text: event.Text, StartSample: event.StartSample, EndSample: event.EndSample,
+				},
+			))
+		},
+		func(event transcriptservice.PartialClearEvent) {
+			if wailsContext == nil {
+				return
+			}
+			runtime.EventsEmit(wailsContext, "meeting.asr.partial.cleared", wailstransport.NewEvent(
+				"meeting.asr.partial.cleared", time.Now(), 0, wailstransport.ASRPartialClearEventDTO{
+					MeetingID: event.MeetingID, SessionID: event.SessionID,
+					Generation: event.Generation, ResultID: event.ResultID,
 				},
 			))
 		},
@@ -181,6 +195,14 @@ func run() error {
 			if wailsContext != nil {
 				runtime.EventsEmit(wailsContext, "settings.wake_word_test.changed", wailstransport.NewEvent(
 					"settings.wake_word_test.changed", time.Now(), 0, wailstransport.MapWakeWordTestStateDTO(state),
+				))
+			}
+		},
+		func(state agentservice.WakeCommandState) {
+			if wailsContext != nil {
+				const name = "meeting.agent.wake.changed"
+				runtime.EventsEmit(wailsContext, name, wailstransport.NewEvent(
+					name, time.Now(), state.Revision, wailstransport.MapWakeCommandStateDTO(state),
 				))
 			}
 		},
@@ -398,7 +420,7 @@ func run() error {
 			if serviceErr != nil {
 				return wailstransport.MinutesServices{}, serviceErr
 			}
-			return wailstransport.MinutesServices{Repository: services.MinutesRepository, Generation: services.MinutesGeneration, Versions: services.MinutesVersions, Projector: services.MinutesProjector}, nil
+			return wailstransport.MinutesServices{Repository: services.MinutesRepository, Generation: services.MinutesGeneration, Settings: services.MinutesSettings, Versions: services.MinutesVersions, Projector: services.MinutesProjector}, nil
 		},
 		func() context.Context { return wailsContext }, boundary,
 	)

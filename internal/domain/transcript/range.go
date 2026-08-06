@@ -41,6 +41,8 @@ const (
 	GapDisconnected GapReason = "disconnected"
 	// GapBackpressure 表示本地 ASR 旁路或处理队列无法安全接受数据。
 	GapBackpressure GapReason = "backpressure"
+	// GapInvalidFinal 表示单条 provider final 无法按幂等或范围契约持久化。
+	GapInvalidFinal GapReason = "invalid_final"
 	// GapTailTimeout 表示结束时等待 final 超时。
 	GapTailTimeout GapReason = "tail_timeout"
 	// GapRecovery 表示崩溃恢复无法确认远端是否已处理的尾部。
@@ -52,7 +54,7 @@ const (
 // IsValid 返回原因是否属于当前 Step 已确认的 gap 原因集合。
 func (reason GapReason) IsValid() bool {
 	switch reason {
-	case GapConnectFailed, GapDisconnected, GapBackpressure, GapTailTimeout, GapRecovery, GapRecordOnly:
+	case GapConnectFailed, GapDisconnected, GapBackpressure, GapInvalidFinal, GapTailTimeout, GapRecovery, GapRecordOnly:
 		return true
 	default:
 		return false

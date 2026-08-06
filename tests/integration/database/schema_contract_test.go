@@ -130,15 +130,9 @@ func TestSchema_DevelopmentDownRestoresStep1Foundation(t *testing.T) {
 	if err := database.Migrate(path); err != nil {
 		t.Fatalf("执行正向 migration 失败：%v", err)
 	}
-	rollbackLatestMigration(t, path)
-	rollbackLatestMigration(t, path)
-	rollbackLatestMigration(t, path)
-	rollbackLatestMigration(t, path)
-	rollbackLatestMigration(t, path)
-	rollbackLatestMigration(t, path)
-	rollbackLatestMigration(t, path)
-	rollbackLatestMigration(t, path)
-	rollbackLatestMigration(t, path)
+	for version := database.CurrentSchemaVersion; version > 2; version-- {
+		rollbackLatestMigration(t, path)
+	}
 
 	db, err := sql.Open("sqlite3", path)
 	if err != nil {
@@ -193,6 +187,8 @@ func TestSchema_IndexesEveryForeignKeyColumn(t *testing.T) {
 		"speaker_track_evidence":          {"speaker_track_id", "utterance_id"},
 		"agent_sessions":                  {"meeting_id", "resumed_from_session_id"},
 		"agent_turns":                     {"meeting_id", "agent_session_id", "question_event_id", "answer_event_id"},
+		"agent_voice_command_utterances":  {"meeting_id", "utterance_id", "agent_turn_id"},
+		"meeting_media_pauses":            {"meeting_id", "agent_turn_id"},
 		"sync_batches":                    {"meeting_id", "agent_session_id"},
 		"context_snapshots":               {"meeting_id", "agent_session_id", "agent_turn_id"},
 		"minute_versions":                 {"meeting_id", "agent_turn_id", "parent_version_id"},
@@ -217,7 +213,8 @@ func TestSchema_ModelColumnsMatchMigration(t *testing.T) {
 		models.AudioAsset{}, models.ASRSession{}, models.ASRGap{}, models.GapTranscriptionAttempt{}, models.GapTranscriptionAttemptItem{},
 		models.VoiceSample{}, models.VoiceEmbedding{}, models.SpeakerCluster{},
 		models.SpeakerTrack{}, models.SpeakerTrackEvidence{},
-		models.AgentSession{}, models.AgentTurn{}, models.SyncBatch{}, models.ContextSnapshot{}, models.MinuteVersion{}, models.DeletionJob{},
+		models.AgentSession{}, models.AgentTurn{}, models.AgentVoiceCommandUtterance{}, models.SyncBatch{}, models.ContextSnapshot{}, models.MinuteVersion{}, models.DeletionJob{},
+		models.MeetingMediaPause{},
 	} {
 		assertModelColumnsMatchTable(t, db, model)
 	}

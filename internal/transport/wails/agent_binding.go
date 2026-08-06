@@ -26,6 +26,7 @@ type AgentSettingsDTO struct {
 	WakeWord       string               `json:"wake_word"`
 	ExecutablePath string               `json:"codex_executable_path"`
 	Availability   AgentAvailabilityDTO `json:"availability"`
+	ProbedAt       int64                `json:"probed_at"`
 	UpdatedAt      int64                `json:"updated_at"`
 }
 
@@ -82,10 +83,12 @@ type AgentTimelineEntryDTO struct {
 	Reason     string `json:"reason,omitempty"`
 }
 
-// AgentRecoveryCommandsDTO 是只读可复制命令投影。
+// AgentRecoveryCommandsDTO 是会议详情可复制的 Codex 接续信息。
 type AgentRecoveryCommandsDTO struct {
+	ThreadAvailable  bool   `json:"thread_available"`
 	ThreadCommand    string `json:"thread_command"`
 	DirectoryCommand string `json:"directory_command"`
+	RecoveryPrompt   string `json:"recovery_prompt"`
 }
 
 // WakeWordTestStateDTO 是真实三次测试的进程内状态。
@@ -95,6 +98,14 @@ type WakeWordTestStateDTO struct {
 	Required  int    `json:"required"`
 	ASRState  string `json:"asr_state"`
 	ErrorCode string `json:"error_code,omitempty"`
+}
+
+// WakeCommandStateDTO 是会中语音指令收集状态，不包含指令文本。
+type WakeCommandStateDTO struct {
+	MeetingID string `json:"meeting_id"`
+	State     string `json:"state"`
+	ErrorCode string `json:"error_code,omitempty"`
+	Revision  uint64 `json:"revision"`
 }
 
 // AgentEventDTO 是 Wails 持续事件使用的轻量安全投影。
@@ -252,7 +263,12 @@ func (binding *AgentBinding) GetAgentRecoveryCommands(meetingID string) Result[A
 			return AgentRecoveryCommandsDTO{}, err
 		}
 		commands, err := services.Recovery.Get(ctx, meetingID)
-		return AgentRecoveryCommandsDTO{ThreadCommand: commands.ThreadCommand, DirectoryCommand: commands.DirectoryCommand}, err
+		return AgentRecoveryCommandsDTO{
+			ThreadAvailable:  commands.ThreadAvailable,
+			ThreadCommand:    commands.ThreadCommand,
+			DirectoryCommand: commands.DirectoryCommand,
+			RecoveryPrompt:   commands.RecoveryPrompt,
+		}, err
 	})
 }
 
@@ -290,7 +306,7 @@ func (binding *AgentBinding) current() (AgentServices, context.Context, error) {
 }
 
 func mapAgentSettings(view agentservice.AgentSettingsView) AgentSettingsDTO {
-	return AgentSettingsDTO{WakeWord: view.WakeWord, ExecutablePath: view.ExecutablePath, Availability: mapAgentAvailability(view.Availability), UpdatedAt: view.UpdatedAt}
+	return AgentSettingsDTO{WakeWord: view.WakeWord, ExecutablePath: view.ExecutablePath, Availability: mapAgentAvailability(view.Availability), ProbedAt: view.ProbedAt, UpdatedAt: view.UpdatedAt}
 }
 
 func mapAgentAvailability(value port.AgentAvailability) AgentAvailabilityDTO {
@@ -307,6 +323,11 @@ func mapAgentState(value agentservice.AgentRuntimeState) AgentStateDTO {
 
 func mapWakeWordTestState(value agentservice.WakeWordTestState) WakeWordTestStateDTO {
 	return WakeWordTestStateDTO{State: string(value.State), Matched: value.Matched, Required: value.Required, ASRState: value.ASRState, ErrorCode: value.ErrorCode}
+}
+
+// MapWakeCommandStateDTO 映射会中唤醒状态为安全 Wails 投影。
+func MapWakeCommandStateDTO(value agentservice.WakeCommandState) WakeCommandStateDTO {
+	return WakeCommandStateDTO{MeetingID: value.MeetingID, State: string(value.State), ErrorCode: value.ErrorCode, Revision: value.Revision}
 }
 
 // MapAgentEventDTO 删除 session/provider 身份和底层 envelope，只保留 UI 所需字段。

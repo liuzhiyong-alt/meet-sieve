@@ -16,6 +16,11 @@ type RecoverableTrackSource interface {
 	ListRecoverableTrackIDs(ctx context.Context, limit int) ([]string, error)
 }
 
+// ProcessingGate 判断当前模型、校准档案和声纹向量是否允许自动处理。
+type ProcessingGate interface {
+	Ready(ctx context.Context) bool
+}
+
 // RunnerPoolConfig 固定 worker、内存队列和单次恢复批量上限。
 type RunnerPoolConfig struct {
 	WorkerCount   int
@@ -27,6 +32,7 @@ type RunnerPoolConfig struct {
 type RunnerPoolDependencies struct {
 	Processor TrackProcessor
 	Recovery  RecoverableTrackSource
+	Gate      ProcessingGate
 	Config    RunnerPoolConfig
 	OnError   func(error)
 }
@@ -35,15 +41,22 @@ type RunnerPoolDependencies struct {
 type RunnerPool struct {
 	processor TrackProcessor
 	recovery  RecoverableTrackSource
+	gate      ProcessingGate
 	config    RunnerPoolConfig
 	onError   func(error)
+}
+
+// trackReservations 防止同一持久 track 同时排队或被多个 worker 重复处理。
+type trackReservations struct {
+	mu  sync.Mutex
+	ids map[string]struct{}
 }
 
 // NewRunnerPool 创建后台池；Run 会校验固定容量均为正数。
 func NewRunnerPool(dependencies RunnerPoolDependencies) *RunnerPool {
 	return &RunnerPool{
 		processor: dependencies.Processor, recovery: dependencies.Recovery,
-		config: dependencies.Config, onError: dependencies.OnError,
+		gate: dependencies.Gate, config: dependencies.Config, onError: dependencies.OnError,
 	}
 }
 
@@ -53,12 +66,13 @@ func (pool *RunnerPool) Run(ctx context.Context, wake <-chan string, poll <-chan
 		return err
 	}
 	jobs := make(chan string, pool.config.QueueCapacity)
+	reservations := &trackReservations{ids: make(map[string]struct{})}
 	var workers sync.WaitGroup
 	for index := 0; index < pool.config.WorkerCount; index++ {
 		workers.Add(1)
-		go pool.runWorker(ctx, jobs, &workers)
+		go pool.runWorker(ctx, jobs, reservations, &workers)
 	}
-	pool.enqueueRecovery(ctx, jobs)
+	pool.enqueueRecoveryWhenReady(ctx, jobs, reservations)
 	for {
 		select {
 		case <-ctx.Done():
@@ -70,15 +84,30 @@ func (pool *RunnerPool) Run(ctx context.Context, wake <-chan string, poll <-chan
 				wake = nil
 				continue
 			}
-			enqueueTrack(jobs, trackID)
+			if pool.processingReady(ctx) {
+				enqueueTrack(jobs, reservations, trackID)
+			}
 		case <-poll:
-			pool.enqueueRecovery(ctx, jobs)
+			pool.enqueueRecoveryWhenReady(ctx, jobs, reservations)
 		}
 	}
 }
 
+// enqueueRecoveryWhenReady 仅在自动识别依赖完整时读取持久任务；未就绪任务继续留在 SQLite。
+func (pool *RunnerPool) enqueueRecoveryWhenReady(ctx context.Context, jobs chan<- string, reservations *trackReservations) {
+	if !pool.processingReady(ctx) {
+		return
+	}
+	pool.enqueueRecovery(ctx, jobs, reservations)
+}
+
+// processingReady 兼容未配置门禁的既有调用方；正式装配必须提供动态门禁。
+func (pool *RunnerPool) processingReady(ctx context.Context) bool {
+	return pool.gate == nil || pool.gate.Ready(ctx)
+}
+
 // runWorker 持续消费任务；单个任务失败或 panic 不终止其他 track。
-func (pool *RunnerPool) runWorker(ctx context.Context, jobs <-chan string, workers *sync.WaitGroup) {
+func (pool *RunnerPool) runWorker(ctx context.Context, jobs <-chan string, reservations *trackReservations, workers *sync.WaitGroup) {
 	defer workers.Done()
 	for {
 		select {
@@ -89,6 +118,7 @@ func (pool *RunnerPool) runWorker(ctx context.Context, jobs <-chan string, worke
 				return
 			}
 			pool.processSafely(ctx, trackID)
+			reservations.release(trackID)
 		}
 	}
 }
@@ -106,14 +136,14 @@ func (pool *RunnerPool) processSafely(ctx context.Context, trackID string) {
 }
 
 // enqueueRecovery 按最早 final seq 查询恢复任务；队列满可等待下一次轮询，不丢 SQLite 事实。
-func (pool *RunnerPool) enqueueRecovery(ctx context.Context, jobs chan<- string) {
+func (pool *RunnerPool) enqueueRecovery(ctx context.Context, jobs chan<- string, reservations *trackReservations) {
 	trackIDs, err := pool.recovery.ListRecoverableTrackIDs(ctx, pool.config.RecoveryBatch)
 	if err != nil {
 		pool.reportError(err)
 		return
 	}
 	for _, trackID := range trackIDs {
-		enqueueTrack(jobs, trackID)
+		enqueueTrack(jobs, reservations, trackID)
 	}
 }
 
@@ -125,14 +155,33 @@ func (pool *RunnerPool) reportError(err error) {
 }
 
 // enqueueTrack 非阻塞加入有界队列；满队列依靠 SQLite 恢复轮询补拉。
-func enqueueTrack(jobs chan<- string, trackID string) {
-	if trackID == "" {
+func enqueueTrack(jobs chan<- string, reservations *trackReservations, trackID string) {
+	if trackID == "" || reservations == nil || !reservations.reserve(trackID) {
 		return
 	}
 	select {
 	case jobs <- trackID:
 	default:
+		reservations.release(trackID)
 	}
+}
+
+// reserve 原子登记排队或处理中的 track；已登记返回 false。
+func (reservations *trackReservations) reserve(trackID string) bool {
+	reservations.mu.Lock()
+	defer reservations.mu.Unlock()
+	if _, exists := reservations.ids[trackID]; exists {
+		return false
+	}
+	reservations.ids[trackID] = struct{}{}
+	return true
+}
+
+// release 在单次处理结束后允许 SQLite 恢复轮询重新提交失败任务。
+func (reservations *trackReservations) release(trackID string) {
+	reservations.mu.Lock()
+	delete(reservations.ids, trackID)
+	reservations.mu.Unlock()
 }
 
 // validateRunnerPool 拒绝无界、零 worker 或缺少 SQLite 恢复源的配置。

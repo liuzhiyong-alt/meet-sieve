@@ -15,7 +15,6 @@ import LiveMeetingView from '../features/meeting/LiveMeetingView.vue'
 import TranscriptEditorView from '../features/correction/TranscriptEditorView.vue'
 import GapConflictView from '../features/gap/GapConflictView.vue'
 import MinutesWorkspaceView from '../features/minutes/MinutesWorkspaceView.vue'
-import MinutesHistoryView from '../features/minutes/MinutesHistoryView.vue'
 import PeopleView from '../features/people/PeopleView.vue'
 import GeneralSettingsView from '../features/settings/GeneralSettingsView.vue'
 import { dirtyEditRegistry } from './dirty'
@@ -25,6 +24,7 @@ export const settingsSections = [
   'audio',
   'asr',
   'codex',
+  'minutes',
   'voice-model',
 ] as const
 
@@ -121,23 +121,6 @@ export function createMeetSieveRouter(history?: RouterHistory) {
             { label: '会议记录', to: '/meetings' },
             { dynamic: 'meeting', to: '/meetings/:id' },
             { label: '会议纪要' },
-          ],
-        },
-      },
-      {
-        path: '/meetings/:id/minutes/history',
-        name: 'meeting-minutes-history',
-        component: MinutesHistoryView,
-        props: (route) => ({
-          meetingId: route.params.id,
-          meetingNo: String(route.query.no ?? ''),
-        }),
-        meta: {
-          breadcrumb: [
-            { label: '会议记录', to: '/meetings' },
-            { dynamic: 'meeting', to: '/meetings/:id' },
-            { label: '会议纪要', to: '/meetings/:id/minutes' },
-            { label: '版本历史' },
           ],
         },
       },

@@ -6,6 +6,8 @@ export function ConfirmMinute(arg1:string,arg2:string,arg3:string):Promise<wails
 
 export function GenerateMinutes(arg1:string,arg2:boolean,arg3:string):Promise<wails.Result_meet_sieve_internal_transport_wails_MinuteMutationDTO_>;
 
+export function GetMinutesSettings():Promise<wails.Result_meet_sieve_internal_transport_wails_MinutesSettingsDTO_>;
+
 export function GetMinutesState(arg1:string):Promise<wails.Result_meet_sieve_internal_transport_wails_MinutesStateDTO_>;
 
 export function ListMinuteVersions(arg1:string,arg2:number,arg3:number):Promise<wails.Result_meet_sieve_internal_transport_wails_MinuteVersionPageDTO_>;
@@ -13,5 +15,7 @@ export function ListMinuteVersions(arg1:string,arg2:number,arg3:number):Promise<
 export function RestoreMinuteVersion(arg1:string,arg2:string,arg3:string):Promise<wails.Result_meet_sieve_internal_transport_wails_MinuteMutationDTO_>;
 
 export function SaveMinuteDraft(arg1:string,arg2:string,arg3:string,arg4:string):Promise<wails.Result_meet_sieve_internal_transport_wails_MinuteMutationDTO_>;
+
+export function SaveMinutesSettings(arg1:string):Promise<wails.Result_meet_sieve_internal_transport_wails_MinutesSettingsDTO_>;
 
 export function StopMinutesGeneration(arg1:string,arg2:string):Promise<wails.Result_meet_sieve_internal_transport_wails_MeetingStateEventDTO_>;

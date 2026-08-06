@@ -57,7 +57,6 @@ function runPrimaryAction(item: MeetingSummary): void {
     recover_meeting: `${meeting}/recovery`,
     resolve_gap: `${meeting}/gaps/${action.target_id}`,
     open_gap: `${meeting}/gaps/${action.target_id}`,
-    confirm_minutes: `${meeting}/minutes`,
     open_meeting: meeting,
   }
   const target = targets[action.kind]
@@ -180,7 +179,7 @@ function runPrimaryAction(item: MeetingSummary): void {
         <template v-else>
           <p class="ms-meta">继续处理</p>
           <h2>当前没有待办会议</h2>
-          <p class="ms-muted">需要恢复、补转写或确认纪要的会议会显示在这里。</p>
+          <p class="ms-muted">需要恢复、补转写或查看纪要的会议会显示在这里。</p>
         </template>
       </article>
     </section>

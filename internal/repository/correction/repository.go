@@ -67,6 +67,8 @@ type EntryRow struct {
 	ParticipantDisplayName string `gorm:"column:participant_display_name"`
 	SpeakerClusterID       string `gorm:"column:speaker_cluster_id"`
 	ClusterDisplayNo       int    `gorm:"column:cluster_display_no"`
+	TrackDisplayNo         int    `gorm:"column:track_display_no"`
+	ClusterParticipantID   string `gorm:"column:cluster_participant_id"`
 	AssignmentSource       string `gorm:"column:speaker_assignment_source"`
 	TextRevision           int    `gorm:"column:text_revision"`
 	SpeakerRevision        int    `gorm:"column:speaker_revision"`
@@ -94,15 +96,20 @@ func (repository *Repository) ListEntries(ctx context.Context, meetingID string,
        COALESCE(participant.display_name_snapshot, '') AS participant_display_name,
        COALESCE(utterance.speaker_cluster_id, '') AS speaker_cluster_id,
        COALESCE(cluster.display_no, 0) AS cluster_display_no,
+	   COALESCE(track.display_no, 0) AS track_display_no,
+		COALESCE(cluster.assigned_participant_id, '') AS cluster_participant_id,
        utterance.speaker_assignment_source, utterance.text_revision, utterance.speaker_revision,
        COALESCE(cluster.revision, 0) AS cluster_revision,
        CASE WHEN cluster.id IS NULL THEN 0 ELSE (SELECT COUNT(*) FROM utterances scoped WHERE scoped.meeting_id=utterance.meeting_id AND scoped.speaker_cluster_id=cluster.id) END AS cluster_count,
        EXISTS(SELECT 1 FROM audio_assets audio WHERE audio.meeting_id=utterance.meeting_id AND audio.state='ready' AND audio.kind IN ('microphone','mixed') AND audio.start_sample <= utterance.start_sample AND audio.end_sample >= utterance.end_sample) AS audio_ready
 FROM meeting_events AS event
 JOIN utterances AS utterance ON utterance.event_id=event.id
+LEFT JOIN agent_voice_command_utterances AS voice_command ON voice_command.utterance_id=utterance.id
 LEFT JOIN meeting_participants AS participant ON participant.id=utterance.current_participant_id
 LEFT JOIN speaker_clusters AS cluster ON cluster.id=utterance.speaker_cluster_id
+LEFT JOIN speaker_tracks AS track ON track.id=utterance.speaker_track_id
 WHERE event.meeting_id=? AND event.kind='utterance.final' AND event.seq>?
+  AND (voice_command.id IS NULL OR voice_command.state='released')
 ORDER BY event.seq ASC LIMIT ?`
 	var rows []EntryRow
 	if err := repository.reader.WithContext(ctx).Raw(statement, meetingID, afterSeq, limit).Scan(&rows).Error; err != nil {

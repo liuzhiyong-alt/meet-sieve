@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { EventsOn } from '../../../wailsjs/runtime/runtime'
 import QRCode from 'qrcode'
 
@@ -8,6 +9,7 @@ import { useASRStore } from '../../stores/asr'
 import { useLANStore } from '../../stores/lan'
 import { useAgentStore } from '../../stores/agent'
 import { useGapStore } from '../../stores/gap'
+import { useSpeakerStore } from '../../stores/speaker'
 import { useTimelineStore } from '../../stores/timeline'
 import FinalizingView from '../finalization/FinalizingView.vue'
 import MeetingTimelinePanel from './components/MeetingTimelinePanel.vue'
@@ -17,7 +19,9 @@ const asr = useASRStore()
 const lan = useLANStore()
 const agent = useAgentStore()
 const postGaps = useGapStore()
+const speaker = useSpeakerStore()
 const timeline = useTimelineStore()
+const router = useRouter()
 const emit = defineEmits<{
   openCorrection: []
   openGap: [gapId: string]
@@ -34,11 +38,13 @@ let returnFocus: HTMLElement | null = null
 const now = ref(Date.now())
 let refreshTicks = 0
 let stopPartialListener: (() => void) | undefined
+let stopPartialClearListener: (() => void) | undefined
 let stopStateListener: (() => void) | undefined
 let stopAgentChangedListener: (() => void) | undefined
 let stopAgentDeltaListener: (() => void) | undefined
 let stopAgentApprovalListener: (() => void) | undefined
 let stopAgentTimelineListener: (() => void) | undefined
+let stopAgentWakeListener: (() => void) | undefined
 let stopGapListener: (() => void) | undefined
 let stopTimelineListener: (() => void) | undefined
 let stopAttachmentListener: (() => void) | undefined
@@ -51,9 +57,14 @@ const timer = window.setInterval(() => {
     void meeting.refreshCurrentMeeting()
     if (meeting.current?.id) void asr.restoreTimeline(meeting.current.id)
     if (meeting.current?.id) void agent.refreshState(meeting.current.id)
+    if (meeting.current?.id && refreshTicks % 10 === 0)
+      void speaker.refresh(meeting.current.id)
     if (meeting.current?.id) {
       void timeline.refreshStatus()
-      if (refreshTicks % 10 === 0) void timeline.recoverAfter()
+      if (refreshTicks % 10 === 0) {
+        void timeline.recoverAfter()
+        void timeline.refreshLatestProjection()
+      }
     }
     if (meeting.current?.id && meeting.current.lifecycle_state === 'ended')
       void postGaps.refresh(meeting.current.id)
@@ -69,6 +80,7 @@ onMounted(async () => {
     await Promise.all([
       agent.refreshState(meetingID),
       agent.restoreTimeline(meetingID),
+      speaker.refresh(meetingID),
       timeline.loadLatest(meetingID),
     ])
     await timeline.refreshStatus()
@@ -80,6 +92,13 @@ onMounted(async () => {
     asr.applyPartial(event)
     timeline.applyPartial(event)
   })
+  stopPartialClearListener = EventsOn(
+    'meeting.asr.partial.cleared',
+    (event) => {
+      asr.applyPartialClear(event)
+      timeline.applyPartialClear(event)
+    },
+  )
   stopStateListener = EventsOn('meeting.asr.changed', (event) => {
     asr.applyRealtimeState(event)
     if (meeting.current?.id) void asr.restoreTimeline(meeting.current.id)
@@ -96,6 +115,9 @@ onMounted(async () => {
   stopAgentTimelineListener = EventsOn('meeting.agent.timeline.changed', () => {
     if (meeting.current?.id) void agent.restoreTimeline(meeting.current.id)
   })
+  stopAgentWakeListener = EventsOn('meeting.agent.wake.changed', (event) => {
+    agent.applyWakeCommandEvent(event)
+  })
   stopGapListener = EventsOn('meeting.gap.changed', (event) => {
     if (postGaps.applyEvent(event) && meeting.current?.id)
       void postGaps.refresh(meeting.current.id)
@@ -109,19 +131,23 @@ onMounted(async () => {
     (event) => timeline.applyAttachmentState(event),
   )
   stopSpeakerListener = EventsOn('meeting.speaker.changed', (event) => {
-    if (event.data?.meeting_id === timeline.meetingID)
-      void timeline.loadLatest(timeline.meetingID)
+    if (event.data?.meeting_id === timeline.meetingID) {
+      void timeline.refreshLatestProjection()
+      void speaker.refresh(timeline.meetingID)
+    }
   })
 })
 
 onBeforeUnmount(() => {
   window.clearInterval(timer)
   stopPartialListener?.()
+  stopPartialClearListener?.()
   stopStateListener?.()
   stopAgentChangedListener?.()
   stopAgentDeltaListener?.()
   stopAgentApprovalListener?.()
   stopAgentTimelineListener?.()
+  stopAgentWakeListener?.()
   stopGapListener?.()
   stopTimelineListener?.()
   stopAttachmentListener?.()
@@ -191,8 +217,23 @@ const isEnded = computed(() => projection.value?.lifecycle_state === 'ended')
 const isFinalizing = computed(
   () => meeting.saving || projection.value?.lifecycle_state === 'finalizing',
 )
+const mediaPausedForAI = computed(
+  () =>
+    agent.wakeCommand.state === 'codex_busy' ||
+    asr.realtimeState === 'paused_for_ai' ||
+    timeline.status.realtime_asr_state === 'paused_for_ai',
+)
+const mediaResumeFailed = computed(
+  () =>
+    agent.wakeCommand.state === 'failed' &&
+    agent.wakeCommand.error_code === 'MEETING_MEDIA_RESUME_FAILED',
+)
 const asrState = computed(
-  () => projection.value?.realtime_asr_state || asr.realtimeState || 'idle',
+  () =>
+    (mediaPausedForAI.value && 'paused_for_ai') ||
+    projection.value?.realtime_asr_state ||
+    asr.realtimeState ||
+    'idle',
 )
 const activeUploads = computed(() => lan.status.active_uploads ?? [])
 const agentQuestionBytes = computed(
@@ -213,6 +254,44 @@ const visibleSpeakers = computed(() => {
   return [...speakers.entries()].map(([key, label]) => ({ key, label }))
 })
 
+/** speakerStateText 把自动识别门禁映射为不会误报成功的会中状态。 */
+function speakerStateText(state: string): string {
+  const labels: Record<string, string> = {
+    ready: '可用',
+    model_unavailable: '模型不可用',
+    profile_missing: '缺少校准档案',
+    profile_mismatch: '校准档案不匹配',
+    voice_rebuild_required: '声纹需重建',
+    unknown: '状态待确认',
+  }
+  return labels[state] ?? '状态待确认'
+}
+
+/** speakerUnavailableHelp 解释自动识别不可用的原因和对录音链路的影响。 */
+function speakerUnavailableHelp(state: string): string {
+  const messages: Record<string, string> = {
+    model_unavailable:
+      '说话人识别模型当前不可用。录音和转写仍会保存，模型恢复后会继续处理。',
+    profile_missing:
+      '声纹样本已保存，但缺少与当前模型匹配的正式校准档案，暂时无法自动关联成员。',
+    profile_mismatch:
+      '正式校准档案与当前模型不匹配，暂时无法自动关联成员。录音和转写不受影响。',
+    voice_rebuild_required:
+      '部分声纹样本还没有当前模型的特征，请在设置中完成声纹重建。',
+    unknown: '暂时无法读取说话人识别状态，录音和转写仍会正常保存。',
+  }
+  return messages[state] ?? ''
+}
+
+/** isRecognizedSpeaker 只有正式成员名才表示自动或人工识别已完成。 */
+function isRecognizedSpeaker(label: string): boolean {
+  return (
+    !label.startsWith('未知说话人') &&
+    !label.startsWith('未识别说话人') &&
+    !label.startsWith('说话人 ')
+  )
+}
+
 /** asrStateText 把内部状态码映射为统一中文状态动词。 */
 function asrStateText(state: string): string {
   const labels: Record<string, string> = {
@@ -220,10 +299,23 @@ function asrStateText(state: string): string {
     connecting: '正在连接',
     streaming: '实时转写中',
     reconnecting: '正在重连',
+    paused_for_ai: 'AI 回答期间已暂停',
     unavailable: '实时转写不可用',
     stopped: '已停止',
   }
   return labels[state] ?? '状态待确认'
+}
+
+/** visibleRecordingStateText 在语音 AI turn 期间如实表达 PCM 未写入会议。 */
+function visibleRecordingStateText(state: string): string {
+  return mediaPausedForAI.value
+    ? 'AI 回答期间已暂停'
+    : recordingStateText(state)
+}
+
+/** visibleLocalSaveStateText 区分保存至暂停边界和持续写入。 */
+function visibleLocalSaveStateText(state: string): string {
+  return mediaPausedForAI.value ? '已保存至暂停点' : localSaveStateText(state)
 }
 
 /** recordingStateText 把录音生命周期映射为用户可理解的独立状态。 */
@@ -279,6 +371,12 @@ async function endMeetingAndCancelUploads(): Promise<void> {
   await endMeeting()
 }
 
+/** startNewMeeting 清除旧会议投影后进入会前页，由用户确认新会议配置。 */
+function startNewMeeting(): void {
+  meeting.startNewMeeting()
+  void router.replace('/meetings/new')
+}
+
 /** copyJoinURL 仅响应用户动作把本代入口写入系统剪贴板。 */
 async function copyJoinURL(): Promise<void> {
   const joinURL = lan.status.join_url
@@ -325,6 +423,20 @@ function agentStateText(state: string): string {
     unsynced: '结束同步失败',
   }
   return labels[state] ?? '状态待确认'
+}
+
+/** visibleAgentStateText 优先展示短暂的语音指令阶段，不覆盖持久 Codex 可用性。 */
+function visibleAgentStateText(): string {
+  if (mediaResumeFailed.value) return '录音或转写恢复失败'
+  const wakeLabels: Record<string, string> = {
+    waiting_command: '已唤醒，请说指令',
+    collecting: '正在听取指令',
+    codex_busy: '正在回答',
+    failed: '语音指令未提交',
+  }
+  return (
+    wakeLabels[agent.wakeCommand.state] ?? agentStateText(agent.runtime.state)
+  )
 }
 
 /** submitAgentQuestion 关闭输入框并让异步 Binding 持续接收事件。 */
@@ -433,6 +545,7 @@ function trapModal(event: KeyboardEvent): void {
       :subject="projection?.subject || ''"
       :agent-partial="agent.runtime.partial"
       :agent-available="agent.runtime.state === 'available'"
+      :transcription-paused="mediaPausedForAI"
       :ended="isEnded || isInterrupted"
       @ask-agent="showAskAgent = true"
       @interrupt-agent="agent.interrupt()"
@@ -457,7 +570,7 @@ function trapModal(event: KeyboardEvent): void {
           <button
             class="ms-button ms-button--quiet"
             type="button"
-            @click="meeting.startNewMeeting()"
+            @click="startNewMeeting"
           >
             开始新会议
           </button>
@@ -506,7 +619,7 @@ function trapModal(event: KeyboardEvent): void {
           <button
             class="ms-button ms-button--quiet"
             type="button"
-            @click="meeting.startNewMeeting()"
+            @click="startNewMeeting"
           >
             开始新会议
           </button>
@@ -529,28 +642,32 @@ function trapModal(event: KeyboardEvent): void {
           <li>
             <span>录音</span
             ><strong>{{
-              recordingStateText(projection.lifecycle_state)
+              visibleRecordingStateText(projection.lifecycle_state)
             }}</strong>
           </li>
           <li>
             <span>麦克风</span
             ><strong
               :class="{
-                'is-ok': timeline.status.microphone_state === 'capturing',
+                'is-ok':
+                  timeline.status.microphone_state === 'capturing' &&
+                  !mediaPausedForAI,
               }"
               >{{
-                timeline.status.microphone_state === 'capturing'
-                  ? '输入正常'
-                  : timeline.status.microphone_state === 'unavailable'
-                    ? '不可用'
-                    : '已停止'
+                mediaPausedForAI
+                  ? '输入未写入会议'
+                  : timeline.status.microphone_state === 'capturing'
+                    ? '输入正常'
+                    : timeline.status.microphone_state === 'unavailable'
+                      ? '不可用'
+                      : '已停止'
               }}</strong
             >
           </li>
           <li>
             <span>本地保存</span
             ><strong>{{
-              localSaveStateText(projection.local_save_state)
+              visibleLocalSaveStateText(projection.local_save_state)
             }}</strong>
           </li>
           <li>
@@ -558,6 +675,19 @@ function trapModal(event: KeyboardEvent): void {
             ><strong :class="{ 'is-ok': asrState === 'streaming' }">{{
               asrStateText(asrState)
             }}</strong>
+          </li>
+          <li>
+            <span>说话人识别</span
+            ><strong
+              :class="{
+                'is-ok': speaker.state === 'ready' && !mediaPausedForAI,
+              }"
+              >{{
+                mediaPausedForAI
+                  ? 'AI 回答期间已暂停'
+                  : speakerStateText(speaker.state)
+              }}</strong
+            >
           </li>
           <li>
             <span>最近 final</span
@@ -581,7 +711,7 @@ function trapModal(event: KeyboardEvent): void {
             <span>Codex</span
             ><strong
               :class="{ 'is-ok': agent.runtime.state === 'available' }"
-              >{{ agentStateText(agent.runtime.state) }}</strong
+              >{{ visibleAgentStateText() }}</strong
             >
           </li>
           <li>
@@ -591,17 +721,54 @@ function trapModal(event: KeyboardEvent): void {
             }}</strong>
           </li>
         </ul>
+        <p
+          v-if="
+            speaker.meetingID && speaker.state !== 'ready' && !mediaPausedForAI
+          "
+          class="ms-help is-danger"
+          role="status"
+        >
+          {{ speakerUnavailableHelp(speaker.state) }}
+        </p>
+        <p v-if="mediaPausedForAI" class="ms-help" role="status">
+          AI 回答期间，本地录音继续保存；实时转写已暂停，回答结束后自动恢复。
+        </p>
+        <p
+          v-if="agent.wakeCommand.state === 'failed'"
+          class="ms-help is-danger"
+          role="alert"
+        >
+          <template v-if="mediaResumeFailed">
+            AI
+            已结束，但录音或实时转写尚未完整恢复。请结束当前会议并检查录音文件后重新开始会议。
+          </template>
+          <template v-else>
+            语音指令未能提交给 Codex，请确认 Codex
+            当前可用且没有其他任务正在执行，然后重新唤醒。
+          </template>
+        </p>
       </div>
       <div v-if="visibleSpeakers.length" class="ms-card ms-meeting-card">
-        <div class="ms-card-head"><h2>参会人</h2></div>
-        <div class="ms-participant-live-list">
-          <div v-for="speaker in visibleSpeakers" :key="speaker.key">
+        <div class="ms-card-head"><h2>说话人</h2></div>
+        <div
+          class="ms-participant-live-list"
+          tabindex="0"
+          aria-label="会中说话人列表"
+        >
+          <div
+            v-for="visibleSpeaker in visibleSpeakers"
+            :key="visibleSpeaker.key"
+          >
             <span class="ms-avatar" aria-hidden="true">{{
-              speaker.label.slice(-1)
+              visibleSpeaker.label.slice(-1)
             }}</span>
             <span
-              ><strong>{{ speaker.label }}</strong
-              ><small>已在转写中识别</small></span
+              ><strong>{{ visibleSpeaker.label }}</strong
+              ><small>{{
+                isRecognizedSpeaker(visibleSpeaker.label)
+                  ? '已识别为正式成员'
+                  : '等待识别或人工校对'
+              }}</small></span
             >
           </div>
         </div>

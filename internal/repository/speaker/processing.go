@@ -12,6 +12,7 @@ import (
 // ProcessingUtterance 是 Runner 构造 evidence 所需的 session 级 final 事实。
 type ProcessingUtterance struct {
 	ID              string `gorm:"column:id"`
+	SpeakerTrackID  string `gorm:"column:speaker_track_id"`
 	ASRSessionID    string `gorm:"column:asr_session_id"`
 	ASRSpeakerLabel string `gorm:"column:asr_speaker_label"`
 	FinalSeq        int64  `gorm:"column:final_seq"`
@@ -64,7 +65,7 @@ type TrackEmbeddingUpdate struct {
 	UpdatedAt          int64
 }
 
-// LoadProcessingSnapshot 读取 track 及同 session 全部 final，用于检测其他标签的重叠。
+// LoadProcessingSnapshot 只读取已 continuity 路由到当前 segment 的 final。
 func (repository *Repository) LoadProcessingSnapshot(ctx context.Context, trackID string) (ProcessingSnapshot, error) {
 	if repository == nil || repository.reader == nil || trackID == "" {
 		return ProcessingSnapshot{}, fmt.Errorf("读取 speaker 处理快照：参数无效")
@@ -75,8 +76,10 @@ func (repository *Repository) LoadProcessingSnapshot(ctx context.Context, trackI
 	}
 	const statement = `SELECT utterance.id, utterance.asr_session_id,
        COALESCE(utterance.asr_speaker_label, '') AS asr_speaker_label,
+       CASE WHEN evidence.routing_state = 'routed' THEN COALESCE(evidence.speaker_track_id, '') ELSE '' END AS speaker_track_id,
        event.seq AS final_seq, utterance.start_sample, utterance.end_sample
 FROM utterances AS utterance
+LEFT JOIN speaker_track_evidence AS evidence ON evidence.utterance_id = utterance.id
 JOIN meeting_events AS event ON event.id = utterance.event_id
 WHERE utterance.asr_session_id = ? AND event.kind = 'utterance.final'
 ORDER BY event.seq ASC, utterance.id ASC`

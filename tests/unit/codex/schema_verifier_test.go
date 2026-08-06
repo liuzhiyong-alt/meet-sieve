@@ -2,8 +2,6 @@ package codex_test
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"os"
 	"path/filepath"
@@ -119,8 +117,8 @@ func TestSchemaVerifier_CachesByExecutableVersionAndMtime(t *testing.T) {
 	}
 }
 
-// TestSchemaVerifier_FailsClosedOnMissingInvalidOrDrift 验证缺失、非法 JSON 和哈希漂移均关闭能力。
-func TestSchemaVerifier_FailsClosedOnMissingInvalidOrDrift(t *testing.T) {
+// TestSchemaVerifier_FailsClosedOnMissingInvalidOrSemanticDrift 验证缺失、非法 JSON 和语义漂移均关闭能力。
+func TestSchemaVerifier_FailsClosedOnMissingInvalidOrSemanticDrift(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -129,8 +127,8 @@ func TestSchemaVerifier_FailsClosedOnMissingInvalidOrDrift(t *testing.T) {
 		contract codex.SchemaContract
 	}{
 		{name: "missing", files: map[string][]byte{}, contract: contractFor("required.json", []byte(`{}`))},
-		{name: "invalid json", files: map[string][]byte{"required.json": []byte(`{`)}, contract: contractFor("required.json", []byte(`{`))},
-		{name: "hash drift", files: map[string][]byte{"required.json": []byte(`{"changed":true}`)}, contract: contractFor("required.json", []byte(`{}`))},
+		{name: "invalid json", files: map[string][]byte{"required.json": []byte(`{`)}, contract: contractFor("required.json", []byte(`{}`))},
+		{name: "semantic drift", files: map[string][]byte{"required.json": []byte(`{"changed":true}`)}, contract: contractFor("required.json", []byte(`{}`))},
 	}
 
 	for _, test := range tests {
@@ -158,6 +156,23 @@ func TestSchemaVerifier_FailsClosedOnMissingInvalidOrDrift(t *testing.T) {
 	}
 }
 
+// TestSchemaVerifier_AcceptsJSONRepresentationOnlyChange 验证字段顺序和空白变化不阻断 Codex 升级。
+func TestSchemaVerifier_AcceptsJSONRepresentationOnlyChange(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	executable := filepath.Join(root, "codex")
+	if err := os.WriteFile(executable, []byte("binary"), 0o700); err != nil {
+		t.Fatalf("创建测试 executable 失败：%v", err)
+	}
+	baseline := []byte(`{"type":"object","properties":{"threadId":{"type":"string"},"cwd":{"type":"string"}}}`)
+	reordered := []byte("{\n  \"properties\": {\"cwd\": {\"type\": \"string\"}, \"threadId\": {\"type\": \"string\"}},\n  \"type\": \"object\"\n}")
+	verifier := codex.NewSchemaVerifier(&schemaRunner{version: "codex-cli upgraded", files: map[string][]byte{"required.json": reordered}}, contractFor("required.json", baseline), root)
+	if err := verifier.Verify(context.Background(), executable); err != nil {
+		t.Fatalf("仅 JSON 表示变化不应阻断：%v", err)
+	}
+}
+
 // TestSchemaVerifier_IgnoresNonRequiredSchemas 验证新增非必要 schema 不会误判协议不兼容。
 func TestSchemaVerifier_IgnoresNonRequiredSchemas(t *testing.T) {
 	t.Parallel()
@@ -178,8 +193,11 @@ func TestSchemaVerifier_IgnoresNonRequiredSchemas(t *testing.T) {
 	}
 }
 
-// contractFor 为单个测试文件构造严格哈希契约。
+// contractFor 为单个测试文件构造规范化哈希契约。
 func contractFor(path string, content []byte) codex.SchemaContract {
-	digest := sha256.Sum256(content)
-	return codex.SchemaContract{Version: "test", Files: map[string]string{path: hex.EncodeToString(digest[:])}}
+	digest, err := codex.CanonicalSchemaDigest(content)
+	if err != nil {
+		panic(err)
+	}
+	return codex.SchemaContract{Version: "test", Files: map[string]string{path: digest}}
 }

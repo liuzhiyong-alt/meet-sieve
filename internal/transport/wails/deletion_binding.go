@@ -12,7 +12,7 @@ import (
 // DeletionServiceProvider 返回当前工作目录对应的删除服务。
 type DeletionServiceProvider func() (*deletionservice.Service, error)
 
-// DeletionBinding 暴露六个固定删除与恢复命令。
+// DeletionBinding 暴露整场会议删除与恢复命令。
 type DeletionBinding struct {
 	service  DeletionServiceProvider
 	boundary *Boundary
@@ -21,36 +21,6 @@ type DeletionBinding struct {
 // NewDeletionBinding 创建删除 Binding。
 func NewDeletionBinding(service DeletionServiceProvider, boundary *Boundary) *DeletionBinding {
 	return &DeletionBinding{service: service, boundary: boundary}
-}
-
-// PreviewRecordingDeletion 返回录音文件数量、字节和预览 revision。
-func (binding *DeletionBinding) PreviewRecordingDeletion(meetingID string) Result[DeletionPreviewDTO] {
-	return Invoke(binding.boundary, "wails.deletion.preview_recording", func(string) (DeletionPreviewDTO, error) {
-		if err := requireUUID("meeting ID", meetingID); err != nil {
-			return DeletionPreviewDTO{}, err
-		}
-		service, err := binding.service()
-		if err != nil {
-			return DeletionPreviewDTO{}, err
-		}
-		preview, err := service.PreviewRecording(context.Background(), meetingID)
-		return mapDeletionPreviewDTO(preview), err
-	})
-}
-
-// DeleteRecording 执行已确认且未过期的录音删除预览。
-func (binding *DeletionBinding) DeleteRecording(input DeleteRecordingDTO) Result[DeletionJobDTO] {
-	return Invoke(binding.boundary, "wails.deletion.delete_recording", func(string) (DeletionJobDTO, error) {
-		if err := validateDeleteInput(input.MeetingID, input.Revision, input.Digest); err != nil {
-			return DeletionJobDTO{}, err
-		}
-		service, err := binding.service()
-		if err != nil {
-			return DeletionJobDTO{}, err
-		}
-		job, err := service.DeleteRecording(context.Background(), input.MeetingID, input.Revision, input.Digest)
-		return mapDeletionJobDTO(job), err
-	})
 }
 
 // PreviewMeetingDeletion 扫描整场规范目录并返回未知文件数量。

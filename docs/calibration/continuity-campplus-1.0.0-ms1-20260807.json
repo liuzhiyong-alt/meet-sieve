@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "meeting_id": "3dbd8f46-e0e2-47b1-9f93-03f591a1584c",
+  "window_ms": 3000,
+  "samples": [
+    {"id":"sel-a-01","speaker_id":"speaker-a","provider_key":"session-1/label-0","split":"selection","start_sample":512,"end_sample":284032},
+    {"id":"sel-b-03","speaker_id":"speaker-b","provider_key":"session-1/label-1","split":"selection","start_sample":301616,"end_sample":409456},
+    {"id":"val-b-04","speaker_id":"speaker-b","provider_key":"session-1/label-1","split":"validation","start_sample":409456,"end_sample":538432},
+    {"id":"val-b-06","speaker_id":"speaker-b","provider_key":"session-1/label-1","split":"validation","start_sample":538432,"end_sample":864672},
+    {"id":"sel-b-07","speaker_id":"speaker-b","provider_key":"session-1/label-1","split":"selection","start_sample":864672,"end_sample":941312},
+    {"id":"sel-a-08","speaker_id":"speaker-a","provider_key":"session-1/label-0","split":"selection","start_sample":968992,"end_sample":1297136},
+    {"id":"val-a-09","speaker_id":"speaker-a","provider_key":"session-1/label-0","split":"validation","start_sample":1297136,"end_sample":1617312},
+    {"id":"val-a-10","speaker_id":"speaker-a","provider_key":"session-1/label-0","split":"validation","start_sample":1617312,"end_sample":1937472},
+    {"id":"sel-b-12","speaker_id":"speaker-b","provider_key":"session-1/label-1","split":"selection","start_sample":1988352,"end_sample":2313152},
+    {"id":"sel-a-16","speaker_id":"speaker-a","provider_key":"session-2/label-0","split":"selection","start_sample":2566400,"end_sample":2624352},
+    {"id":"sel-b-17","speaker_id":"speaker-b","provider_key":"session-2/label-0","split":"selection","start_sample":2659392,"end_sample":2685792},
+    {"id":"val-b-18","speaker_id":"speaker-b","provider_key":"session-2/label-0","split":"validation","start_sample":5503232,"end_sample":5529792},
+    {"id":"val-b-19","speaker_id":"speaker-b","provider_key":"session-2/label-0","split":"validation","start_sample":5586752,"end_sample":5616816},
+    {"id":"val-b-21","speaker_id":"speaker-b","provider_key":"session-2/label-0","split":"validation","start_sample":6276336,"end_sample":6320192},
+    {"id":"val-b-22","speaker_id":"speaker-b","provider_key":"session-2/label-0","split":"validation","start_sample":6811232,"end_sample":7139392},
+    {"id":"val-b-23","speaker_id":"speaker-b","provider_key":"session-2/label-0","split":"validation","start_sample":7139392,"end_sample":7217312}
+  ]
+}

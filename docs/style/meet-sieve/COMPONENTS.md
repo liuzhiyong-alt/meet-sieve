@@ -33,15 +33,16 @@
 | Notice             | `.notice`                                  | existing               |
 | EmptyState         | `.empty`                                   | existing               |
 | Modal              | `.modal-backdrop`、`.modal`                | existing               |
+| CodexHandoffDialog | 会议详情页头与接续 Modal                    | derived                |
 | Toast              | `.toast`                                   | existing               |
 | Avatar             | `.avatar`、`.avatar-group`                 | existing               |
 | LiveStage          | `.live-stage`、`.recording-line`           | existing               |
 | OperationSteps     | Step 8 会议收尾与失败页面                  | existing               |
 | UploadItem         | Step 6 访客附件与结束会议提案              | existing               |
 | TranscriptEditor   | `transcript-editor.html`                   | existing               |
-| MinuteVersion      | Step 8 纪要当前与历史版本页                | existing               |
+| MinuteDocument     | 会议详情纪要展示与源码编辑页               | existing               |
 | CursorPagination   | Step 9 会议记录                            | existing               |
-| DangerZone         | Step 9 会议、小组与成员详情                | existing               |
+| DangerZone         | Step 9 小组与成员详情                      | existing               |
 | RecoverySummary    | Step 9 中断与删除恢复                      | existing               |
 | StorageBreakdown   | Step 9 通用设置                            | existing               |
 | FileIntegrityState | Step 9 附件异常                            | existing               |
@@ -194,7 +195,7 @@ Error（按需）
 - 行最小 64px；
 - 相邻行使用 Soft Border；
 - 主内容在左，状态和动作在右；
-- 一行通常只有一个直接操作；
+- 一行通常只有一个直接操作；会议记录固定为“打开”和“删除”两个操作；
 - 长标题省略时必须提供完整访问方式；
 - 会议记录 Alpha 不提供批量选择；需要批量能力的其他列表必须先登记业务模式。
 
@@ -305,6 +306,16 @@ Error（按需）
 - Modal 打开时会议录音、实时转写和本地保存继续，正文明确等待计入任务超时；
 - 过期、取消或 turn 终结时自动关闭，并将焦点恢复到原触发上下文。
 
+### CodexHandoffDialog 变体
+
+- 由会议详情页头“用 Codex 继续”触发，使用现有 Modal、FormField、Notice、Tabs 与 Button 组合；
+- 有格式可信 thread 时显示“恢复原对话”和只读恢复命令；无 thread 时显示可继续的 Warning Notice；
+- “从会议文件继续”内通过“接续提示词 / 终端命令”切换，只显示当前文本，命令与路径使用 Mono；
+- 两个同级接续区的复制动作统一使用 Primary Button，明确当前内容可以直接复制；
+- Modal 使用固定 Header、独立滚动 Body 和右下固定 Footer；Loading 时仍允许关闭，关闭后不得由旧请求回写状态；
+- 复制失败聚焦并选中对应只读 Textarea，用户可手动复制；
+- 为短任务 Modal：长提示词在 Body 内纵向滚动，Footer 的“关闭”始终可见，焦点锁定并在关闭时返回页头触发按钮。
+
 ## 19. Toast
 
 - 用于复制、保存设置等短暂且无需后续处理的反馈；
@@ -364,41 +375,41 @@ TranscriptEditor
 - `1024×720` 收为单列，记录列表在前、编辑面板在后，不产生横向滚动；
 - 页面切换片段或离开时撤销短期音频片段。
 
-## 23. MinuteVersion
+## 23. MinuteDocument
 
-MinuteVersion 是会议纪要当前版本、只读历史版本和版本动作的组合组件，不负责生成任务
-本身的进度展示。
+MinuteDocument 是单份会议纪要的展示与编辑组合组件。会议详情直接渲染 Markdown，独立
+编辑页提供 Markdown 源码编辑；产品界面不暴露版本、确认、恢复或重新生成概念。
 
-### MinuteVersion Anatomy
+### MinuteDocument Anatomy
 
 ```text
-MinuteVersion
-├── VersionSummary：版本号、来源、状态和保存时间
-├── EditorOrPreview：当前草稿编辑或历史只读正文
-├── CurrentVersionState：当前、未保存、候选或已确认
-├── VersionActions：保存、确认、重新生成或恢复
-├── VersionHistory：版本列表与当前标记
-└── SourceAnchors：原始记录时间引用与缺口提示
+MinuteDocument
+├── EmptyState：未生成说明与生成会议纪要动作
+├── MarkdownPreview：已有纪要的安全 Markdown 渲染结果
+├── SourceEditor：原版 Markdown 源码输入框
+├── DocumentActions：编辑、保存修改或放弃修改
+└── GapNotice：未纳入生成事实的补转写缺口提示
 ```
 
-- AI 草稿、人工草稿、已确认和历史只读必须使用文字明确区分；
-- 有未保存修改时禁用确认，并通过相邻帮助文案解释原因；
-- 保存人工修改创建新版本，不在原版本上覆盖正文；
-- 新 AI 草稿只作为候选，不能切走人工或已确认的当前版本；
-- 历史恢复必须提前说明将创建的新版本号，旧版本继续只读保留；
+- 未生成时只展示 `生成会议纪要`，生成中允许停止并说明当前步骤；
+- 已有纪要时在详情页直接渲染 Markdown，不要求进入独立工作区后才能阅读；
+- 编辑页默认展示当前纪要的原版 Markdown 源码，保存后返回单份纪要语义；
+- Markdown 渲染必须过滤危险 HTML，不加载远程图片、音视频或可交互表单；
+- 页面不展示版本号、历史记录、确认、恢复和重新生成动作；
 - 有补转写失败或冲突时持续显示范围，并明确该范围未作为会议事实生成结论；
 - 来源锚点使用等宽时间，不依赖颜色表达可追溯关系；
-- 默认与最小桌面尺寸都保留当前版本状态和关键版本动作。
+- 默认与最小桌面尺寸都保留纪要正文和编辑入口。
 
-页面级金标为 `docs/UI/step8-proposal/minutes-workspace.html` 与
-`docs/UI/step8-proposal/minutes-history.html`，已于 2026-08-03 经用户确认。
+`docs/UI/step8-proposal/minutes-workspace.html` 与 `minutes-history.html` 仅保留为旧版
+证据；2026-08-06 确认的简化交互与技术方案优先。
 
 ## 24. CursorPagination
 
 用于会议记录和会议详情长列表的游标分页：
 
-- 只显示上一页、下一页和当前页信息，不查询或伪造总条数；
-- 会议记录固定每页 50 场，按 `started_at DESC, meeting_no DESC`；
+- 只显示“上一页”“下一页”和当前页信息，不查询或伪造总条数；
+- 会议详情中的两个按钮固定展示，是否可用只由后端返回的真实前后页状态决定；
+- 会议记录固定每页 10 场，按 `started_at DESC, meeting_no DESC`；
 - 原始记录固定每页 200 条，会议消息固定每页 100 条，均按 `seq` 游标；
 - 修改搜索或任一筛选后回到第一页；
 - 加载期间禁用重复翻页，失败后保留当前页并允许重试；
@@ -406,14 +417,12 @@ MinuteVersion
 
 ## 25. DangerZone
 
-危险区固定在详情页正文底部，不放在 Titlebar：
+危险区固定在小组或成员详情正文底部，不放在 Titlebar：
 
-- 每个危险动作分别说明对象、保留内容和不可逆后果；
-- 删除录音与删除整场会议是两个独立动作，不合并为“删除”；
-- 删除录音使用明确 Danger Modal，无需输入会议号；
-- 删除整场会议必须先扫描目录，并输入会议号确认；
-- 停止后台任务或删除期间禁用同场新任务；
-- 部分删除持续显示失败事实、剩余项目和原清单重试入口，不能显示完整成功。
+- 只提供当前实体的永久删除或归档，并明确对象和不可逆后果；
+- 使用同一 Danger Modal 前必须展示真实影响范围与必要的二次确认；
+- 删除期间禁用同一实体的重复危险操作；
+- 失败持续显示已完成与仍需处理的事实，不能显示完整成功。
 
 ## 26. RecoverySummary
 

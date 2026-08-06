@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	querydomain "meet-sieve/internal/domain/query"
+	speakerdomain "meet-sieve/internal/domain/speaker"
 	"meet-sieve/internal/infra/apperr"
 	queryrepository "meet-sieve/internal/repository/query"
 )
@@ -18,8 +19,8 @@ type Repository interface {
 	ListMeetings(context.Context, queryrepository.ListInput) (queryrepository.MeetingPage, error)
 	FindHighestPriorityMeeting(context.Context) (*queryrepository.MeetingSummaryRow, error)
 	GetMeeting(context.Context, string) (*queryrepository.MeetingSummaryRow, error)
-	ListTranscript(context.Context, string, int64, int64, int) ([]queryrepository.TranscriptRow, bool, error)
-	ListContent(context.Context, string, int64, int64, int) ([]queryrepository.ContentRow, bool, error)
+	ListTranscript(context.Context, string, int64, int64, int) ([]queryrepository.TranscriptRow, queryrepository.SeqPageState, error)
+	ListContent(context.Context, string, int64, int64, int) ([]queryrepository.ContentRow, queryrepository.SeqPageState, error)
 	CountStatus(context.Context, querydomain.MeetingStatus) (int, error)
 	GetRecoveryFacts(context.Context, string) (queryrepository.RecoveryFactsRow, error)
 }
@@ -52,7 +53,9 @@ type MeetingPage struct {
 // MeetingSummary 是 Repository 会议事实与唯一主动作组成的服务投影。
 type MeetingSummary struct {
 	queryrepository.MeetingSummaryRow
-	PrimaryAction PrimaryAction
+	PrimaryAction        PrimaryAction
+	CanDeleteMeeting     bool
+	DeleteDisabledReason string
 }
 
 // Home 是首页快捷开始、继续处理和最近会议投影。
@@ -86,7 +89,7 @@ func PrimaryActionFor(meeting queryrepository.MeetingSummaryRow) PrimaryAction {
 	case querydomain.StatusGapPending:
 		return gapPrimaryAction("open_gap", "打开", meeting.PendingGapID)
 	case querydomain.StatusMinuteCandidate:
-		return meetingAction("confirm_minutes", "确认纪要")
+		return meetingAction("open_meeting", "打开")
 	case querydomain.StatusAgentUnsynced, querydomain.StatusMinuteConfirmed, querydomain.StatusSaved:
 		return meetingAction("open_meeting", "打开")
 	default:
@@ -104,12 +107,11 @@ func gapPrimaryAction(kind string, label string, gapID string) PrimaryAction {
 
 // MeetingDetail 是不含文件路径的会议详情摘要和动作能力。
 type MeetingDetail struct {
-	Summary            MeetingSummary
-	CanPlayAudio       bool
-	CanRetranscribe    bool
-	CanDeleteRecording bool
-	CanDeleteMeeting   bool
-	DisabledReason     string
+	Summary          MeetingSummary
+	CanPlayAudio     bool
+	CanRetranscribe  bool
+	CanDeleteMeeting bool
+	DisabledReason   string
 }
 
 // InterruptedRecovery 是恢复页的真实只读事实和安全能力。
@@ -130,10 +132,12 @@ type SeqPageInput struct {
 
 // TranscriptPage 是原始记录的有界页。
 type TranscriptPage struct {
-	Items     []queryrepository.TranscriptRow
-	HasMore   bool
-	AfterSeq  int64
-	BeforeSeq int64
+	Items       []queryrepository.TranscriptRow
+	HasMore     bool
+	HasPrevious bool
+	HasNext     bool
+	AfterSeq    int64
+	BeforeSeq   int64
 }
 
 // ContentItem 是去除原始 URL 后的消息或资源投影。
@@ -145,10 +149,12 @@ type ContentItem struct {
 
 // ContentPage 是消息、资源与公开 AI 回答的有界页。
 type ContentPage struct {
-	Items     []ContentItem
-	HasMore   bool
-	AfterSeq  int64
-	BeforeSeq int64
+	Items       []ContentItem
+	HasMore     bool
+	HasPrevious bool
+	HasNext     bool
+	AfterSeq    int64
+	BeforeSeq   int64
 }
 
 // ListMeetings 校验筛选和不透明游标并签发前后页边界。
@@ -218,7 +224,7 @@ func (service *Service) GetMeetingDetail(ctx context.Context, meetingID string) 
 	audioAvailable := row.LocalSaveState == "saved" && row.HasReadyAudio && !row.RecordingDeleted && !locked
 	detail := MeetingDetail{
 		Summary: projectMeetingSummary(*row), CanPlayAudio: audioAvailable, CanRetranscribe: audioAvailable,
-		CanDeleteRecording: !locked && row.LifecycleState != "recording", CanDeleteMeeting: !locked && row.LifecycleState != "recording",
+		CanDeleteMeeting: !locked && row.LifecycleState != "recording",
 	}
 	if locked {
 		detail.DisabledReason = apperr.CodeMeetingMaintenanceLocked.Message
@@ -249,18 +255,24 @@ func (service *Service) GetInterruptedRecovery(ctx context.Context, meetingID st
 
 // ListTranscript 读取最多 200 条原始记录，并返回可写入 URL 的 seq 边界。
 func (service *Service) ListTranscript(ctx context.Context, input SeqPageInput) (TranscriptPage, error) {
-	rows, hasMore, err := service.repository.ListTranscript(ctx, input.MeetingID, input.AfterSeq, input.BeforeSeq, input.Limit)
+	rows, state, err := service.repository.ListTranscript(ctx, input.MeetingID, input.AfterSeq, input.BeforeSeq, input.Limit)
 	if err != nil {
 		return TranscriptPage{}, err
 	}
-	page := TranscriptPage{Items: rows, HasMore: hasMore}
+	for index := range rows {
+		rows[index].SpeakerDisplay = transcriptSpeakerDisplay(rows[index])
+	}
+	page := TranscriptPage{
+		Items: rows, HasMore: state.HasNext,
+		HasPrevious: state.HasPrevious, HasNext: state.HasNext,
+	}
 	setTranscriptBoundaries(&page)
 	return page, nil
 }
 
 // ListContent 读取最多 100 条内容，并只返回脱敏链接展示信息。
 func (service *Service) ListContent(ctx context.Context, input SeqPageInput) (ContentPage, error) {
-	rows, hasMore, err := service.repository.ListContent(ctx, input.MeetingID, input.AfterSeq, input.BeforeSeq, input.Limit)
+	rows, state, err := service.repository.ListContent(ctx, input.MeetingID, input.AfterSeq, input.BeforeSeq, input.Limit)
 	if err != nil {
 		return ContentPage{}, err
 	}
@@ -273,12 +285,23 @@ func (service *Service) ListContent(ctx context.Context, input SeqPageInput) (Co
 		}
 		items = append(items, item)
 	}
-	page := ContentPage{Items: items, HasMore: hasMore}
+	page := ContentPage{
+		Items: items, HasMore: state.HasNext,
+		HasPrevious: state.HasPrevious, HasNext: state.HasNext,
+	}
 	if len(items) > 0 {
 		page.BeforeSeq = items[0].Seq
 		page.AfterSeq = items[len(items)-1].Seq
 	}
 	return page, nil
+}
+
+// transcriptSpeakerDisplay 按成员、单场未知聚类和未识别状态生成用户可见名称。
+func transcriptSpeakerDisplay(row queryrepository.TranscriptRow) string {
+	if row.Kind != "utterance.final" {
+		return ""
+	}
+	return speakerdomain.DisplayName(row.SpeakerName, row.ClusterDisplayNo, row.TrackDisplayNo)
 }
 
 // buildMeetingPage 按当前页首尾项签发前后游标。
@@ -318,7 +341,19 @@ func projectMeetingSummaries(rows []queryrepository.MeetingSummaryRow) []Meeting
 
 // projectMeetingSummary 组合单场会议事实与业务动作。
 func projectMeetingSummary(row queryrepository.MeetingSummaryRow) MeetingSummary {
-	return MeetingSummary{MeetingSummaryRow: row, PrimaryAction: PrimaryActionFor(row)}
+	canDelete := row.HighestStatus != querydomain.StatusDeleting && row.LifecycleState != "recording"
+	disabledReason := ""
+	if row.HighestStatus == querydomain.StatusDeleting {
+		disabledReason = apperr.CodeMeetingMaintenanceLocked.Message
+	} else if row.LifecycleState == "recording" {
+		disabledReason = "会议进行中，结束会议后才能删除"
+	}
+	return MeetingSummary{
+		MeetingSummaryRow:    row,
+		PrimaryAction:        PrimaryActionFor(row),
+		CanDeleteMeeting:     canDelete,
+		DeleteDisabledReason: disabledReason,
+	}
 }
 
 // mapCursorError 把领域游标原因映射为前端稳定错误码。

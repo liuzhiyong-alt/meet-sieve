@@ -61,12 +61,26 @@ func (repository *Repository) FindEvidenceByUtterance(ctx context.Context, tx *g
 // FindTrackBySessionLabel 返回 session 内已有匿名 track。
 func (repository *Repository) FindTrackBySessionLabel(ctx context.Context, tx *gorm.DB, sessionID string, label string) (*models.SpeakerTrack, error) {
 	var track models.SpeakerTrack
-	err := tx.WithContext(ctx).Where("asr_session_id = ? AND asr_speaker_label = ?", sessionID, label).Take(&track).Error
+	err := tx.WithContext(ctx).Where("asr_session_id = ? AND asr_speaker_label = ?", sessionID, label).
+		Order("provider_segment_no ASC").Take(&track).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, fmt.Errorf("查询 speaker track 失败：%w", err)
+	}
+	return &track, nil
+}
+
+// FindTrackBySourceUtterance 返回同一个无标签 final 已创建的本地候选 track。
+func (repository *Repository) FindTrackBySourceUtterance(ctx context.Context, tx *gorm.DB, utteranceID string) (*models.SpeakerTrack, error) {
+	var track models.SpeakerTrack
+	err := tx.WithContext(ctx).Where("source = 'local_utterance' AND source_utterance_id = ?", utteranceID).Take(&track).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("查询本地 speaker track 失败：%w", err)
 	}
 	return &track, nil
 }
@@ -77,6 +91,20 @@ func (repository *Repository) CreateTrack(ctx context.Context, tx *gorm.DB, trac
 		return fmt.Errorf("创建 speaker track 失败：%w", err)
 	}
 	return nil
+}
+
+// NextTrackDisplayNo 在单 writer 事务内分配会议级匿名 track 展示编号。
+func (repository *Repository) NextTrackDisplayNo(ctx context.Context, tx *gorm.DB, meetingID string) (int, error) {
+	if tx == nil || meetingID == "" {
+		return 0, fmt.Errorf("分配 speaker track 展示编号：参数无效")
+	}
+	var displayNo int
+	if err := tx.WithContext(ctx).Raw(
+		"SELECT COALESCE(MAX(display_no), 0) + 1 FROM speaker_tracks WHERE meeting_id = ?", meetingID,
+	).Scan(&displayNo).Error; err != nil {
+		return 0, fmt.Errorf("分配 speaker track 展示编号失败：%w", err)
+	}
+	return displayNo, nil
 }
 
 // NextEvidenceOrder 在单 writer 事务中分配 track 内确定性证据序号。
@@ -90,30 +118,33 @@ func (repository *Repository) NextEvidenceOrder(ctx context.Context, tx *gorm.DB
 	return order, nil
 }
 
-// AttachEvidence 原子写 evidence 并把 utterance 指向同一 track。
-func (repository *Repository) AttachEvidence(ctx context.Context, tx *gorm.DB, evidence models.SpeakerTrackEvidence, updatedAt int64) error {
+// AttachEvidence 原子写 evidence 并把 utterance 指向同一 track；返回是否同步改变了说话人投影。
+func (repository *Repository) AttachEvidence(ctx context.Context, tx *gorm.DB, evidence models.SpeakerTrackEvidence, updatedAt int64) (bool, error) {
 	result := tx.WithContext(ctx).Model(&models.Utterance{}).
 		Where("id = ? AND (speaker_track_id IS NULL OR speaker_track_id = ?)", evidence.UtteranceID, evidence.SpeakerTrackID).
 		Updates(map[string]any{"speaker_track_id": evidence.SpeakerTrackID, "updated_at": updatedAt})
 	if result.Error != nil {
-		return fmt.Errorf("关联 utterance speaker track 失败：%w", result.Error)
+		return false, fmt.Errorf("关联 utterance speaker track 失败：%w", result.Error)
 	}
 	if result.RowsAffected != 1 {
-		return fmt.Errorf("utterance 已归属其他 speaker track")
+		return false, fmt.Errorf("utterance 已归属其他 speaker track")
 	}
 	if err := tx.WithContext(ctx).Create(&evidence).Error; err != nil {
-		return fmt.Errorf("创建 speaker evidence 失败：%w", err)
+		return false, fmt.Errorf("创建 speaker evidence 失败：%w", err)
+	}
+	if evidence.RoutingState == "pending" {
+		return false, nil
 	}
 	return repository.inheritTrackProjection(ctx, tx, evidence, updatedAt)
 }
 
-// inheritTrackProjection 让既有成员/cluster track 的新 final 继承当前决定，并推进 cluster revision。
+// inheritTrackProjection 让既有成员/cluster track 的新 final 继承当前决定，并返回投影是否发生变化。
 func (repository *Repository) inheritTrackProjection(
 	ctx context.Context,
 	tx *gorm.DB,
 	evidence models.SpeakerTrackEvidence,
 	updatedAt int64,
-) error {
+) (bool, error) {
 	var assignment struct {
 		State                  string   `gorm:"column:state"`
 		AutomaticParticipantID *string  `gorm:"column:automatic_participant_id"`
@@ -130,10 +161,10 @@ LEFT JOIN speaker_clusters AS cluster ON cluster.id = track.speaker_cluster_id
 WHERE track.id = ?`, evidence.SpeakerTrackID).
 		Take(&assignment).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil
+		return false, nil
 	}
 	if err != nil {
-		return fmt.Errorf("读取人工 cluster 继承事实失败：%w", err)
+		return false, fmt.Errorf("读取人工 cluster 继承事实失败：%w", err)
 	}
 	updates := map[string]any{"updated_at": updatedAt}
 	switch {
@@ -151,20 +182,24 @@ WHERE track.id = ?`, evidence.SpeakerTrackID).
 		updates["speaker_assignment_source"] = "automatic_cluster"
 		updates["speaker_confidence"] = assignment.Confidence
 	default:
-		return nil
+		return false, nil
 	}
 	updates["speaker_revision"] = gorm.Expr("speaker_revision + 1")
-	if err := tx.WithContext(ctx).Model(&models.Utterance{}).
-		Where("id = ? AND speaker_assignment_source = 'unassigned'", evidence.UtteranceID).Updates(updates).Error; err != nil {
-		return fmt.Errorf("继承 speaker track 投影失败：%w", err)
+	result := tx.WithContext(ctx).Model(&models.Utterance{}).
+		Where("id = ? AND speaker_assignment_source = 'unassigned'", evidence.UtteranceID).Updates(updates)
+	if result.Error != nil {
+		return false, fmt.Errorf("继承 speaker track 投影失败：%w", result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return false, nil
 	}
 	if assignment.ClusterID != nil {
 		if err := tx.WithContext(ctx).Model(&models.SpeakerCluster{}).Where("id = ?", *assignment.ClusterID).
 			Updates(map[string]any{"revision": gorm.Expr("revision + 1"), "updated_at": updatedAt}).Error; err != nil {
-			return fmt.Errorf("推进 cluster scope revision 失败：%w", err)
+			return false, fmt.Errorf("推进 cluster scope revision 失败：%w", err)
 		}
 	}
-	return nil
+	return true, nil
 }
 
 // ListRecoverableTrackIDs 按最早 final seq 返回需要后台补拉的 track。
@@ -196,7 +231,8 @@ FROM speaker_tracks AS track
 JOIN speaker_track_evidence AS evidence ON evidence.speaker_track_id = track.id
 JOIN utterances AS utterance ON utterance.id = evidence.utterance_id
 JOIN meeting_events AS event ON event.id = utterance.event_id
-WHERE track.state IN ('collecting', 'pending', 'rebuild_required') AND (? = '' OR track.meeting_id = ?)
+WHERE evidence.routing_state = 'routed'
+  AND track.state IN ('collecting', 'pending', 'rebuild_required') AND (? = '' OR track.meeting_id = ?)
 GROUP BY track.id
 ORDER BY MIN(event.seq) ASC, track.id ASC
 LIMIT ?`

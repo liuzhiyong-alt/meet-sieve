@@ -9,6 +9,7 @@ export interface TimelineEntry {
   content_format?: 'plain' | 'markdown'
   speaker_key?: string
   speaker_label?: string
+  speaker_revision?: number
   start_sample?: number
   end_sample?: number
   state?: string

@@ -78,12 +78,14 @@ func readWhitelistedFacts(ctx context.Context, tx *gorm.DB, meetingID string, cu
 FROM meeting_events AS event
 LEFT JOIN utterances AS utterance
   ON event.kind IN ('utterance.final','asr.compensated') AND utterance.event_id=event.id AND utterance.meeting_id=event.meeting_id
+LEFT JOIN agent_voice_command_utterances AS voice_command ON voice_command.utterance_id=utterance.id
 LEFT JOIN meeting_participants AS participant ON participant.id=utterance.current_participant_id
 LEFT JOIN messages AS message
   ON event.kind='message.created' AND message.event_id=event.id AND message.meeting_id=event.meeting_id
 LEFT JOIN resources AS resource
   ON event.kind='resource.created' AND resource.event_id=event.id AND resource.meeting_id=event.meeting_id AND resource.state='completed'
 WHERE event.meeting_id=? AND event.seq<=?
+  AND (voice_command.id IS NULL OR voice_command.state='released')
   AND (utterance.id IS NOT NULL OR message.id IS NOT NULL OR resource.id IS NOT NULL)
 ORDER BY event.seq ASC`
 	var facts []domainminutes.Fact

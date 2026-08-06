@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 
+	speakerdomain "meet-sieve/internal/domain/speaker"
 	"meet-sieve/models"
 
 	"gorm.io/gorm"
@@ -14,13 +15,14 @@ import (
 
 // CreateQuestionInput 描述原子创建问题事实的全部已验证输入。
 type CreateQuestionInput struct {
-	Turn        models.AgentTurn
-	Event       models.MeetingEvent
-	Text        string
-	Trigger     string
-	UtteranceID *string
-	Speaker     string
-	UpdatedAt   int64
+	Turn           models.AgentTurn
+	Event          models.MeetingEvent
+	Text           string
+	Trigger        string
+	UtteranceID    *string
+	UtteranceIDs   []string
+	VoiceCommandID string
+	UpdatedAt      int64
 }
 
 // CreateQuestionResult 返回持久问题和固定 cutoff seq；Existing 表示幂等复用。
@@ -61,9 +63,14 @@ func (repository *Repository) CreateQuestion(ctx context.Context, input CreateQu
 		if err != nil {
 			return err
 		}
+		speakerKey, speakerLabel, err := repository.questionSpeakerSnapshot(ctx, tx, input)
+		if err != nil {
+			return err
+		}
 		payload, err := json.Marshal(map[string]any{
-			"v": 2, "text": input.Text, "content_format": "markdown", "trigger": input.Trigger,
-			"trigger_utterance_id": input.UtteranceID, "speaker": input.Speaker,
+			"v": 3, "text": input.Text, "content_format": "markdown", "trigger": input.Trigger,
+			"trigger_utterance_id": input.UtteranceID, "trigger_utterance_ids": input.UtteranceIDs,
+			"speaker_key_snapshot": speakerKey, "speaker_label_snapshot": speakerLabel,
 		})
 		if err != nil {
 			return fmt.Errorf("编码问题事件失败：%w", err)
@@ -82,10 +89,95 @@ func (repository *Repository) CreateQuestion(ctx context.Context, input CreateQu
 			return fmt.Errorf("关联问题事件失败：%w", update.Error)
 		}
 		input.Turn.QuestionEventID = &input.Event.ID
+		if err := consumeVoiceCommand(ctx, tx, input); err != nil {
+			return err
+		}
 		result = CreateQuestionResult{Turn: input.Turn, Event: input.Event}
 		return nil
 	})
 	return result, err
+}
+
+// questionSpeakerSnapshot 在问题事务中保存触发 utterance 的身份快照；手动提问固定属于主持人。
+func (repository *Repository) questionSpeakerSnapshot(ctx context.Context, tx *gorm.DB, input CreateQuestionInput) (string, string, error) {
+	if input.Trigger != "wake_word" || input.UtteranceID == nil || *input.UtteranceID == "" {
+		return "host", "你", nil
+	}
+	var row struct {
+		ParticipantID    string `gorm:"column:participant_id"`
+		ParticipantName  string `gorm:"column:participant_name"`
+		ClusterID        string `gorm:"column:cluster_id"`
+		ClusterDisplayNo int    `gorm:"column:cluster_display_no"`
+		TrackID          string `gorm:"column:track_id"`
+		TrackDisplayNo   int    `gorm:"column:track_display_no"`
+	}
+	err := tx.WithContext(ctx).Raw(`SELECT
+    COALESCE(utterance.current_participant_id, '') AS participant_id,
+    COALESCE(participant.display_name_snapshot, '') AS participant_name,
+    COALESCE(utterance.speaker_cluster_id, '') AS cluster_id,
+    COALESCE(cluster.display_no, 0) AS cluster_display_no,
+    COALESCE(utterance.speaker_track_id, '') AS track_id,
+    COALESCE(track.display_no, 0) AS track_display_no
+FROM utterances AS utterance
+LEFT JOIN meeting_participants AS participant ON participant.id = utterance.current_participant_id
+LEFT JOIN speaker_clusters AS cluster ON cluster.id = utterance.speaker_cluster_id
+LEFT JOIN speaker_tracks AS track ON track.id = utterance.speaker_track_id
+WHERE utterance.id = ? AND utterance.meeting_id = ?`, *input.UtteranceID, input.Turn.MeetingID).Take(&row).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return "", "未识别说话人", nil
+	}
+	if err != nil {
+		return "", "", fmt.Errorf("读取 AI 提问者身份失败：%w", err)
+	}
+	return speakerSnapshotIdentity(row.ParticipantID, row.ParticipantName, row.ClusterID, row.ClusterDisplayNo, row.TrackID, row.TrackDisplayNo),
+		speakerdomain.DisplayName(row.ParticipantName, row.ClusterDisplayNo, row.TrackDisplayNo), nil
+}
+
+// speakerSnapshotIdentity 返回与时间线一致的稳定说话人键，供审计快照和前端去重使用。
+func speakerSnapshotIdentity(participantID string, participantName string, clusterID string, clusterDisplayNo int, trackID string, trackDisplayNo int) string {
+	if participantID != "" && participantName != "" {
+		return "participant:" + participantID
+	}
+	if clusterID != "" && clusterDisplayNo > 0 {
+		return "cluster:" + clusterID
+	}
+	if trackID != "" && trackDisplayNo > 0 {
+		return "track:" + trackID
+	}
+	return ""
+}
+
+// consumeVoiceCommand 校验并原子绑定语音指令的全部有序 final。
+func consumeVoiceCommand(ctx context.Context, tx *gorm.DB, input CreateQuestionInput) error {
+	if input.Trigger != "wake_word" {
+		return nil
+	}
+	if input.VoiceCommandID == "" || len(input.UtteranceIDs) == 0 {
+		return fmt.Errorf("消费语音指令：触发关系不完整")
+	}
+	var relations []models.AgentVoiceCommandUtterance
+	if err := tx.WithContext(ctx).Where("command_id = ? AND state = 'candidate'", input.VoiceCommandID).
+		Order("position ASC").Find(&relations).Error; err != nil {
+		return fmt.Errorf("读取语音指令候选失败：%w", err)
+	}
+	if len(relations) != len(input.UtteranceIDs) {
+		return ErrConflict
+	}
+	for index, relation := range relations {
+		if relation.MeetingID != input.Turn.MeetingID || relation.Position != index || relation.UtteranceID != input.UtteranceIDs[index] {
+			return ErrConflict
+		}
+	}
+	result := tx.WithContext(ctx).Model(&models.AgentVoiceCommandUtterance{}).
+		Where("command_id = ? AND state = 'candidate'", input.VoiceCommandID).
+		Updates(map[string]any{"state": "consumed", "agent_turn_id": input.Turn.ID, "updated_at": input.UpdatedAt})
+	if result.Error != nil {
+		return fmt.Errorf("消费语音指令候选失败：%w", result.Error)
+	}
+	if result.RowsAffected != int64(len(relations)) {
+		return ErrConflict
+	}
+	return nil
 }
 
 // MarkTurnRunning 比较 pending 状态写入唯一 provider turn ID。

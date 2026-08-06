@@ -137,7 +137,7 @@ func validate(cfg Config, expectedONNXVersion string) error {
 // isValidASRConfig 校验 endpoint、容量、超时和退避均等于 Step 4 冻结边界。
 func isValidASRConfig(cfg ASRConfig) bool {
 	wantBackoff := []int{1, 2, 4, 8, 15}
-	if strings.TrimSpace(cfg.Endpoint) == "" || strings.TrimSpace(cfg.ResourceID) == "" || cfg.ConnectTimeoutSeconds != 10 || cfg.PCMQueueSamples != 32000 || cfg.FinalQueueCapacity != 128 || cfg.FinalPersistTimeoutSeconds != 5 || cfg.TailTimeoutSeconds != 15 || len(cfg.ReconnectBackoffSeconds) != len(wantBackoff) {
+	if strings.TrimSpace(cfg.Endpoint) == "" || strings.TrimSpace(cfg.ResourceID) == "" || cfg.ConnectTimeoutSeconds != 10 || cfg.PCMQueueSamples != 240000 || cfg.FinalQueueCapacity != 128 || cfg.FinalPersistTimeoutSeconds != 5 || cfg.TailTimeoutSeconds != 15 || len(cfg.ReconnectBackoffSeconds) != len(wantBackoff) {
 		return false
 	}
 	for index, value := range wantBackoff {

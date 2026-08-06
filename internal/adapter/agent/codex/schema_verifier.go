@@ -7,16 +7,19 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
+	"strconv"
 	"strings"
 	"sync"
 
 	"meet-sieve/internal/infra/apperr"
 )
 
-// SchemaContract 固定当前实现真正依赖的 schema 文件及其哈希。
+// SchemaContract 固定当前实现真正依赖的 schema 文件及其规范化哈希。
 type SchemaContract struct {
 	Version string
 	Files   map[string]string
@@ -60,7 +63,7 @@ func (CommandSchemaRunner) Generate(ctx context.Context, executablePath string, 
 	return nil
 }
 
-// SchemaVerifier 对运行时生成的必要 schema 执行严格 JSON 与哈希校验。
+// SchemaVerifier 对运行时生成的必要 schema 执行 JSON 语义哈希校验。
 type SchemaVerifier struct {
 	runner        SchemaCommandRunner
 	contract      SchemaContract
@@ -69,7 +72,7 @@ type SchemaVerifier struct {
 	verifiedKey   string
 }
 
-// NewSchemaVerifier 创建严格 schema 校验器；temporaryRoot 为空时使用系统临时目录。
+// NewSchemaVerifier 创建 schema 语义校验器；temporaryRoot 为空时使用系统临时目录。
 func NewSchemaVerifier(runner SchemaCommandRunner, contract SchemaContract, temporaryRoot string) *SchemaVerifier {
 	files := make(map[string]string, len(contract.Files))
 	for path, digest := range contract.Files {
@@ -149,6 +152,7 @@ func mapSchemaCommandError(cause error, operation string) error {
 }
 
 // validateRequiredSchemas 只校验必要文件，允许 provider 增加与当前实现无关的 schema。
+// 对象键顺序、缩进与换行不属于协议语义，不能导致升级后的 Codex 不可用。
 func validateRequiredSchemas(root string, required map[string]string) error {
 	if len(required) == 0 {
 		return fmt.Errorf("必要 schema 清单为空")
@@ -158,15 +162,121 @@ func validateRequiredSchemas(root string, required map[string]string) error {
 		if err != nil {
 			return fmt.Errorf("必要 schema 缺失: %s", relativePath)
 		}
-		if !json.Valid(content) {
-			return fmt.Errorf("必要 schema 不是合法 JSON: %s", relativePath)
+		digest, err := CanonicalSchemaDigest(content)
+		if err != nil {
+			return fmt.Errorf("必要 schema 不是合法 JSON: %s: %w", relativePath, err)
 		}
-		digest := sha256.Sum256(content)
-		if hex.EncodeToString(digest[:]) != expectedDigest {
+		if digest != expectedDigest {
 			return fmt.Errorf("必要 schema 哈希漂移: %s", relativePath)
 		}
 	}
 	return nil
+}
+
+// CanonicalSchemaDigest 计算 JSON schema 的规范化 SHA-256。
+// 它保留数组顺序和 number 原文，排序对象键，从而只忽略 JSON 表示层差异。
+func CanonicalSchemaDigest(content []byte) (string, error) {
+	decoder := json.NewDecoder(strings.NewReader(string(content)))
+	decoder.UseNumber()
+	var value any
+	if err := decoder.Decode(&value); err != nil {
+		return "", err
+	}
+	var extra any
+	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
+		if err == nil {
+			return "", fmt.Errorf("JSON schema 包含多个顶层值")
+		}
+		return "", err
+	}
+	canonical, err := marshalCanonicalJSON(value)
+	if err != nil {
+		return "", err
+	}
+	digest := sha256.Sum256(canonical)
+	return hex.EncodeToString(digest[:]), nil
+}
+
+// marshalCanonicalJSON 按 JSON 类型递归输出稳定字节序列，不改变数组和标量语义。
+func marshalCanonicalJSON(value any) ([]byte, error) {
+	var builder strings.Builder
+	if err := writeCanonicalJSON(&builder, value); err != nil {
+		return nil, err
+	}
+	return []byte(builder.String()), nil
+}
+
+// writeCanonicalJSON 排序 object key，拒绝 decoder 不应产生的未知 Go 类型。
+func writeCanonicalJSON(builder *strings.Builder, value any) error {
+	switch typed := value.(type) {
+	case nil:
+		builder.WriteString("null")
+	case bool:
+		builder.WriteString(strconv.FormatBool(typed))
+	case string:
+		encoded, err := canonicalJSONString(typed)
+		if err != nil {
+			return err
+		}
+		builder.Write(encoded)
+	case json.Number:
+		number, err := strconv.ParseFloat(typed.String(), 64)
+		if err != nil {
+			return fmt.Errorf("JSON number 无效: %w", err)
+		}
+		// JSON 的 1、1.0 与 1e0 表达相同数值，统一为稳定浮点字面量。
+		builder.WriteString(strconv.FormatFloat(number, 'g', -1, 64))
+	case []any:
+		builder.WriteByte('[')
+		for index, item := range typed {
+			if index > 0 {
+				builder.WriteByte(',')
+			}
+			if err := writeCanonicalJSON(builder, item); err != nil {
+				return err
+			}
+		}
+		builder.WriteByte(']')
+	case map[string]any:
+		keys := make([]string, 0, len(typed))
+		for key := range typed {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		builder.WriteByte('{')
+		for index, key := range keys {
+			if index > 0 {
+				builder.WriteByte(',')
+			}
+			encodedKey, err := canonicalJSONString(key)
+			if err != nil {
+				return err
+			}
+			builder.Write(encodedKey)
+			builder.WriteByte(':')
+			if err := writeCanonicalJSON(builder, typed[key]); err != nil {
+				return err
+			}
+		}
+		builder.WriteByte('}')
+	default:
+		return fmt.Errorf("JSON schema 包含未知类型 %T", value)
+	}
+	return nil
+}
+
+// canonicalJSONString 使用 JSON 编码字符串，但不把 HTML 字符重新写成转义序列。
+func canonicalJSONString(value string) ([]byte, error) {
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		return nil, err
+	}
+	encoded = []byte(strings.NewReplacer(
+		`\u003c`, "<",
+		`\u003e`, ">",
+		`\u0026`, "&",
+	).Replace(string(encoded)))
+	return encoded, nil
 }
 
 // protocolIncompatible 统一返回安全用户文案，同时保留内部 cause 和操作名。

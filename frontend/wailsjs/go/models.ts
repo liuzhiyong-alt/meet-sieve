@@ -293,8 +293,10 @@ export namespace wails {
 	    }
 	}
 	export class AgentRecoveryCommandsDTO {
+	    thread_available: boolean;
 	    thread_command: string;
 	    directory_command: string;
+	    recovery_prompt: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new AgentRecoveryCommandsDTO(source);
@@ -302,14 +304,17 @@ export namespace wails {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.thread_available = source["thread_available"];
 	        this.thread_command = source["thread_command"];
 	        this.directory_command = source["directory_command"];
+	        this.recovery_prompt = source["recovery_prompt"];
 	    }
 	}
 	export class AgentSettingsDTO {
 	    wake_word: string;
 	    codex_executable_path: string;
 	    availability: AgentAvailabilityDTO;
+	    probed_at: number;
 	    updated_at: number;
 	
 	    static createFrom(source: any = {}) {
@@ -321,6 +326,7 @@ export namespace wails {
 	        this.wake_word = source["wake_word"];
 	        this.codex_executable_path = source["codex_executable_path"];
 	        this.availability = this.convertValues(source["availability"], AgentAvailabilityDTO);
+	        this.probed_at = source["probed_at"];
 	        this.updated_at = source["updated_at"];
 	    }
 	
@@ -639,6 +645,8 @@ export namespace wails {
 	export class ContentPageDTO {
 	    items: ContentItemDTO[];
 	    has_more: boolean;
+	    has_previous: boolean;
+	    has_next: boolean;
 	    after_seq?: number;
 	    before_seq?: number;
 	
@@ -650,6 +658,8 @@ export namespace wails {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.items = this.convertValues(source["items"], ContentItemDTO);
 	        this.has_more = source["has_more"];
+	        this.has_previous = source["has_previous"];
+	        this.has_next = source["has_next"];
 	        this.after_seq = source["after_seq"];
 	        this.before_seq = source["before_seq"];
 	    }
@@ -704,6 +714,8 @@ export namespace wails {
 	    speaker_display: string;
 	    current_participant_id?: string;
 	    speaker_cluster_id?: string;
+	    cluster_display_no?: number;
+	    cluster_participant_id?: string;
 	    assignment_source: string;
 	    text_revision: number;
 	    speaker_revision: number;
@@ -729,6 +741,8 @@ export namespace wails {
 	        this.speaker_display = source["speaker_display"];
 	        this.current_participant_id = source["current_participant_id"];
 	        this.speaker_cluster_id = source["speaker_cluster_id"];
+	        this.cluster_display_no = source["cluster_display_no"];
+	        this.cluster_participant_id = source["cluster_participant_id"];
 	        this.assignment_source = source["assignment_source"];
 	        this.text_revision = source["text_revision"];
 	        this.speaker_revision = source["speaker_revision"];
@@ -877,22 +891,6 @@ export namespace wails {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.meeting_id = source["meeting_id"];
 	        this.meeting_no = source["meeting_no"];
-	        this.revision = source["revision"];
-	        this.digest = source["digest"];
-	    }
-	}
-	export class DeleteRecordingDTO {
-	    meeting_id: string;
-	    revision: number;
-	    digest: string;
-	
-	    static createFrom(source: any = {}) {
-	        return new DeleteRecordingDTO(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.meeting_id = source["meeting_id"];
 	        this.revision = source["revision"];
 	        this.digest = source["digest"];
 	    }
@@ -1298,6 +1296,8 @@ export namespace wails {
 	    participant_member_ids: string[];
 	    highest_status: string;
 	    primary_action: MeetingPrimaryActionDTO;
+	    can_delete_meeting: boolean;
+	    delete_disabled_reason?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new MeetingSummaryDTO(source);
@@ -1321,6 +1321,8 @@ export namespace wails {
 	        this.participant_member_ids = source["participant_member_ids"];
 	        this.highest_status = source["highest_status"];
 	        this.primary_action = this.convertValues(source["primary_action"], MeetingPrimaryActionDTO);
+	        this.can_delete_meeting = source["can_delete_meeting"];
+	        this.delete_disabled_reason = source["delete_disabled_reason"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -1617,7 +1619,6 @@ export namespace wails {
 	    summary: MeetingSummaryDTO;
 	    can_play_audio: boolean;
 	    can_retranscribe: boolean;
-	    can_delete_recording: boolean;
 	    can_delete_meeting: boolean;
 	    disabled_reason?: string;
 	
@@ -1630,7 +1631,6 @@ export namespace wails {
 	        this.summary = this.convertValues(source["summary"], MeetingSummaryDTO);
 	        this.can_play_audio = source["can_play_audio"];
 	        this.can_retranscribe = source["can_retranscribe"];
-	        this.can_delete_recording = source["can_delete_recording"];
 	        this.can_delete_meeting = source["can_delete_meeting"];
 	        this.disabled_reason = source["disabled_reason"];
 	    }
@@ -1971,6 +1971,22 @@ export namespace wails {
 		    }
 		    return a;
 		}
+	}
+	export class MinutesSettingsDTO {
+	    prompt: string;
+	    is_default: boolean;
+	    updated_at: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new MinutesSettingsDTO(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.prompt = source["prompt"];
+	        this.is_default = source["is_default"];
+	        this.updated_at = source["updated_at"];
+	    }
 	}
 	export class MinutesStateDTO {
 	    meeting_id: string;
@@ -4062,6 +4078,44 @@ export namespace wails {
 		    return a;
 		}
 	}
+	export class Result_meet_sieve_internal_transport_wails_MinutesSettingsDTO_ {
+	    code: number;
+	    errorCode?: string;
+	    message: string;
+	    data?: MinutesSettingsDTO;
+	    requestId: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Result_meet_sieve_internal_transport_wails_MinutesSettingsDTO_(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.code = source["code"];
+	        this.errorCode = source["errorCode"];
+	        this.message = source["message"];
+	        this.data = this.convertValues(source["data"], MinutesSettingsDTO);
+	        this.requestId = source["requestId"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class Result_meet_sieve_internal_transport_wails_MinutesStateDTO_ {
 	    code: number;
 	    errorCode?: string;
@@ -4329,6 +4383,7 @@ export namespace wails {
 	    content_format?: string;
 	    speaker_key?: string;
 	    speaker_label?: string;
+	    speaker_revision?: number;
 	    start_sample?: number;
 	    end_sample?: number;
 	    state?: string;
@@ -4357,6 +4412,7 @@ export namespace wails {
 	        this.content_format = source["content_format"];
 	        this.speaker_key = source["speaker_key"];
 	        this.speaker_label = source["speaker_label"];
+	        this.speaker_revision = source["speaker_revision"];
 	        this.start_sample = source["start_sample"];
 	        this.end_sample = source["end_sample"];
 	        this.state = source["state"];
@@ -4490,6 +4546,7 @@ export namespace wails {
 	    occurred_at: number;
 	    text?: string;
 	    speaker_name?: string;
+	    speaker_display?: string;
 	    start_sample?: number;
 	    end_sample?: number;
 	
@@ -4504,6 +4561,7 @@ export namespace wails {
 	        this.occurred_at = source["occurred_at"];
 	        this.text = source["text"];
 	        this.speaker_name = source["speaker_name"];
+	        this.speaker_display = source["speaker_display"];
 	        this.start_sample = source["start_sample"];
 	        this.end_sample = source["end_sample"];
 	    }
@@ -4511,6 +4569,8 @@ export namespace wails {
 	export class TranscriptPageDTO {
 	    items: TranscriptItemDTO[];
 	    has_more: boolean;
+	    has_previous: boolean;
+	    has_next: boolean;
 	    after_seq?: number;
 	    before_seq?: number;
 	
@@ -4522,6 +4582,8 @@ export namespace wails {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.items = this.convertValues(source["items"], TranscriptItemDTO);
 	        this.has_more = source["has_more"];
+	        this.has_previous = source["has_previous"];
+	        this.has_next = source["has_next"];
 	        this.after_seq = source["after_seq"];
 	        this.before_seq = source["before_seq"];
 	    }

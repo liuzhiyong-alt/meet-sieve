@@ -13,6 +13,12 @@ vi.mock('../../../wailsjs/go/wails/QueryBinding', () => ({
   ListMeetings: vi.fn(),
   ListTranscript: vi.fn(),
 }))
+vi.mock('../../../wailsjs/go/wails/DeletionBinding', () => ({
+  DeleteMeeting: vi.fn(),
+  GetDeletionJob: vi.fn(),
+  PreviewMeetingDeletion: vi.fn(),
+  RetryDeletion: vi.fn(),
+}))
 
 import { ListMeetings } from '../../../wailsjs/go/wails/QueryBinding'
 import { wails } from '../../../wailsjs/go/models'
@@ -39,6 +45,7 @@ function makeMeeting(
     participant_member_ids: [],
     highest_status: 'gap_conflict',
     primary_action: primaryAction,
+    can_delete_meeting: true,
   })
 }
 
@@ -108,7 +115,7 @@ describe('RecordsView', () => {
     expect(wrapper.get('.ms-records-filter-submit').text()).toBe('查询')
   })
 
-  it('主动作只按后端 kind 和 target ID 导航', async () => {
+  it('每条记录固定展示打开和删除，不暴露后端状态动作', async () => {
     vi.mocked(ListMeetings).mockResolvedValue(
       new wails.Result_meet_sieve_internal_transport_wails_MeetingPageDTO_({
         code: 200,
@@ -135,10 +142,7 @@ describe('RecordsView', () => {
       routes: [
         { path: '/meetings', component: RecordsView },
         { path: '/meetings/new', component: { template: '<p>new</p>' } },
-        {
-          path: '/meetings/:id/gaps/:gap',
-          component: { template: '<p>gap</p>' },
-        },
+        { path: '/meetings/:id', component: { template: '<p>detail</p>' } },
       ],
     })
     await router.push('/meetings')
@@ -148,10 +152,14 @@ describe('RecordsView', () => {
     })
     await flushPromises()
 
-    await wrapper.get('[data-primary-action]').trigger('click')
+    const actions = wrapper.findAll('.ms-record-actions button')
+    expect(actions.map((item) => item.text())).toEqual(['打开', '删除'])
+    expect(wrapper.text()).not.toContain('处理缺口')
+
+    await actions[0]?.trigger('click')
     await flushPromises()
     expect(router.currentRoute.value.path).toBe(
-      '/meetings/11111111-1111-4111-8111-000000000001/gaps/22222222-2222-4222-8222-222222222222',
+      '/meetings/11111111-1111-4111-8111-000000000001',
     )
   })
 
@@ -201,6 +209,7 @@ describe('RecordsView', () => {
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy()
     expect(list.findAll('.ms-record-status')).toHaveLength(10)
-    expect(list.findAll('.ms-record-action')).toHaveLength(10)
+    expect(list.findAll('.ms-record-actions')).toHaveLength(10)
+    expect(list.findAll('.ms-record-actions button')).toHaveLength(20)
   })
 })

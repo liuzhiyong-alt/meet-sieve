@@ -13,13 +13,22 @@ import (
 
 // TranscriptRow 是原始记录页面使用的单条 SQLite 事实投影。
 type TranscriptRow struct {
-	Seq         int64
-	Kind        string
-	OccurredAt  int64
-	Text        string
-	SpeakerName string
-	StartSample int64
-	EndSample   int64
+	Seq              int64
+	Kind             string
+	OccurredAt       int64
+	Text             string
+	SpeakerName      string
+	SpeakerDisplay   string
+	ClusterDisplayNo int
+	TrackDisplayNo   int
+	StartSample      int64
+	EndSample        int64
+}
+
+// SeqPageState 明确表达当前事件页两侧是否存在相邻页。
+type SeqPageState struct {
+	HasPrevious bool
+	HasNext     bool
 }
 
 // ContentRow 是消息、附件、链接和公开 AI 回答的安全内部投影。
@@ -79,18 +88,38 @@ func (repository *Repository) CountStatus(ctx context.Context, status querydomai
 }
 
 // ListTranscript 按事件 seq 读取原始记录，after 与 before 只能使用一个。
-func (repository *Repository) ListTranscript(ctx context.Context, meetingID string, afterSeq int64, beforeSeq int64, limit int) ([]TranscriptRow, bool, error) {
+func (repository *Repository) ListTranscript(ctx context.Context, meetingID string, afterSeq int64, beforeSeq int64, limit int) ([]TranscriptRow, SeqPageState, error) {
 	if repository == nil || repository.reader == nil || meetingID == "" || afterSeq < 0 || beforeSeq < 0 || (afterSeq > 0 && beforeSeq > 0) {
-		return nil, false, fmt.Errorf("读取原始记录：参数无效")
+		return nil, SeqPageState{}, fmt.Errorf("读取原始记录：参数无效")
 	}
 	limit = normalizeSeqLimit(limit, 200)
 	query := repository.reader.WithContext(ctx).Table("meeting_events AS event").Select(
-		"event.seq", "event.kind", "event.occurred_at", "COALESCE(utterance.current_text, '') AS text",
+		"event.seq", "event.kind", "event.occurred_at",
+		`CASE
+			WHEN event.kind = 'utterance.final' THEN COALESCE(utterance.current_text, '')
+			WHEN event.kind = 'message.created' THEN COALESCE(message.content, '')
+			WHEN event.kind = 'resource.created' THEN COALESCE(NULLIF(resource.current_description, ''), NULLIF(resource.original_name, ''), NULLIF(resource.source_url, ''), '')
+			WHEN event.kind IN ('ai.question', 'ai.answer') THEN COALESCE(json_extract(event.payload_json, '$.text'), '')
+			WHEN event.kind = 'ai.cancelled' THEN 'AI 回答已取消'
+			WHEN event.kind = 'ai.failed' THEN 'AI 回答失败'
+			WHEN event.kind = 'asr.gap' THEN '实时转写中断'
+			ELSE ''
+		END AS text`,
 		"COALESCE(participant.display_name_snapshot, '') AS speaker_name",
+		"COALESCE(cluster.display_no, 0) AS cluster_display_no",
+		"COALESCE(track.display_no, 0) AS track_display_no",
 		"COALESCE(utterance.start_sample, 0) AS start_sample", "COALESCE(utterance.end_sample, 0) AS end_sample",
 	).Joins("LEFT JOIN utterances AS utterance ON utterance.event_id = event.id AND utterance.meeting_id = event.meeting_id").
+		Joins("LEFT JOIN agent_voice_command_utterances AS voice_command ON voice_command.utterance_id = utterance.id").
 		Joins("LEFT JOIN meeting_participants AS participant ON participant.id = utterance.current_participant_id AND participant.meeting_id = event.meeting_id").
-		Where("event.meeting_id = ?", meetingID)
+		Joins("LEFT JOIN speaker_clusters AS cluster ON cluster.id = utterance.speaker_cluster_id AND cluster.meeting_id = event.meeting_id").
+		Joins("LEFT JOIN speaker_tracks AS track ON track.id = utterance.speaker_track_id AND track.meeting_id = event.meeting_id").
+		Joins("LEFT JOIN messages AS message ON message.event_id = event.id AND message.meeting_id = event.meeting_id").
+		Joins("LEFT JOIN resources AS resource ON resource.event_id = event.id AND resource.meeting_id = event.meeting_id").
+		Where("event.meeting_id = ? AND event.kind IN ?", meetingID, []string{
+			"utterance.final", "asr.gap", "message.created", "resource.created",
+			"ai.question", "ai.answer", "ai.cancelled", "ai.failed",
+		}).Where("voice_command.id IS NULL OR voice_command.state = 'released'")
 	reverse := beforeSeq > 0
 	if afterSeq > 0 {
 		query = query.Where("event.seq > ?", afterSeq)
@@ -102,7 +131,7 @@ func (repository *Repository) ListTranscript(ctx context.Context, meetingID stri
 	}
 	var rows []TranscriptRow
 	if err := query.Limit(limit + 1).Scan(&rows).Error; err != nil {
-		return nil, false, fmt.Errorf("读取原始记录失败：%w", err)
+		return nil, SeqPageState{}, fmt.Errorf("读取原始记录失败：%w", err)
 	}
 	hasMore := len(rows) > limit
 	if hasMore {
@@ -111,13 +140,13 @@ func (repository *Repository) ListTranscript(ctx context.Context, meetingID stri
 	if reverse {
 		slices.Reverse(rows)
 	}
-	return rows, hasMore, nil
+	return rows, buildSeqPageState(afterSeq, beforeSeq, hasMore), nil
 }
 
 // ListContent 按事件 seq 读取消息、资源和明确公开的 AI 回答。
-func (repository *Repository) ListContent(ctx context.Context, meetingID string, afterSeq int64, beforeSeq int64, limit int) ([]ContentRow, bool, error) {
+func (repository *Repository) ListContent(ctx context.Context, meetingID string, afterSeq int64, beforeSeq int64, limit int) ([]ContentRow, SeqPageState, error) {
 	if repository == nil || repository.reader == nil || meetingID == "" || afterSeq < 0 || beforeSeq < 0 || (afterSeq > 0 && beforeSeq > 0) {
-		return nil, false, fmt.Errorf("读取会议内容：参数无效")
+		return nil, SeqPageState{}, fmt.Errorf("读取会议内容：参数无效")
 	}
 	limit = normalizeSeqLimit(limit, 100)
 	query := repository.reader.WithContext(ctx).Table("meeting_events AS event").Select(
@@ -143,7 +172,7 @@ func (repository *Repository) ListContent(ctx context.Context, meetingID string,
 	}
 	var rows []ContentRow
 	if err := query.Limit(limit + 1).Scan(&rows).Error; err != nil {
-		return nil, false, fmt.Errorf("读取会议内容失败：%w", err)
+		return nil, SeqPageState{}, fmt.Errorf("读取会议内容失败：%w", err)
 	}
 	hasMore := len(rows) > limit
 	if hasMore {
@@ -152,7 +181,18 @@ func (repository *Repository) ListContent(ctx context.Context, meetingID string,
 	if reverse {
 		slices.Reverse(rows)
 	}
-	return rows, hasMore, nil
+	return rows, buildSeqPageState(afterSeq, beforeSeq, hasMore), nil
+}
+
+// buildSeqPageState 将当前查询方向与多取一条的结果转换为明确的前后页状态。
+func buildSeqPageState(afterSeq int64, beforeSeq int64, hasMore bool) SeqPageState {
+	if beforeSeq > 0 {
+		return SeqPageState{HasPrevious: hasMore, HasNext: true}
+	}
+	if afterSeq > 0 {
+		return SeqPageState{HasPrevious: true, HasNext: hasMore}
+	}
+	return SeqPageState{HasNext: hasMore}
 }
 
 // normalizeSeqLimit 固定长列表单页上限。

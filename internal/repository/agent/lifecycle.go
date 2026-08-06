@@ -195,7 +195,12 @@ func (repository *Repository) GetSettings(ctx context.Context) (models.Settings,
 		return models.Settings{}, fmt.Errorf("读取 Codex 设置：Repository 不可用")
 	}
 	var settings models.Settings
-	err := repository.reader.WithContext(ctx).Select("id", "singleton_key", "wake_word", "codex_executable_path", "created_at", "updated_at").
+	err := repository.reader.WithContext(ctx).Select(
+		"id", "singleton_key", "wake_word", "codex_executable_path",
+		"codex_availability_state", "codex_version", "codex_account_state",
+		"codex_protocol_state", "codex_probe_message", "codex_probed_at",
+		"created_at", "updated_at",
+	).
 		Where("singleton_key = 1").Take(&settings).Error
 	if err != nil {
 		return models.Settings{}, fmt.Errorf("读取 Codex 设置失败：%w", err)
@@ -203,14 +208,27 @@ func (repository *Repository) GetSettings(ctx context.Context) (models.Settings,
 	return settings, nil
 }
 
-// UpdateSettings 保存已规范化 wake word 和单个 executable 路径字符串。
+// UpdateSettings 保存设置；只有 executable 真正变化时才让既有检测快照失效。
 func (repository *Repository) UpdateSettings(ctx context.Context, wakeWord string, executablePath *string, updatedAt int64) error {
 	if repository == nil || repository.transactions == nil || wakeWord == "" {
 		return fmt.Errorf("保存 Codex 设置：参数无效")
 	}
 	return repository.transactions.WithinTransaction(ctx, func(tx *gorm.DB) error {
+		var current models.Settings
+		if err := tx.WithContext(ctx).Select("codex_executable_path").Where("singleton_key = 1").Take(&current).Error; err != nil {
+			return fmt.Errorf("读取 Codex 原设置失败：%w", err)
+		}
+		updates := map[string]any{"wake_word": wakeWord, "codex_executable_path": executablePath, "updated_at": updatedAt}
+		if optionalStringChanged(current.CodexExecutablePath, executablePath) {
+			updates["codex_availability_state"] = "unchecked"
+			updates["codex_version"] = ""
+			updates["codex_account_state"] = "unknown"
+			updates["codex_protocol_state"] = "unchecked"
+			updates["codex_probe_message"] = "设置已更新，尚未检测"
+			updates["codex_probed_at"] = nil
+		}
 		result := tx.WithContext(ctx).Model(&models.Settings{}).Where("singleton_key = 1").
-			Updates(map[string]any{"wake_word": wakeWord, "codex_executable_path": executablePath, "updated_at": updatedAt})
+			Updates(updates)
 		if result.Error != nil {
 			return fmt.Errorf("保存 Codex 设置失败：%w", result.Error)
 		}
@@ -219,4 +237,33 @@ func (repository *Repository) UpdateSettings(ctx context.Context, wakeWord strin
 		}
 		return nil
 	})
+}
+
+// UpdateProbeSnapshot 原子保存不含账号、路径和凭据的 Codex 检测结果。
+func (repository *Repository) UpdateProbeSnapshot(ctx context.Context, state string, version string, accountState string, protocolState string, message string, probedAt int64) error {
+	if repository == nil || repository.transactions == nil || state == "" || accountState == "" || protocolState == "" || probedAt < 0 {
+		return fmt.Errorf("保存 Codex 检测结果：参数无效")
+	}
+	return repository.transactions.WithinTransaction(ctx, func(tx *gorm.DB) error {
+		result := tx.WithContext(ctx).Model(&models.Settings{}).Where("singleton_key = 1").Updates(map[string]any{
+			"codex_availability_state": state, "codex_version": version,
+			"codex_account_state": accountState, "codex_protocol_state": protocolState,
+			"codex_probe_message": message, "codex_probed_at": probedAt, "updated_at": probedAt,
+		})
+		if result.Error != nil {
+			return fmt.Errorf("保存 Codex 检测结果失败：%w", result.Error)
+		}
+		if result.RowsAffected != 1 {
+			return ErrNotFound
+		}
+		return nil
+	})
+}
+
+// optionalStringChanged 判断两个数据库可选字符串是否发生语义变化。
+func optionalStringChanged(left *string, right *string) bool {
+	if left == nil || right == nil {
+		return left != nil || right != nil
+	}
+	return *left != *right
 }

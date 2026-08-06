@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>会议详情危险区 · Step 9 提案 · MeetSieve</title>
+    <title>会议详情 · Step 9 提案 · MeetSieve</title>
     <link rel="stylesheet" href="../../style/meet-sieve/tokens.css" />
     <link rel="stylesheet" href="../assets/meetsieve.css" />
     <link rel="stylesheet" href="step9-proposal.css" />
@@ -29,9 +29,7 @@
         <header class="titlebar">
           <a href="records.html">← 返回会议记录</a>
           <div class="row">
-            <button class="btn btn-quiet" type="button">
-              复制 Codex 恢复命令</button
-            ><button class="btn btn-quiet" type="button">导出本场诊断</button>
+            <button class="btn btn-quiet" type="button">导出本场诊断</button>
           </div>
         </header>
         <div class="content">
@@ -41,14 +39,16 @@
               <h1>AI 会议助手产品评审</h1>
               <p class="num">2026 年 7 月 31 日 09:30–10:18 · 4 位参会人</p>
             </div>
-            <span class="status warn">有 1 段转写缺口</span>
+            <button class="btn btn-quiet detail-codex-action" type="button">
+              用 Codex 继续
+            </button>
           </section>
           <nav class="tabs" aria-label="会议详情">
-            <a class="tab active" href="#minutes">会议纪要</a
-            ><a class="tab" href="#transcript">原始记录</a
-            ><a class="tab" href="#messages">会议消息</a>
+            <a class="tab" href="#transcript">原始记录</a
+            ><a class="tab active" href="#minutes">会议纪要</a
+            ><a class="tab" href="#messages">消息与资料</a>
           </nav>
-          <section class="danger-layout section-offset">
+          <section class="step9-layout section-offset">
             <article class="card">
               <div class="card-head">
                 <div>
@@ -83,60 +83,8 @@
               </ul>
             </aside>
           </section>
-          <section class="danger-zone" aria-labelledby="danger-title">
-            <div>
-              <p class="eyebrow">永久删除</p>
-              <h2 id="danger-title">危险操作</h2>
-              <p class="muted">
-                永久删除不进入回收站。MeetSieve
-                会先停止本场后台任务并锁定新的处理操作。
-              </p>
-            </div>
-            <div class="danger-item">
-              <div>
-                <strong>删除全部会议录音</strong>
-                <p class="muted">
-                  删除混合录音、麦克风分片、缺口片段和临时音频；保留转写、附件、AI
-                  问答与纪要。
-                </p>
-              </div>
-              <button class="btn btn-danger" type="button">删除录音</button>
-            </div>
-            <div class="danger-item">
-              <div>
-                <strong>删除整场会议</strong>
-                <p class="muted">
-                  扫描会议目录后，删除该目录中的全部文件及数据库事实，包括未登记文件。
-                </p>
-              </div>
-              <button class="btn btn-danger" type="button">删除整场会议</button>
-            </div>
-          </section>
         </div>
       </main>
-    </div>
-    <div class="modal-backdrop is-visible" role="presentation">
-      <section
-        class="modal"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="delete-audio-title"
-      >
-        <h2 id="delete-audio-title">永久删除全部会议录音？</h2>
-        <p class="muted">
-          删除后不能播放，也不能再次补转写。显式录入的成员声纹样本不会受影响。
-        </p>
-        <div class="modal-summary">
-          <p><strong>AI 会议助手产品评审</strong></p>
-          <p class="meta num">20260731-A7K2-03</p>
-          <p>14 个音频文件 · 486 MB</p>
-          <p class="muted">保留：转写、校对、附件、AI 问答与会议纪要</p>
-        </div>
-        <div class="modal-actions">
-          <button class="btn" type="button">取消</button
-          ><button class="btn btn-danger" type="button">永久删除录音</button>
-        </div>
-      </section>
     </div>
   </body>
 </html>

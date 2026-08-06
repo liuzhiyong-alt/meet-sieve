@@ -134,9 +134,9 @@ func migrateLegacySpeakerCluster(tx *sql.Tx, cluster legacySpeakerCluster, displ
 		}
 	}
 	if _, err := tx.Exec(`INSERT INTO speaker_tracks (
-		id, meeting_id, asr_session_id, asr_speaker_label, state, automatic_participant_id,
-		speaker_cluster_id, top_score, evidence_duration_ms, revision, created_at, updated_at
-	) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 1, ?, ?)`, cluster.id, cluster.meetingID, cluster.asrSessionID,
+		id, meeting_id, asr_session_id, source, asr_speaker_label, provider_segment_no, state, automatic_participant_id,
+		speaker_cluster_id, top_score, evidence_duration_ms, routing_revision, revision, created_at, updated_at
+	) VALUES (?, ?, ?, 'provider_label', ?, 1, ?, ?, ?, ?, 0, 1, 1, ?, ?)`, cluster.id, cluster.meetingID, cluster.asrSessionID,
 		cluster.asrSpeakerLabel, state, projection.participantID, projection.clusterID, cluster.confidence,
 		cluster.createdAt, cluster.updatedAt); err != nil {
 		return projection, fmt.Errorf("迁移 speaker track 失败：%w", err)

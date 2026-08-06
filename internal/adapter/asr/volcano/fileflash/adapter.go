@@ -164,6 +164,8 @@ func buildRequestBody(request port.FileTranscriptionRequest, wav []byte) ([]byte
 		},
 		"request": map[string]any{
 			"model_name": "bigmodel", "enable_itn": true, "enable_punc": true, "show_utterances": true,
+			// 文件接口明确支持说话人分离；实时接口是否返回标签仍由运行时结果决定。
+			"enable_speaker_info": true,
 		},
 	}
 	return json.Marshal(payload)
@@ -185,10 +187,35 @@ type providerResponse struct {
 }
 
 type providerUtterance struct {
-	Text      string `json:"text"`
-	StartTime int64  `json:"start_time"`
-	EndTime   int64  `json:"end_time"`
-	SpeakerID string `json:"speaker_id"`
+	Text      string            `json:"text"`
+	StartTime int64             `json:"start_time"`
+	EndTime   int64             `json:"end_time"`
+	SpeakerID flexibleSpeakerID `json:"speaker_id"`
+	Additions struct {
+		Speaker flexibleSpeakerID `json:"speaker"`
+	} `json:"additions"`
+}
+
+// flexibleSpeakerID 兼容火山接口在不同版本中返回的数字或字符串说话人标签。
+type flexibleSpeakerID string
+
+// UnmarshalJSON 将有效的字符串或数字标签归一化为非空字符串；null 保持为空。
+func (id *flexibleSpeakerID) UnmarshalJSON(data []byte) error {
+	if string(data) == "null" {
+		*id = ""
+		return nil
+	}
+	var text string
+	if err := json.Unmarshal(data, &text); err == nil {
+		*id = flexibleSpeakerID(strings.TrimSpace(text))
+		return nil
+	}
+	var number json.Number
+	if err := json.Unmarshal(data, &number); err != nil {
+		return fmt.Errorf("speaker 标签类型无效")
+	}
+	*id = flexibleSpeakerID(number.String())
+	return nil
 }
 
 // parseResponse 根据稳定业务状态解析有限响应，不保留 Header 或原始正文。
@@ -228,11 +255,19 @@ func normalizeSegments(values []providerUtterance, request port.FileTranscriptio
 			return nil, fmt.Errorf("provider utterance range invalid")
 		}
 		segments = append(segments, port.FileTranscriptionSegment{
-			Text: value.Text, SpeakerID: value.SpeakerID, StartSample: start, EndSample: end,
+			Text: value.Text, SpeakerID: normalizedSpeakerID(value), StartSample: start, EndSample: end,
 		})
 		lastEnd = end
 	}
 	return segments, nil
+}
+
+// normalizedSpeakerID 优先使用官方 additions.speaker，并兼容历史 speaker_id 响应。
+func normalizedSpeakerID(value providerUtterance) string {
+	if label := strings.TrimSpace(string(value.Additions.Speaker)); label != "" {
+		return label
+	}
+	return strings.TrimSpace(string(value.SpeakerID))
 }
 
 // mapRequestError 把取消、超时和其他网络失败映射为安全稳定错误。

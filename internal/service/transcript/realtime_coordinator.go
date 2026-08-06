@@ -21,6 +21,18 @@ type ReconnectWaitFunc func(context.Context, time.Duration) error
 // RealtimeStatePublisher 发布独立 ASR 状态轴，不承载凭据或错误 cause。
 type RealtimeStatePublisher func(meetingID string, state string, errorCode string)
 
+// RealtimeFailureReport 描述一次取得处理权的实时转写失败，不包含转写正文或凭据。
+type RealtimeFailureReport struct {
+	MeetingID      string
+	SessionID      string
+	ReconnectCount int
+	ErrorCode      string
+	Cause          error
+}
+
+// RealtimeFailureReporter 把实时转写失败交给应用边界记录，避免服务层依赖具体日志库。
+type RealtimeFailureReporter func(RealtimeFailureReport)
+
 // RealtimeCoordinatorDependencies 描述实时 session、事件持久化和退避依赖。
 type RealtimeCoordinatorDependencies struct {
 	// Repository 读写 session 与会议 ASR 状态。
@@ -37,12 +49,20 @@ type RealtimeCoordinatorDependencies struct {
 	Clock clock.Clock
 	// Backoff 是五次自动重连退避。
 	Backoff []time.Duration
+	// ConnectTimeout 限制一次完整物理建连尝试，避免状态永久停在 connecting。
+	ConnectTimeout time.Duration
 	// Wait 执行可取消退避。
 	Wait ReconnectWaitFunc
 	// PublishPartial 发布内存 partial。
 	PublishPartial PartialPublisher
+	// PublishPartialClear 发布 partial 生命周期终止事件。
+	PublishPartialClear PartialClearPublisher
 	// PublishState 发布安全状态。
 	PublishState RealtimeStatePublisher
+	// ReportFailure 记录已被状态机接受的失败及安全上下文。
+	ReportFailure RealtimeFailureReporter
+	// PCMQueueSamples 是 ASR 建连和短时抖动期间允许积压的样本数。
+	PCMQueueSamples int64
 	// FinalPersistTimeout 限制单条 final SQLite 事务时间。
 	FinalPersistTimeout time.Duration
 	// FinalQueueCapacity 是允许等待持久化的 final 数量。
@@ -99,7 +119,7 @@ func NewRealtimeCoordinator(dependencies RealtimeCoordinatorDependencies) *Realt
 	if dependencies.Wait == nil {
 		dependencies.Wait = waitReconnect
 	}
-	return &RealtimeCoordinator{dependencies: dependencies, queue: NewPCMQueue(), failures: make(chan realtimeFailure, 8), done: make(chan struct{})}
+	return &RealtimeCoordinator{dependencies: dependencies, queue: NewPCMQueue(dependencies.PCMQueueSamples), failures: make(chan realtimeFailure, 8), done: make(chan struct{})}
 }
 
 // Start 建立首个物理连接；外部连接失败进入后台重连，不回滚已经开始的本地录音。
@@ -111,12 +131,12 @@ func (coordinator *RealtimeCoordinator) Start(ctx context.Context, meetingID str
 	coordinator.ctx, coordinator.cancel = context.WithCancel(ctx)
 	coordinator.meetingID, coordinator.credentials = meetingID, credentials
 	coordinator.lastSent, coordinator.lastFinal, coordinator.started = startSample, startSample, true
-	coordinator.partials = NewPartialProjector(coordinator.dependencies.Clock.Now, coordinator.dependencies.PublishPartial)
+	coordinator.partials = NewPartialProjector(coordinator.dependencies.Clock.Now, coordinator.dependencies.PublishPartial, coordinator.dependencies.PublishPartialClear)
 	coordinator.finals = NewFinalProcessor(FinalProcessorDependencies{
 		Capacity: coordinator.dependencies.FinalQueueCapacity, PersistTimeout: coordinator.dependencies.FinalPersistTimeout,
 		Persist: coordinator.persistFinal,
-		OnFailure: func(err error) {
-			coordinator.reportFailure(realtimeFailure{code: apperr.CodeASREventPersistFailed.ErrorCode, reason: transcriptdomain.GapBackpressure, cause: err})
+		OnFailure: func(event port.TranscriptionEvent, err error) {
+			coordinator.handleFinalPersistFailure(event, err)
 		},
 	})
 	runContext := coordinator.ctx
@@ -197,6 +217,9 @@ func (coordinator *RealtimeCoordinator) Stop(ctx context.Context, recordingEndSa
 	if err := coordinator.finals.CloseAndWait(ctx); err != nil {
 		tailFailure = true
 	}
+	if current != nil {
+		coordinator.partials.ClearAll(coordinator.meetingID, current.id, current.generation)
+	}
 	if tailFailure {
 		coordinator.openTailGap(recordingEndSample)
 	}
@@ -242,7 +265,7 @@ func (coordinator *RealtimeCoordinator) Retry() error {
 
 // validateStart 检查冻结依赖和输入，不在失败时做部分初始化。
 func (coordinator *RealtimeCoordinator) validateStart(ctx context.Context, meetingID string, startSample int64, credentials transcriptdomain.Credentials) error {
-	if coordinator == nil || ctx == nil || meetingID == "" || startSample < 0 || coordinator.dependencies.Repository == nil || coordinator.dependencies.Transactions == nil || coordinator.dependencies.Events == nil || coordinator.dependencies.Transcriber == nil || coordinator.dependencies.IDs == nil || coordinator.dependencies.Clock == nil || coordinator.dependencies.FinalPersistTimeout <= 0 || coordinator.dependencies.FinalQueueCapacity != 128 || len(coordinator.dependencies.Backoff) != 5 {
+	if coordinator == nil || ctx == nil || meetingID == "" || startSample < 0 || coordinator.dependencies.Repository == nil || coordinator.dependencies.Transactions == nil || coordinator.dependencies.Events == nil || coordinator.dependencies.Transcriber == nil || coordinator.dependencies.IDs == nil || coordinator.dependencies.Clock == nil || coordinator.dependencies.ConnectTimeout <= 0 || coordinator.dependencies.PCMQueueSamples != DefaultPCMQueueCapacitySamples || coordinator.dependencies.FinalPersistTimeout <= 0 || coordinator.dependencies.FinalQueueCapacity != 128 || len(coordinator.dependencies.Backoff) != 5 {
 		return fmt.Errorf("实时转写 coordinator 依赖或输入无效")
 	}
 	if err := credentials.Validate(); err != nil {

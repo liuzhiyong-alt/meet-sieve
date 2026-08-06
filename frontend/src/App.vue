@@ -137,17 +137,10 @@ function openMinutes(): void {
       `/meetings/${meeting.current.id}/minutes?no=${encodeURIComponent(meeting.current.meeting_no)}`,
     )
 }
-/** backFromFeature 返回会议详情或纪要工作区。 */
+/** backFromFeature 返回会议详情。 */
 function backFromFeature(): void {
   const id = String(route.params.id ?? meeting.current?.id ?? '')
-  if (route.name === 'meeting-minutes-history')
-    void router.push(`/meetings/${id}/minutes?no=${route.query.no ?? ''}`)
-  else void router.push(id ? `/meetings/${id}` : '/meetings')
-}
-/** openHistory 进入不可变纪要版本历史。 */
-function openHistory(): void {
-  const id = String(route.params.id)
-  void router.push(`/meetings/${id}/minutes/history?no=${route.query.no ?? ''}`)
+  void router.push(id ? `/meetings/${id}` : '/meetings')
 }
 </script>
 
@@ -179,7 +172,6 @@ function openHistory(): void {
         @open-gap="openGap"
         @open-minutes="openMinutes"
         @back="backFromFeature"
-        @history="openHistory"
     /></RouterView>
   </AppShell>
   <main v-else class="ms-blocking-view">

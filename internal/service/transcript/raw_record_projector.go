@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	speakerdomain "meet-sieve/internal/domain/speaker"
 	"meet-sieve/internal/infra/apperr"
 	"meet-sieve/internal/infra/filesystem"
 	transcriptrepository "meet-sieve/internal/repository/transcript"
@@ -261,13 +262,7 @@ func rawRecordKind(row transcriptrepository.RawRecordRow) string {
 
 // resolveRawRecordSpeaker 按当前 participant、unknown cluster、session fallback 的优先级返回展示名。
 func resolveRawRecordSpeaker(row transcriptrepository.RawRecordRow) string {
-	if strings.TrimSpace(row.ParticipantDisplayName) != "" {
-		return row.ParticipantDisplayName
-	}
-	if row.ClusterDisplayNo > 0 {
-		return fmt.Sprintf("未知说话人 %d", row.ClusterDisplayNo)
-	}
-	return ""
+	return speakerdomain.DisplayName(row.ParticipantDisplayName, row.ClusterDisplayNo, row.TrackDisplayNo)
 }
 
 // rawRecordStateText 避免把内部状态码直接暴露到用户原始记录。

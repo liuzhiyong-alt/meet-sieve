@@ -16,6 +16,7 @@ import { useVoiceModelStore } from '../../stores/voiceModel'
 import { useASRStore } from '../../stores/asr'
 import { useMeetingStore } from '../../stores/meeting'
 import { useAgentStore } from '../../stores/agent'
+import { useMinutesStore } from '../../stores/minutes'
 import { useDiagnosticsStore } from '../../stores/diagnostics'
 import { dirtyEditRegistry } from '../../router/dirty'
 import { setBreadcrumbTitles } from '../../router/breadcrumb'
@@ -29,6 +30,7 @@ const voiceModel = useVoiceModelStore()
 const asr = useASRStore()
 const meeting = useMeetingStore()
 const agent = useAgentStore()
+const minutes = useMinutesStore()
 const diagnostics = useDiagnosticsStore()
 const audio = ref<wails.AudioSettingsDTO>()
 const audioDeviceID = ref('')
@@ -40,14 +42,16 @@ const apiKey = ref('')
 const confirmClearASR = ref(false)
 const codexPath = ref('')
 const wakeWord = ref('AI 助手')
+const minutePrompt = ref('')
 const activeSection = ref<
-  'general' | 'audio' | 'asr' | 'codex' | 'voice-model'
+  'general' | 'audio' | 'asr' | 'codex' | 'minutes' | 'voice-model'
 >('general')
 const sectionLabels = {
   general: '通用',
   audio: '录音',
   asr: '实时转写',
   codex: 'Codex',
+  minutes: '会议纪要',
   'voice-model': '声纹模型',
 } as const
 let stopVoiceModelListener: (() => void) | undefined
@@ -77,12 +81,14 @@ onMounted(async () => {
     voiceModel.refresh(),
     asr.loadSettings(),
     agent.loadSettings(),
+    minutes.loadSettings(),
     diagnostics.refreshScan(),
     loadAudioSettings(),
   ])
   path.value = workspace.settings.savedPath
   codexPath.value = agent.settings.codex_executable_path
   wakeWord.value = agent.settings.wake_word
+  minutePrompt.value = minutes.settings.prompt
   registerDirtyEditors()
 })
 
@@ -90,7 +96,7 @@ watch(
   () => props.section,
   (section) => {
     if (
-      ['general', 'audio', 'asr', 'codex', 'voice-model'].includes(
+      ['general', 'audio', 'asr', 'codex', 'minutes', 'voice-model'].includes(
         section ?? '',
       )
     ) {
@@ -127,6 +133,13 @@ watch(
   },
 )
 
+watch(
+  () => minutes.settings.updated_at,
+  () => {
+    if (!minutes.settingsSaving) minutePrompt.value = minutes.settings.prompt
+  },
+)
+
 /** choosePath 仅把系统对话框选择结果带回输入框。 */
 async function choosePath(): Promise<void> {
   const chosen = await workspace.chooseDirectory()
@@ -157,6 +170,19 @@ async function clearASRCredentials(): Promise<void> {
 /** saveAgentSettings 保存后继续由后端规范化值回填表单。 */
 async function saveAgentSettings(): Promise<void> {
   await agent.saveSettings(wakeWord.value, codexPath.value)
+}
+
+/** saveMinutesSettings 保存生成会议纪要时使用的业务要求。 */
+async function saveMinutesSettings(): Promise<boolean> {
+  const saved = await minutes.saveSettings(minutePrompt.value)
+  if (saved) minutePrompt.value = minutes.settings.prompt
+  return saved
+}
+
+/** restoreDefaultMinutesSettings 清除自定义内容并回填当前内置默认要求。 */
+async function restoreDefaultMinutesSettings(): Promise<void> {
+  const restored = await minutes.restoreDefault()
+  if (restored) minutePrompt.value = minutes.settings.prompt
 }
 
 /** startWakeTest 使用已保存 ASR 凭据和系统当前麦克风。 */
@@ -290,6 +316,18 @@ function registerDirtyEditors(): void {
         wakeWord.value = agent.settings.wake_word
       },
     }),
+    dirtyEditRegistry.register({
+      id: 'settings-minutes',
+      label: '会议纪要设置',
+      isDirty: () =>
+        activeSection.value === 'minutes' &&
+        minutePrompt.value !== minutes.settings.prompt,
+      canSave: () => Boolean(minutePrompt.value.trim()),
+      save: saveMinutesSettings,
+      discard: () => {
+        minutePrompt.value = minutes.settings.prompt
+      },
+    }),
   )
 }
 </script>
@@ -328,6 +366,12 @@ function registerDirtyEditors(): void {
           Codex
         </button>
         <button
+          :class="{ 'is-current': activeSection === 'minutes' }"
+          @click="selectSection('minutes')"
+        >
+          会议纪要
+        </button>
+        <button
           :class="{ 'is-current': activeSection === 'voice-model' }"
           @click="selectSection('voice-model')"
         >
@@ -344,12 +388,12 @@ function registerDirtyEditors(): void {
               <div>
                 <p class="ms-eyebrow">通用设置</p>
                 <h2 id="general-settings-title">会议工作目录</h2>
+                <p class="ms-help">修改后的目录将在下次启动时使用。</p>
               </div>
               <span class="ms-status ms-status--success">{{
                 workspace.settings.restartRequired ? '重启后生效' : '目录可写'
               }}</span>
             </div>
-            <p class="ms-lead">修改后的目录将在下次启动时使用。</p>
 
             <AppNotice
               v-if="workspace.settings.disabledReason === 'meeting_in_progress'"
@@ -487,9 +531,13 @@ function registerDirtyEditors(): void {
           class="ms-card ms-settings-card"
           aria-labelledby="audio-settings-title"
         >
-          <p class="ms-eyebrow">本机配置</p>
-          <h1 id="audio-settings-title">录音</h1>
-          <p class="ms-lead">默认麦克风独立保存；测试结果不会修改设置。</p>
+          <div class="ms-card-head">
+            <div>
+              <p class="ms-eyebrow">本机配置</p>
+              <h2 id="audio-settings-title">录音</h2>
+              <p class="ms-help">默认麦克风独立保存；测试结果不会修改设置。</p>
+            </div>
+          </div>
           <AppNotice
             v-if="audioError"
             variant="danger"
@@ -538,7 +586,10 @@ function registerDirtyEditors(): void {
           <div class="ms-card-head">
             <div>
               <p class="ms-eyebrow">本机配置</p>
-              <h1 id="asr-settings-title">火山引擎实时转写</h1>
+              <h2 id="asr-settings-title">火山引擎实时转写</h2>
+              <p class="ms-help">
+                一个 APP Key 同时用于实时转写与缺口补录。凭证保存在会议工作目录的数据库中，不会写入日志或原始记录。
+              </p>
             </div>
             <span class="ms-status">{{
               asr.settings.requires_api_key_upgrade
@@ -548,10 +599,6 @@ function registerDirtyEditors(): void {
                   : '未配置'
             }}</span>
           </div>
-          <p class="ms-lead">
-            一个 APP Key 同时用于实时转写与缺口补录。凭证保存在会议工作目录的数据库中，不会写入日志或原始记录。
-          </p>
-
           <AppNotice
             v-if="
               meeting.current &&
@@ -567,7 +614,8 @@ function registerDirtyEditors(): void {
             v-if="asr.settings.requires_api_key_upgrade"
             variant="warning"
             title="旧版凭证已停用"
-            >请在火山引擎控制台复制新版 APP Key。保存后会清除本机旧版 App ID 与 Access Token。</AppNotice
+            >请在火山引擎控制台复制新版 APP Key。保存后会清除本机旧版 App ID 与
+            Access Token。</AppNotice
           >
           <AppNotice
             v-if="asr.errorMessage"
@@ -617,8 +665,8 @@ function registerDirtyEditors(): void {
           </div>
 
           <AppNotice variant="info" title="连接测试不发送真实音频">
-            测试只验证 WebSocket
-            连接和初始化。请填写本次要测试的 APP Key；真实转写需要在会议中验证。
+            测试只验证 WebSocket 连接和初始化。请填写本次要测试的 APP
+            Key；真实转写需要在会议中验证。
           </AppNotice>
           <div class="ms-actions">
             <BaseButton
@@ -670,16 +718,15 @@ function registerDirtyEditors(): void {
           <div class="ms-card-head">
             <div>
               <p class="ms-eyebrow">本机配置</p>
-              <h1 id="codex-settings-title">Codex</h1>
+              <h2 id="codex-settings-title">Codex</h2>
+              <p class="ms-help">
+                Codex 使用你本机已有的登录、工具与原生权限配置。
+              </p>
             </div>
             <span class="ms-status">{{
               agent.settings.availability.message
             }}</span>
           </div>
-          <p class="ms-lead">
-            Codex 使用你本机已有的登录、工具与原生权限配置。
-          </p>
-
           <AppNotice
             v-if="agent.notice"
             variant="info"
@@ -779,13 +826,21 @@ function registerDirtyEditors(): void {
             <p class="ms-help">
               {{
                 agent.wakeTest.state === 'passed'
-                  ? '唤醒词测试通过。'
+                  ? '三次完整口令测试通过。'
                   : agent.wakeTest.state === 'running'
-                    ? '请连续三次说出完整唤醒词；其他 final 会重新计数。'
-                    : '测试会使用真实麦克风和已保存的实时转写凭据，不写入录音文件。'
+                    ? '每次请先说唤醒词，短暂停顿后说出一条测试指令，指令结束后保持安静 3 秒。'
+                    : '测试会使用真实麦克风和已保存的实时转写凭据，验证三次完整口令，不写入录音文件。'
               }}
             </p>
           </div>
+          <AppNotice
+            v-if="agent.wakeTestError"
+            variant="danger"
+            title="唤醒测试未启动"
+            role="alert"
+          >
+            {{ agent.wakeTestError }}
+          </AppNotice>
           <div class="ms-actions">
             <BaseButton
               variant="primary"
@@ -821,6 +876,77 @@ function registerDirtyEditors(): void {
           </div>
         </section>
         <section
+          v-else-if="activeSection === 'minutes'"
+          class="ms-card ms-settings-card"
+          aria-labelledby="minutes-settings-title"
+          :aria-busy="minutes.settingsLoading || minutes.settingsSaving"
+        >
+          <div class="ms-card-head">
+            <div>
+              <p class="ms-eyebrow">本机配置</p>
+              <h2 id="minutes-settings-title">会议纪要</h2>
+              <p class="ms-help">
+                自定义会议纪要的内容重点、详略程度和表达方式。
+              </p>
+            </div>
+            <span class="ms-status">{{
+              minutes.settings.is_default ? '使用默认要求' : '已自定义'
+            }}</span>
+          </div>
+          <AppNotice
+            v-if="minutes.settingsError"
+            variant="danger"
+            title="会议纪要设置未完成"
+            role="alert"
+            >{{ minutes.settingsError }}</AppNotice
+          >
+          <AppNotice
+            v-if="minutes.settingsNotice"
+            variant="info"
+            title="已保存"
+            aria-live="polite"
+            >{{ minutes.settingsNotice }}</AppNotice
+          >
+          <div class="ms-field">
+            <label for="minutes-prompt">会议纪要要求</label>
+            <textarea
+              id="minutes-prompt"
+              v-model="minutePrompt"
+              class="ms-input ms-textarea ms-minute-prompt"
+              rows="10"
+              :disabled="minutes.settingsLoading || minutes.settingsSaving"
+              aria-describedby="minutes-prompt-help"
+            />
+            <p id="minutes-prompt-help" class="ms-help">
+              未自定义时使用 MeetSieve
+              默认要求。修改后只影响后续生成的会议纪要。
+            </p>
+          </div>
+          <div class="ms-actions">
+            <BaseButton
+              variant="primary"
+              :busy="minutes.settingsSaving"
+              :disabled="
+                minutes.settingsSaving ||
+                !minutePrompt.trim() ||
+                minutePrompt === minutes.settings.prompt
+              "
+              @click="saveMinutesSettings"
+              >保存会议纪要要求</BaseButton
+            >
+            <BaseButton
+              v-if="!minutes.settings.is_default"
+              variant="quiet"
+              :disabled="
+                minutes.settingsSaving ||
+                minutePrompt !== minutes.settings.prompt
+              "
+              @click="restoreDefaultMinutesSettings"
+              >恢复默认要求</BaseButton
+            >
+          </div>
+        </section>
+        <section
           v-else
           class="ms-card ms-settings-card"
           aria-labelledby="voice-model-title"
@@ -828,7 +954,10 @@ function registerDirtyEditors(): void {
           <div class="ms-card-head">
             <div>
               <p class="ms-eyebrow">本机配置</p>
-              <h1 id="voice-model-title">声纹模型</h1>
+              <h2 id="voice-model-title">声纹模型</h2>
+              <p class="ms-help">
+                管理本机声纹模型的下载、离线导入与完整性校验。
+              </p>
             </div>
             <span class="ms-status">{{ modelStateText }}</span>
           </div>

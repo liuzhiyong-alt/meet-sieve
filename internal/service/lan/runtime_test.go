@@ -63,7 +63,8 @@ func TestRuntime_RetryStopsOldGenerationAndRevokesSessions(t *testing.T) {
 			"11111111-1111-4111-8111-111111111111",
 			"22222222-2222-4222-8222-222222222222",
 		),
-		Random: strings.NewReader(strings.Repeat("a", MeetingTokenBytes) + strings.Repeat("b", MeetingTokenBytes)),
+		Random:  strings.NewReader(strings.Repeat("a", MeetingTokenBytes) + strings.Repeat("b", MeetingTokenBytes)),
+		Handler: readyGuestHandler(),
 		ListenerFactory: func(_ context.Context, address string) (net.Listener, error) {
 			return newFakeListener(strings.Replace(address, ":0", ":4312"+string(rune('5'+serverIndex)), 1)), nil
 		},
@@ -112,6 +113,26 @@ func TestRuntime_StartFailureBecomesIndependentFailedState(t *testing.T) {
 	}
 }
 
+// TestRuntime_RejectsUnavailableGuestEntry 验证资源预检失败时绝不发布虚假的 serving 入口。
+func TestRuntime_RejectsUnavailableGuestEntry(t *testing.T) {
+	t.Parallel()
+
+	runtime := NewRuntime(Dependencies{
+		IDs:    identity.NewFixedGenerator("11111111-1111-4111-8111-111111111111"),
+		Random: strings.NewReader(strings.Repeat("a", MeetingTokenBytes)), Handler: readyGuestHandler(),
+		ReadinessCheck:  func() error { return errors.New("guest assets missing") },
+		ListenerFactory: (&fakeListenerFactory{listener: newFakeListener("192.168.1.20:43125")}).Listen,
+		ServerFactory:   func(http.Handler) HTTPServer { return newFakeServer() },
+	})
+	snapshot, err := runtime.Start(context.Background(), StartRequest{MeetingID: "meeting-1", InterfaceID: "if-1", Address: "192.168.1.20"})
+	if err == nil {
+		t.Fatal("Guest 资源缺失必须阻止 LAN 启动")
+	}
+	if snapshot.State != StateFailed || snapshot.ErrorCode != "LAN_GUEST_ASSETS_MISSING" || snapshot.JoinURL != "" {
+		t.Fatalf("资源预检失败状态不正确：%#v", snapshot)
+	}
+}
+
 // TestRuntime_StopIsIdempotent 验证停止会取消上传、撤销会话并且可重复执行。
 func TestRuntime_StopIsIdempotent(t *testing.T) {
 	t.Parallel()
@@ -142,6 +163,7 @@ func newTestRuntime(factory *fakeListenerFactory, server *fakeServer, revoker *f
 	dependencies := Dependencies{
 		IDs:             identity.NewFixedGenerator("11111111-1111-4111-8111-111111111111"),
 		Random:          strings.NewReader(strings.Repeat("a", MeetingTokenBytes)),
+		Handler:         readyGuestHandler(),
 		ListenerFactory: factory.Listen,
 		ServerFactory:   func(_ http.Handler) HTTPServer { return server },
 	}
@@ -152,6 +174,18 @@ func newTestRuntime(factory *fakeListenerFactory, server *fakeServer, revoker *f
 		dependencies.Uploads = uploads
 	}
 	return NewRuntime(dependencies)
+}
+
+// readyGuestHandler 构造通过访客入口最小闭环的测试 HTTP handler。
+func readyGuestHandler() http.Handler {
+	return http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.URL.Path != "/join" {
+			writer.WriteHeader(http.StatusNotFound)
+			return
+		}
+		writer.Header().Set("Content-Type", "text/html; charset=utf-8")
+		writer.WriteHeader(http.StatusOK)
+	})
 }
 
 // tokenFromJoinURL 从仅主持端可见的入口 URL 中读取 fragment 令牌。

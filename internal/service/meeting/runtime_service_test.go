@@ -80,6 +80,94 @@ func TestRuntimeServiceStartsOnlyAfterFirstFrameAndStateCommit(t *testing.T) {
 	}
 }
 
+// TestRuntimeServiceVoiceTurnPausesOnlyASR 验证 AI 回答期间录音持续，只有 ASR 投递暂停。
+func TestRuntimeServiceVoiceTurnPausesAndResumesMedia(t *testing.T) {
+	_, db := openRuntimeMeetingDatabase(t)
+	repository := meetingrepository.NewRepository(db)
+	transactions := database.NewTransactionManager(db)
+	meetingID := "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+	turnID := "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+	prepareMediaPauseMeeting(t, db, meetingID, turnID)
+	stream := newFakeAudioStream(port.AudioFrame{StartSample: 0, PCM: []byte{1, 0}})
+	coordinator := NewRecordingCoordinator(&fakeAudioCapture{stream: stream}, 960000, 32000, time.Second)
+	if err := coordinator.Start(context.Background(), "device-1", filepath.Join(t.TempDir(), "segments")); err != nil {
+		t.Fatal(err)
+	}
+	if err := coordinator.Activate(); err != nil {
+		t.Fatal(err)
+	}
+	transcript := &mediaTranscriptRuntime{}
+	runtimeService := NewRuntimeService(RuntimeDependencies{
+		Repository: repository, Transactions: transactions, Coordinator: coordinator,
+		Transcript: transcript, Clock: clock.NewFixed(time.UnixMilli(2_000)),
+		IDs: identity.NewFixedGenerator("cccccccc-cccc-4ccc-8ccc-cccccccccccc"),
+	})
+	pauseErrors := make(chan error, 1)
+	go func() { pauseErrors <- runtimeService.PauseForTurn(context.Background(), meetingID, turnID) }()
+	stream.push(port.AudioFrame{StartSample: 1, PCM: []byte{2, 0}})
+	if err := <-pauseErrors; err != nil {
+		t.Fatalf("暂停语音 turn 媒体失败：%v", err)
+	}
+	if state := runtimeService.RealtimeASRState(context.Background(), meetingID, "stopped"); state != "paused_for_ai" {
+		t.Fatalf("活动媒体暂停未覆盖实时转写状态：%s", state)
+	}
+	resumeErrors := make(chan error, 1)
+	go func() { resumeErrors <- runtimeService.ResumeAfterTurn(context.Background(), meetingID, turnID) }()
+	stream.push(port.AudioFrame{StartSample: 2, PCM: []byte{3, 0}})
+	if err := <-resumeErrors; err != nil {
+		t.Fatalf("恢复语音 turn 媒体失败：%v", err)
+	}
+	var pause models.MeetingMediaPause
+	if err := db.Where("agent_turn_id = ?", turnID).Take(&pause).Error; err != nil {
+		t.Fatal(err)
+	}
+	if pause.State != "completed" || pause.LogicalSample == nil || *pause.LogicalSample != 1 || pause.DiscardedSamples != 0 {
+		t.Fatalf("媒体暂停事实错误：%+v", pause)
+	}
+	if transcript.pauseBoundary != 1 || transcript.resumeBoundary != 2 {
+		t.Fatalf("ASR 暂停恢复边界错误：%+v", transcript)
+	}
+	if state := runtimeService.RealtimeASRState(context.Background(), meetingID, "streaming"); state != "streaming" {
+		t.Fatalf("媒体恢复后未回落到实时转写事实：%s", state)
+	}
+	if _, err := coordinator.Stop(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// prepareMediaPauseMeeting 写入媒体暂停测试所需的会议、session 和 pending turn。
+func prepareMediaPauseMeeting(t *testing.T, db *gorm.DB, meetingID string, turnID string) {
+	t.Helper()
+	meeting := models.Meeting{ID: meetingID, MeetingNo: "20260806-ABCD-01", Subject: "媒体暂停", RelativeDir: "meetings/media", LocalTimezone: "Asia/Shanghai", LifecycleState: "recording", LocalSaveState: "saving", RealtimeASRState: "streaming", GapState: "none", AgentState: "busy", MinuteState: "not_generated", LANState: "disabled", CreatedAt: 1, UpdatedAt: 1}
+	if err := db.Create(&meeting).Error; err != nil {
+		t.Fatal(err)
+	}
+	sessionID := "dddddddd-dddd-4ddd-8ddd-dddddddddddd"
+	if err := db.Create(&models.AgentSession{ID: sessionID, MeetingID: meetingID, Provider: "codex", CWDRelativePath: "meetings/media", State: "available", StartedAt: 1, CreatedAt: 1, UpdatedAt: 1}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&models.AgentTurn{ID: turnID, MeetingID: meetingID, AgentSessionID: sessionID, Kind: "answer", State: "pending", IdempotencyKey: "voice-turn", CreatedAt: 1, UpdatedAt: 1}).Error; err != nil {
+		t.Fatal(err)
+	}
+}
+
+type mediaTranscriptRuntime struct {
+	pauseBoundary  int64
+	resumeBoundary int64
+}
+
+func (runtime *mediaTranscriptRuntime) Start(context.Context, string, string) error { return nil }
+func (runtime *mediaTranscriptRuntime) TryAcceptFrame(port.AudioFrame) bool         { return true }
+func (runtime *mediaTranscriptRuntime) Pause(_ context.Context, _ string) (int64, error) {
+	runtime.pauseBoundary = 1
+	return runtime.pauseBoundary, nil
+}
+func (runtime *mediaTranscriptRuntime) Resume(_ context.Context, _ string) (int64, error) {
+	runtime.resumeBoundary = 2
+	return runtime.resumeBoundary, nil
+}
+func (runtime *mediaTranscriptRuntime) Stop(context.Context, string, int64) error { return nil }
+
 // TestRuntimeServiceEndsWithSegmentsAndVerifiedMergedAsset 验证正常结束保留分片并完成最终录音与数据库终态。
 func TestRuntimeServiceEndsWithSegmentsAndVerifiedMergedAsset(t *testing.T) {
 	root, db := openRuntimeMeetingDatabase(t)

@@ -180,7 +180,7 @@ describe('StartMeetingView', () => {
     wrapper.unmount()
   })
 
-  it('局域网没有安全推荐时不显示网络选择并允许关闭后开始', async () => {
+  it('局域网访客页暂未开放时固定关闭且提交关闭状态', async () => {
     peopleBindings.GetMeetingPeopleOptions.mockResolvedValue({
       code: 200,
       data: {
@@ -219,26 +219,34 @@ describe('StartMeetingView', () => {
       .find((item) => item.text() === '展开高级设置')!
       .trigger('click')
     expect(wrapper.text()).not.toContain('使用的网络')
-    expect(wrapper.text()).toContain('未检测到可用的私有网络')
+    expect(wrapper.text()).toContain(
+      '开启后，同一局域网内的设备可以访问访客页。仅在可信的私有网络使用（暂未开放）。',
+    )
     const lanSwitch = wrapper.get<HTMLInputElement>('[role="switch"]')
     expect(lanSwitch.attributes('aria-label')).toBe('允许同一私有网络访问')
+    expect(lanSwitch.attributes('aria-describedby')).toBe('lan-create-help')
+    expect(lanSwitch.element.disabled).toBe(true)
+    expect(lanSwitch.element.checked).toBe(false)
     const switchTrack = wrapper.get('.ms-switch-track')
     expect(switchTrack.attributes('aria-hidden')).toBe('true')
     expect(lanSwitch.element.nextElementSibling).toBe(switchTrack.element)
     expect(
       wrapper.get<HTMLButtonElement>('.ms-start-button').element.disabled,
-    ).toBe(true)
-
-    await lanSwitch.setValue(false)
-    expect(
-      wrapper.get<HTMLButtonElement>('.ms-start-button').element.disabled,
     ).toBe(false)
 
+    await lanSwitch.trigger('click')
     await lanSwitch.trigger('keydown', { key: ' ' })
-    expect(lanSwitch.element.checked).toBe(true)
-    expect(
-      wrapper.get<HTMLButtonElement>('.ms-start-button').element.disabled,
-    ).toBe(true)
+    expect(lanSwitch.element.checked).toBe(false)
+
+    meetingBindings.StartMeeting.mockResolvedValue({
+      code: 200,
+      data: { id: 'meeting-1', lifecycle_state: 'recording' },
+    })
+    await wrapper.get('.ms-start-button').trigger('click')
+    await flushPromises()
+    expect(meetingBindings.StartMeeting).toHaveBeenCalledWith(
+      expect.objectContaining({ lan_enabled: false, lan_interface_id: '' }),
+    )
   })
 
   it('实时 ASR 启动失败时由用户选择用同一草稿仅录音重试', async () => {

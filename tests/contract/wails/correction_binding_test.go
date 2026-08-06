@@ -37,3 +37,13 @@ func TestCorrectionEntryDTO_DoesNotExposeSensitiveStorage(t *testing.T) {
 		}
 	}
 }
+
+// TestCorrectionEntryDTO_ExposesClusterMapping 验证编辑页所需的 cluster 只读投影保持稳定。
+func TestCorrectionEntryDTO_ExposesClusterMapping(t *testing.T) {
+	typeOf := reflect.TypeOf(wailstransport.CorrectionEntryDTO{})
+	for _, field := range []string{"ClusterDisplayNo", "ClusterParticipantID"} {
+		if _, exists := typeOf.FieldByName(field); !exists {
+			t.Fatalf("CorrectionEntryDTO 缺少 cluster 映射字段：%s", field)
+		}
+	}
+}

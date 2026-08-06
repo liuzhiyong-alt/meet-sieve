@@ -35,7 +35,7 @@ func TestLoadDefault_LoadsEmbeddedConfig(t *testing.T) {
 	if cfg.Recording.MaxSegmentSeconds != 60 || cfg.Recording.CheckpointSeconds != 2 || cfg.Recording.FirstFrameTimeoutSeconds != 5 || cfg.Recording.MinimumFreeSpaceGiB != 1 {
 		t.Fatalf("Step 3 录音默认配置不正确：%+v", cfg.Recording)
 	}
-	if cfg.ASR.ResourceID != "volc.seedasr.sauc.duration" || cfg.ASR.PCMQueueSamples != 32000 || cfg.ASR.FinalQueueCapacity != 128 || cfg.ASR.TailTimeoutSeconds != 15 {
+	if cfg.ASR.ResourceID != "volc.seedasr.sauc.duration" || cfg.ASR.PCMQueueSamples != 240000 || cfg.ASR.FinalQueueCapacity != 128 || cfg.ASR.TailTimeoutSeconds != 15 {
 		t.Fatalf("Step 4 ASR 默认配置不正确：%+v", cfg.ASR)
 	}
 }
@@ -66,10 +66,10 @@ recording:
   first_frame_timeout_seconds: 5
   minimum_free_space_gib: 1
 asr:
-  endpoint: wss://openspeech.bytedance.com/api/v3/sauc/bigmodel
+  endpoint: wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async
   resource_id: volc.seedasr.sauc.duration
   connect_timeout_seconds: 10
-  pcm_queue_samples: 32000
+  pcm_queue_samples: 240000
   final_queue_capacity: 128
   final_persist_timeout_seconds: 5
   tail_timeout_seconds: 15
@@ -96,7 +96,7 @@ runtime:
 		{name: "读连接上限过大", data: strings.Replace(validConfig, "read_max_open_conns: 4", "read_max_open_conns: 5", 1)},
 		{name: "空闲连接超过读连接上限", data: strings.Replace(validConfig, "read_max_idle_conns: 2", "read_max_idle_conns: 5", 1)},
 		{name: "分片时长不允许变更", data: strings.Replace(validConfig, "max_segment_seconds: 60", "max_segment_seconds: 59", 1)},
-		{name: "ASR PCM 队列不允许扩大", data: strings.Replace(validConfig, "pcm_queue_samples: 32000", "pcm_queue_samples: 64000", 1)},
+		{name: "ASR PCM 队列不允许偏离十五秒边界", data: strings.Replace(validConfig, "pcm_queue_samples: 240000", "pcm_queue_samples: 32000", 1)},
 		{name: "ASR 重连退避不允许变更", data: strings.Replace(validConfig, "reconnect_backoff_seconds: [1, 2, 4, 8, 15]", "reconnect_backoff_seconds: [1, 2, 4]", 1)},
 	}
 

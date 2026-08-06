@@ -54,7 +54,7 @@ type RuntimeConfig struct {
 
 // Validate 检查冻结的实时转写配置未被错误装配或静默降级。
 func (config RuntimeConfig) Validate() error {
-	if config.Endpoint == "" || config.ResourceID == "" || config.PCMQueueSamples != 32000 || config.FinalQueueCapacity != 128 || config.FinalPersistTimeoutMS != 5000 || config.TailTimeoutMS != 15000 {
+	if config.Endpoint == "" || config.ResourceID == "" || config.PCMQueueSamples != 240000 || config.FinalQueueCapacity != 128 || config.FinalPersistTimeoutMS != 5000 || config.TailTimeoutMS != 15000 {
 		return fmt.Errorf("实时转写配置不符合冻结技术边界")
 	}
 	want := []int64{1000, 2000, 4000, 8000, 15000}

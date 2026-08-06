@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sync"
 	"testing"
 	"time"
@@ -159,6 +160,83 @@ func TestRecordingCoordinatorForwardsOnlyPersistedPCM(t *testing.T) {
 	}
 }
 
+// TestRecordingCoordinatorPauseDropsPCMAndResumesContinuousSamples 验证暂停期不落盘，恢复后逻辑样本连续。
+func TestRecordingCoordinatorPauseDropsPCMAndResumesContinuousSamples(t *testing.T) {
+	stream := newFakeAudioStream(port.AudioFrame{StartSample: 0, PCM: []byte{1, 0}})
+	coordinator := NewRecordingCoordinator(&fakeAudioCapture{stream: stream}, 960000, 32000, time.Second)
+	frames := make(chan port.AudioFrame, 4)
+	if err := coordinator.SetPersistedPCMFrameHandler(func(frame port.AudioFrame) { frames <- frame }); err != nil {
+		t.Fatal(err)
+	}
+	if err := coordinator.Start(context.Background(), "device-1", filepath.Join(t.TempDir(), "segments")); err != nil {
+		t.Fatal(err)
+	}
+	<-frames // 首帧已经安全写入。
+	if err := coordinator.Activate(); err != nil {
+		t.Fatal(err)
+	}
+
+	pauseResult := make(chan RecordingPauseBoundary, 1)
+	pauseErrors := make(chan error, 1)
+	go func() {
+		boundary, err := coordinator.Pause(context.Background(), "turn-1")
+		pauseResult <- boundary
+		pauseErrors <- err
+	}()
+	waitForRecordingControl(t, coordinator)
+	stream.push(port.AudioFrame{StartSample: 1, PCM: []byte{2, 0}})
+	if err := <-pauseErrors; err != nil {
+		t.Fatalf("暂停录音失败：%v", err)
+	}
+	if boundary := <-pauseResult; boundary.LogicalSample != 1 || boundary.PhysicalSample != 1 {
+		t.Fatalf("暂停边界错误：%+v", boundary)
+	}
+	resumeResult := make(chan RecordingResumeBoundary, 1)
+	resumeErrors := make(chan error, 1)
+	go func() {
+		boundary, err := coordinator.Resume(context.Background(), "turn-1")
+		resumeResult <- boundary
+		resumeErrors <- err
+	}()
+	waitForRecordingControl(t, coordinator)
+	stream.push(port.AudioFrame{StartSample: 2, PCM: []byte{4, 0}})
+	if err := <-resumeErrors; err != nil {
+		t.Fatalf("恢复录音失败：%v", err)
+	}
+	if boundary := <-resumeResult; boundary.LogicalSample != 1 || boundary.DiscardedSamples != 1 {
+		t.Fatalf("恢复边界错误：%+v", boundary)
+	}
+	if resumed := <-frames; resumed.StartSample != 1 || resumed.PCM[0] != 4 {
+		t.Fatalf("恢复帧必须紧接暂停前样本：%+v", resumed)
+	}
+	secondPause := make(chan error, 1)
+	go func() {
+		_, err := coordinator.Pause(context.Background(), "turn-2")
+		secondPause <- err
+	}()
+	waitForRecordingControl(t, coordinator)
+	stream.push(port.AudioFrame{StartSample: 3, PCM: []byte{5, 0}})
+	if err := <-secondPause; err != nil {
+		t.Fatalf("第二次暂停录音失败：%v", err)
+	}
+	secondResume := make(chan recordingControlResult, 1)
+	go func() {
+		boundary, err := coordinator.Resume(context.Background(), "turn-2")
+		secondResume <- recordingControlResult{resume: boundary, err: err}
+	}()
+	waitForRecordingControl(t, coordinator)
+	stream.push(port.AudioFrame{StartSample: 4, PCM: []byte{6, 0}})
+	if result := <-secondResume; result.err != nil || result.resume.LogicalSample != 2 || result.resume.DiscardedSamples != 1 {
+		t.Fatalf("第二次恢复必须只返回本次丢弃样本：%+v", result)
+	}
+	if resumed := <-frames; resumed.StartSample != 2 || resumed.PCM[0] != 6 {
+		t.Fatalf("第二次恢复帧逻辑样本错误：%+v", resumed)
+	}
+	if _, err := coordinator.Stop(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // TestRecordingCoordinatorFinalizesRuntimeFailure 验证设备读失败会自动停止并发布唯一故障。
 func TestRecordingCoordinatorFinalizesRuntimeFailure(t *testing.T) {
 	t.Parallel()
@@ -228,6 +306,28 @@ type fakeAudioStream struct {
 	mu        sync.Mutex
 	frames    chan port.AudioFrame
 	stopCount int
+}
+
+// push 向活动 fake 设备流提交一条物理 PCM 帧。
+func (stream *fakeAudioStream) push(frame port.AudioFrame) {
+	stream.frames <- frame
+}
+
+// waitForRecordingControl 等待测试请求进入 runner 控制队列，不依赖固定 sleep。
+func waitForRecordingControl(t *testing.T, coordinator *RecordingCoordinator) {
+	t.Helper()
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		coordinator.mu.Lock()
+		session := coordinator.session
+		pending := session != nil && len(session.control) > 0
+		coordinator.mu.Unlock()
+		if pending {
+			return
+		}
+		runtime.Gosched()
+	}
+	t.Fatal("录音控制请求没有进入 runner")
 }
 
 func newFakeAudioStream(frames ...port.AudioFrame) *fakeAudioStream {

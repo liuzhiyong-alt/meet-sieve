@@ -15,6 +15,8 @@ type WakeFinal struct {
 	UtteranceID string
 	MeetingID   string
 	Text        string
+	StartSample int64
+	EndSample   int64
 }
 
 // GetWakeFinal 只读取已经持久化的 ASR final，不接受 partial 文本。
@@ -24,7 +26,7 @@ func (repository *Repository) GetWakeFinal(ctx context.Context, utteranceID stri
 	}
 	var final WakeFinal
 	err := repository.reader.WithContext(ctx).Model(&models.Utterance{}).
-		Select("id AS utterance_id", "meeting_id", "current_text AS text").Where("id = ?", utteranceID).Take(&final).Error
+		Select("id AS utterance_id", "meeting_id", "current_text AS text", "start_sample", "end_sample").Where("id = ?", utteranceID).Take(&final).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return WakeFinal{}, ErrNotFound
 	}
@@ -60,4 +62,36 @@ func (repository *Repository) GetDefaultMicrophoneID(ctx context.Context) (strin
 		return "", nil
 	}
 	return *settings.DefaultMicrophoneID, nil
+}
+
+// ReleaseVoiceCommandCandidates 把未形成 AI 问题的候选 final 恢复为普通会议内容。
+func (repository *Repository) ReleaseVoiceCommandCandidates(ctx context.Context, commandID string) error {
+	if repository == nil || repository.transactions == nil || commandID == "" {
+		return fmt.Errorf("释放语音指令候选：参数无效")
+	}
+	return repository.transactions.WithinTransaction(ctx, func(tx *gorm.DB) error {
+		result := tx.WithContext(ctx).Model(&models.AgentVoiceCommandUtterance{}).
+			Where("command_id = ? AND state = 'candidate'", commandID).
+			Updates(map[string]any{"state": "released", "updated_at": tx.NowFunc().UnixMilli()})
+		if result.Error != nil {
+			return fmt.Errorf("释放语音指令候选失败：%w", result.Error)
+		}
+		return nil
+	})
+}
+
+// ReleaseOrphanVoiceCommandCandidates 在应用重启时释放未绑定 AI turn 的候选 final。
+func (repository *Repository) ReleaseOrphanVoiceCommandCandidates(ctx context.Context) error {
+	if repository == nil || repository.transactions == nil {
+		return fmt.Errorf("释放遗留语音指令候选：Repository 不可用")
+	}
+	return repository.transactions.WithinTransaction(ctx, func(tx *gorm.DB) error {
+		result := tx.WithContext(ctx).Model(&models.AgentVoiceCommandUtterance{}).
+			Where("state = 'candidate' AND agent_turn_id IS NULL").
+			Updates(map[string]any{"state": "released", "updated_at": tx.NowFunc().UnixMilli()})
+		if result.Error != nil {
+			return fmt.Errorf("释放遗留语音指令候选失败：%w", result.Error)
+		}
+		return nil
+	})
 }

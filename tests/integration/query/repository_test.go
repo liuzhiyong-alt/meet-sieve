@@ -97,6 +97,86 @@ func TestRepository_ListMeetingsLoadsRealPendingGapTarget(t *testing.T) {
 	}
 }
 
+// TestRepository_ListTranscriptReturnsStableSpeakerFactsAndDirections 验证未知聚类与前后页语义。
+func TestRepository_ListTranscriptReturnsStableSpeakerFactsAndDirections(t *testing.T) {
+	db := openQueryDatabase(t)
+	const meetingID = "11111111-1111-4111-8111-111111111111"
+	insertMeeting(t, db, meetingID, "M-TRANSCRIPT", "原始记录", 1000, "saved")
+	insertParticipant(t, db, "22222222-2222-4222-8222-222222222222", meetingID, "张三")
+	insertTranscriptFixtures(t, db, meetingID)
+	repository := queryrepository.NewRepository(db)
+
+	first, firstState, err := repository.ListTranscript(context.Background(), meetingID, 0, 0, 2)
+	if err != nil {
+		t.Fatalf("读取原始记录第一页失败：%v", err)
+	}
+	if len(first) != 2 || firstState.HasPrevious || !firstState.HasNext {
+		t.Fatalf("第一页边界错误：rows=%+v state=%+v", first, firstState)
+	}
+	if first[0].SpeakerName != "张三" || first[1].ClusterDisplayNo != 2 {
+		t.Fatalf("说话人事实投影错误：%+v", first)
+	}
+
+	last, lastState, err := repository.ListTranscript(context.Background(), meetingID, first[1].Seq, 0, 2)
+	if err != nil || len(last) != 1 || !lastState.HasPrevious || lastState.HasNext {
+		t.Fatalf("末页边界错误：rows=%+v state=%+v err=%v", last, lastState, err)
+	}
+
+	previous, previousState, err := repository.ListTranscript(context.Background(), meetingID, 0, last[0].Seq, 2)
+	if err != nil || len(previous) != 2 || previous[0].Seq != 1 || previous[1].Seq != 2 || previousState.HasPrevious || !previousState.HasNext {
+		t.Fatalf("上一页顺序或边界错误：rows=%+v state=%+v err=%v", previous, previousState, err)
+	}
+}
+
+// insertTranscriptFixtures 写入成员、未知聚类和未聚类三条 final 记录。
+func insertTranscriptFixtures(t *testing.T, db *gorm.DB, meetingID string) {
+	t.Helper()
+	if err := db.Exec(`INSERT INTO asr_sessions (
+		id, meeting_id, provider, state, started_at, ended_at, reconnect_count, transport_mode,
+		input_start_sample, last_sent_sample, last_final_sample, created_at, updated_at
+	) VALUES ('33333333-3333-4333-8333-333333333333', ?, 'volcano', 'stopped', 1000, 1001, 0,
+		'seed_v1', 0, 48000, 48000, 1000, 1001)`, meetingID).Error; err != nil {
+		t.Fatalf("写入 ASR Session 失败：%v", err)
+	}
+	if err := db.Exec(`INSERT INTO speaker_clusters (
+		id, meeting_id, display_no, assignment_source, track_count, revision, created_at, updated_at
+	) VALUES ('44444444-4444-4444-8444-444444444444', ?, 2, 'unassigned', 1, 1, 1000, 1000)`, meetingID).Error; err != nil {
+		t.Fatalf("写入未知说话人聚类失败：%v", err)
+	}
+	for seq := 1; seq <= 3; seq++ {
+		eventID := []string{
+			"55555555-5555-4555-8555-555555555551",
+			"55555555-5555-4555-8555-555555555552",
+			"55555555-5555-4555-8555-555555555553",
+		}[seq-1]
+		utteranceID := []string{
+			"66666666-6666-4666-8666-666666666661",
+			"66666666-6666-4666-8666-666666666662",
+			"66666666-6666-4666-8666-666666666663",
+		}[seq-1]
+		if err := db.Exec(`INSERT INTO meeting_events (
+			id, meeting_id, seq, kind, occurred_at, source, entity_type, entity_id, created_at, updated_at
+		) VALUES (?, ?, ?, 'utterance.final', ?, 'asr', 'utterance', ?, 1000, 1000)`, eventID, meetingID, seq, 1000+seq, utteranceID).Error; err != nil {
+			t.Fatalf("写入第 %d 条事件失败：%v", seq, err)
+		}
+		participantID, clusterID := any(nil), any(nil)
+		if seq == 1 {
+			participantID = "22222222-2222-4222-8222-222222222222"
+		}
+		if seq == 2 {
+			clusterID = "44444444-4444-4444-8444-444444444444"
+		}
+		if err := db.Exec(`INSERT INTO utterances (
+			id, meeting_id, event_id, asr_session_id, provider_result_id, original_text, current_text,
+			start_sample, end_sample, asr_speaker_label, current_participant_id, speaker_cluster_id,
+			speaker_assignment_source, text_revision, speaker_revision, created_at, updated_at
+		) VALUES (?, ?, ?, '33333333-3333-4333-8333-333333333333', ?, ?, ?, ?, ?, ?, ?, ?,
+			'unassigned', 1, 1, 1000, 1000)`, utteranceID, meetingID, eventID, "result-"+utteranceID, "文本", "文本", (seq-1)*16000, seq*16000, "speaker-1", participantID, clusterID).Error; err != nil {
+			t.Fatalf("写入第 %d 条转写失败：%v", seq, err)
+		}
+	}
+}
+
 // openQueryDatabase 创建隔离的最新 SQLite 查询测试库。
 func openQueryDatabase(t *testing.T) *gorm.DB {
 	t.Helper()

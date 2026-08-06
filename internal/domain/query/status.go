@@ -12,7 +12,7 @@ const (
 	StatusGapConflict MeetingStatus = "gap_conflict"
 	// StatusGapPending 表示补转写仍待处理或失败。
 	StatusGapPending MeetingStatus = "gap_pending"
-	// StatusMinuteCandidate 表示存在未确认纪要草稿。
+	// StatusMinuteCandidate 表示存在已生成的纪要草稿。
 	StatusMinuteCandidate MeetingStatus = "minute_candidate"
 	// StatusAgentUnsynced 表示 Codex 结束同步可重试。
 	StatusAgentUnsynced MeetingStatus = "agent_unsynced"

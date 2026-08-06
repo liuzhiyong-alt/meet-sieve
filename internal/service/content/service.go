@@ -9,6 +9,7 @@ import (
 	"slices"
 
 	guestdomain "meet-sieve/internal/domain/guest"
+	speakerdomain "meet-sieve/internal/domain/speaker"
 	"meet-sieve/internal/infra/apperr"
 	"meet-sieve/internal/infra/clock"
 	"meet-sieve/internal/infra/database"
@@ -63,27 +64,28 @@ type TimelinePage struct {
 
 // TimelineEntry 是桌面前端使用 kind 区分的统一事件投影。
 type TimelineEntry struct {
-	Seq           int64
-	Kind          string
-	OccurredAt    int64
-	Source        string
-	EntityID      string
-	DisplayName   string
-	Text          string
-	ContentFormat string
-	SpeakerKey    string
-	SpeakerLabel  string
-	StartSample   int64
-	EndSample     int64
-	State         string
-	Reason        string
-	ResourceKind  string
-	OriginalName  string
-	MediaType     string
-	SizeBytes     int64
-	SHA256        string
-	URL           string
-	Description   string
+	Seq             int64
+	Kind            string
+	OccurredAt      int64
+	Source          string
+	EntityID        string
+	DisplayName     string
+	Text            string
+	ContentFormat   string
+	SpeakerKey      string
+	SpeakerLabel    string
+	SpeakerRevision int
+	StartSample     int64
+	EndSample       int64
+	State           string
+	Reason          string
+	ResourceKind    string
+	OriginalName    string
+	MediaType       string
+	SizeBytes       int64
+	SHA256          string
+	URL             string
+	Description     string
 }
 
 // SendMessageInput 是主持人发送 Markdown 会议消息的幂等输入。
@@ -243,10 +245,12 @@ func normalizeLimit(limit int) int {
 }
 
 type agentPayload struct {
-	Version       int    `json:"v"`
-	Text          string `json:"text"`
-	Reason        string `json:"reason"`
-	ContentFormat string `json:"content_format"`
+	Version              int    `json:"v"`
+	Text                 string `json:"text"`
+	Reason               string `json:"reason"`
+	ContentFormat        string `json:"content_format"`
+	SpeakerKeySnapshot   string `json:"speaker_key_snapshot"`
+	SpeakerLabelSnapshot string `json:"speaker_label_snapshot"`
 }
 
 // projectTimelineRow 把数据库内部行映射为前端白名单判别结构。
@@ -257,6 +261,7 @@ func projectTimelineRow(row contentrepository.TimelineRow) (TimelineEntry, bool)
 		base.Kind, base.Text, base.ContentFormat = "utterance", row.UtteranceText, "plain"
 		base.StartSample, base.EndSample = row.StartSample, row.EndSample
 		base.SpeakerKey, base.SpeakerLabel = speakerIdentity(row)
+		base.SpeakerRevision = row.SpeakerRevision
 		return base, row.UtteranceID != ""
 	case "asr.gap":
 		base.Kind, base.Reason, base.ContentFormat = "gap", row.GapReason, "plain"
@@ -282,7 +287,11 @@ func projectTimelineRow(row contentrepository.TimelineRow) (TimelineEntry, bool)
 			return TimelineEntry{}, false
 		}
 		base.Kind, base.Text, base.Reason = "ai_"+row.EventKind[3:], payload.Text, payload.Reason
-		base.DisplayName = "AI 助手"
+		if row.EventKind == "ai.question" {
+			base.SpeakerKey, base.DisplayName = questionSpeakerIdentity(row, payload)
+		} else {
+			base.DisplayName = "AI 助手"
+		}
 		base.ContentFormat = "plain"
 		if payload.Version >= 2 && payload.ContentFormat == "markdown" {
 			base.ContentFormat = "markdown"
@@ -293,19 +302,42 @@ func projectTimelineRow(row contentrepository.TimelineRow) (TimelineEntry, bool)
 	}
 }
 
+// questionSpeakerIdentity 优先使用触发 utterance 的当前投影，使人工校对可回写既有 AI 问题。
+func questionSpeakerIdentity(row contentrepository.TimelineRow, payload agentPayload) (string, string) {
+	if row.AgentTriggerID != "" {
+		return speakerIdentityParts(
+			row.AgentParticipantID, row.AgentParticipantName, row.AgentClusterID,
+			row.AgentClusterDisplayNo, row.AgentTrackID, row.AgentTrackDisplayNo,
+		)
+	}
+	if payload.SpeakerLabelSnapshot != "" {
+		return payload.SpeakerKeySnapshot, payload.SpeakerLabelSnapshot
+	}
+	return "host", "你"
+}
+
 // speakerIdentity 选择可跨刷新稳定的说话人 key 和展示名。
 func speakerIdentity(row contentrepository.TimelineRow) (string, string) {
-	if row.ParticipantID != "" {
-		return "participant:" + row.ParticipantID, row.ParticipantName
+	key, label := speakerIdentityParts(row.ParticipantID, row.ParticipantName, row.SpeakerClusterID, row.ClusterDisplayNo, row.SpeakerTrackID, row.TrackDisplayNo)
+	if key != "" {
+		return key, label
 	}
-	if row.SpeakerClusterID != "" {
-		return "cluster:" + row.SpeakerClusterID, "未知说话人"
+	// 无标签且尚未建立本地 track 时按 utterance 隔离，避免被错误合并为同一人。
+	return "unlabeled:" + row.UtteranceID, label
+}
+
+// speakerIdentityParts 把当前 participant、cluster 与 track 投影统一映射为稳定 key 和展示名称。
+func speakerIdentityParts(participantID string, participantName string, clusterID string, clusterDisplayNo int, trackID string, trackDisplayNo int) (string, string) {
+	if participantID != "" {
+		return "participant:" + participantID, speakerdomain.DisplayName(participantName, clusterDisplayNo, trackDisplayNo)
 	}
-	label := row.ASRSpeakerLabel
-	if label == "" {
-		label = "未知说话人"
+	if clusterID != "" {
+		return "cluster:" + clusterID, speakerdomain.DisplayName("", clusterDisplayNo, trackDisplayNo)
 	}
-	return "asr:" + row.ASRSessionID + ":" + row.ASRSpeakerLabel, label
+	if trackID != "" {
+		return "track:" + trackID, speakerdomain.DisplayName("", 0, trackDisplayNo)
+	}
+	return "", speakerdomain.DisplayName("", 0, 0)
 }
 
 // fallbackFormat 只接受已登记格式，异常旧数据安全退回纯文本。

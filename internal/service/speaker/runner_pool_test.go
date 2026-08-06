@@ -39,6 +39,25 @@ type fixedRecoverySource struct {
 	ids []string
 }
 
+type mutableProcessingGate struct {
+	mu    sync.RWMutex
+	ready bool
+}
+
+// Ready 返回测试控制的动态自动处理门禁。
+func (gate *mutableProcessingGate) Ready(context.Context) bool {
+	gate.mu.RLock()
+	defer gate.mu.RUnlock()
+	return gate.ready
+}
+
+// setReady 模拟模型或正式校准档案在运行期间变为可用。
+func (gate *mutableProcessingGate) setReady(ready bool) {
+	gate.mu.Lock()
+	gate.ready = ready
+	gate.mu.Unlock()
+}
+
 // ListRecoverableTrackIDs 首次返回固定恢复任务，后续返回空。
 func (source *fixedRecoverySource) ListRecoverableTrackIDs(context.Context, int) ([]string, error) {
 	source.mu.Lock()
@@ -97,6 +116,67 @@ func TestRunnerPool_RecoversPersistedTracksOnStart(t *testing.T) {
 	cancel()
 	if err := awaitPoolExit(t, done); err != nil {
 		t.Fatalf("停止恢复 RunnerPool 失败：%v", err)
+	}
+}
+
+// TestRunnerPool_PreservesPersistedTracksUntilGateReady 验证门禁缺失时不消费，恢复后由轮询处理原任务。
+func TestRunnerPool_PreservesPersistedTracksUntilGateReady(t *testing.T) {
+	processor := &blockingTrackProcessor{started: make(chan string, 1), release: make(chan struct{})}
+	recovery := &fixedRecoverySource{ids: []string{"waiting-track"}}
+	gate := &mutableProcessingGate{}
+	pool := NewRunnerPool(RunnerPoolDependencies{
+		Processor: processor, Recovery: recovery, Gate: gate,
+		Config: RunnerPoolConfig{WorkerCount: 1, QueueCapacity: 1, RecoveryBatch: 1},
+	})
+	poll := make(chan struct{}, 1)
+	wake := make(chan string, 1)
+	wake <- "waiting-track"
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- pool.Run(ctx, wake, poll) }()
+
+	select {
+	case trackID := <-processor.started:
+		t.Fatalf("门禁未就绪时不应处理任务：%s", trackID)
+	case <-time.After(50 * time.Millisecond):
+	}
+	gate.setReady(true)
+	poll <- struct{}{}
+	if got := awaitTrack(t, processor.started); got != "waiting-track" {
+		t.Fatalf("门禁恢复后的任务错误：%s", got)
+	}
+	close(processor.release)
+	cancel()
+	if err := awaitPoolExit(t, done); err != nil {
+		t.Fatalf("停止门禁 RunnerPool 失败：%v", err)
+	}
+}
+
+// TestRunnerPool_DeduplicatesQueuedTrack 验证 wake 与恢复同时提交同一 track 时只运行一个 worker。
+func TestRunnerPool_DeduplicatesQueuedTrack(t *testing.T) {
+	processor := &blockingTrackProcessor{started: make(chan string, 2), release: make(chan struct{})}
+	pool := NewRunnerPool(RunnerPoolDependencies{
+		Processor: processor, Recovery: &fixedRecoverySource{},
+		Config: RunnerPoolConfig{WorkerCount: 2, QueueCapacity: 2, RecoveryBatch: 2},
+	})
+	wake := make(chan string, 2)
+	wake <- "duplicate-track"
+	wake <- "duplicate-track"
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- pool.Run(ctx, wake, nil) }()
+	if got := awaitTrack(t, processor.started); got != "duplicate-track" {
+		t.Fatalf("首个 track 错误：%s", got)
+	}
+	select {
+	case duplicate := <-processor.started:
+		t.Fatalf("同一 track 不应并发重复处理：%s", duplicate)
+	case <-time.After(50 * time.Millisecond):
+	}
+	close(processor.release)
+	cancel()
+	if err := awaitPoolExit(t, done); err != nil {
+		t.Fatalf("停止去重 RunnerPool 失败：%v", err)
 	}
 }
 

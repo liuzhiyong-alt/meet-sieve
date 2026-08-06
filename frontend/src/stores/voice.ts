@@ -49,6 +49,7 @@ export const useVoiceStore = defineStore('voice', {
     loading: false,
     processing: false,
     errorMessage: '',
+    notice: '',
   }),
   actions: {
     /** open 从 Go/SQLite 恢复指定成员样本，并读取当前输入设备。 */
@@ -84,6 +85,7 @@ export const useVoiceStore = defineStore('voice', {
       if (!this.selectedToken) return false
       this.processing = true
       this.errorMessage = ''
+      this.notice = ''
       const result = await ProcessVoiceSample(
         this.memberId,
         environment,
@@ -100,6 +102,7 @@ export const useVoiceStore = defineStore('voice', {
       this.selectedToken = ''
       this.selectedFileName = ''
       await this.refreshSamples()
+      this.notice = '声纹样本已保存到本机。'
       return true
     },
     /** startRecording 打开选定麦克风并冻结成员、环境归属。 */
@@ -108,6 +111,7 @@ export const useVoiceStore = defineStore('voice', {
       environment: string,
     ): Promise<boolean> {
       this.errorMessage = ''
+      this.notice = ''
       this.startingRecording = true
       const result = await StartVoiceRecording(
         this.memberId,
@@ -145,6 +149,9 @@ export const useVoiceStore = defineStore('voice', {
         return false
       }
       await this.refreshSamples()
+      this.recordingLevel = 0
+      this.recordingDurationMS = 0
+      this.notice = '声纹样本已保存到本机。'
       return true
     },
     /** cancelRecording 丢弃当前录音，不创建样本。 */
@@ -188,10 +195,12 @@ export const useVoiceStore = defineStore('voice', {
       this.selectedToken = ''
       this.selectedFileName = ''
       this.errorMessage = ''
+      this.notice = ''
       this.recording = false
       this.startingRecording = false
       this.recordingLevel = 0
       this.recordingDurationMS = 0
+      this.processing = false
     },
   },
 })

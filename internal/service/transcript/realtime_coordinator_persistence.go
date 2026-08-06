@@ -11,6 +11,9 @@ import (
 	"gorm.io/gorm"
 )
 
+// sentCheckpointSamples 保持每两秒持久化一次实际发送边界，独立于启动缓冲容量。
+const sentCheckpointSamples int64 = 2 * transcriptdomain.SampleRate
+
 func (coordinator *RealtimeCoordinator) persistFinal(ctx context.Context, event port.TranscriptionEvent) error {
 	rangeValue, err := transcriptdomain.NewSampleRange(event.StartSample, event.EndSample)
 	if err != nil {
@@ -31,6 +34,40 @@ func (coordinator *RealtimeCoordinator) persistFinal(ctx context.Context, event 
 	return err
 }
 
+// finalPersistFailure 保留持久化错误的稳定码和可恢复性，避免把临时 SQLite 失败误判为永久不可用。
+func finalPersistFailure(err error) realtimeFailure {
+	appErr := apperr.Normalize(err)
+	if appErr == nil {
+		return realtimeFailure{code: apperr.CodeASREventPersistFailed.ErrorCode, retryable: true, reason: transcriptdomain.GapBackpressure}
+	}
+	return realtimeFailure{
+		code: appErr.ErrorCode, retryable: appErr.Retryable,
+		reason: transcriptdomain.GapBackpressure, cause: err,
+	}
+}
+
+// handleFinalPersistFailure 隔离单条无效 final；其他持久化失败仍交给重连协调器。
+func (coordinator *RealtimeCoordinator) handleFinalPersistFailure(event port.TranscriptionEvent, err error) {
+	appErr := apperr.Normalize(err)
+	if appErr == nil || appErr.ErrorCode != apperr.CodeASRFinalInvalid.ErrorCode {
+		coordinator.reportFailure(finalPersistFailure(err))
+		return
+	}
+	sampleRange, rangeErr := transcriptdomain.NewSampleRange(event.StartSample, event.EndSample)
+	if rangeErr != nil {
+		coordinator.reportFailure(finalPersistFailure(err))
+		return
+	}
+	sessionID := event.SessionID
+	_, persistErr := coordinator.dependencies.Events.PersistGap(context.Background(), GapInput{
+		MeetingID: coordinator.meetingID, ASRSessionID: &sessionID,
+		Range: sampleRange, Reason: transcriptdomain.GapInvalidFinal,
+	})
+	if persistErr != nil {
+		coordinator.reportFailure(finalPersistFailure(persistErr))
+	}
+}
+
 // advanceSent 更新内存精确边界，并每推进两秒 latest-wins 持久化检查点。
 func (coordinator *RealtimeCoordinator) advanceSent(current *physicalSession, sample int64) {
 	coordinator.mu.Lock()
@@ -39,7 +76,7 @@ func (coordinator *RealtimeCoordinator) advanceSent(current *physicalSession, sa
 		coordinator.lastSent = sample
 	}
 	coordinator.mu.Unlock()
-	if sample-previous < PCMQueueCapacitySamples && sample%PCMQueueCapacitySamples != 0 {
+	if sample-previous < sentCheckpointSamples && sample%sentCheckpointSamples != 0 {
 		return
 	}
 	now := coordinator.dependencies.Clock.Now().UnixMilli()
@@ -66,6 +103,12 @@ func (coordinator *RealtimeCoordinator) checkpointSent(current *physicalSession,
 
 // markStreaming 原子更新物理 session 与会议状态。
 func (coordinator *RealtimeCoordinator) markStreaming(current *physicalSession, providerSessionID string) {
+	coordinator.mu.Lock()
+	isCurrent := coordinator.current == current && current != nil && current.generation == coordinator.generation && !coordinator.stopping && !coordinator.unavailable
+	coordinator.mu.Unlock()
+	if !isCurrent {
+		return
+	}
 	now := coordinator.dependencies.Clock.Now().UnixMilli()
 	_ = coordinator.dependencies.Transactions.WithinTransaction(coordinator.ctx, func(tx *gorm.DB) error {
 		return coordinator.dependencies.Repository.MarkSessionStreaming(coordinator.ctx, tx, coordinator.meetingID, current.id, providerSessionID, now)

@@ -13,11 +13,14 @@ import (
 	domainfinalization "meet-sieve/internal/domain/finalization"
 	"meet-sieve/internal/infra/apperr"
 	"meet-sieve/internal/infra/clock"
+	"meet-sieve/internal/infra/database"
 	"meet-sieve/internal/infra/filesystem"
 	"meet-sieve/internal/infra/identity"
 	"meet-sieve/internal/port"
 	meetingrepository "meet-sieve/internal/repository/meeting"
 	"meet-sieve/models"
+
+	"gorm.io/gorm"
 )
 
 // DiskSpaceReader 返回指定路径所在卷当前可用字节数。
@@ -27,6 +30,7 @@ type DiskSpaceReader func(path string) (uint64, error)
 type RuntimeDependencies struct {
 	Meetings          *Service
 	Repository        *meetingrepository.Repository
+	Transactions      *database.TransactionManager
 	Coordinator       *RecordingCoordinator
 	Capture           port.AudioCapture
 	Clock             clock.Clock
@@ -56,6 +60,8 @@ type RuntimeDependencies struct {
 type MeetingTranscriptRuntime interface {
 	Start(ctx context.Context, meetingID string, mode string) error
 	TryAcceptFrame(frame port.AudioFrame) bool
+	Pause(ctx context.Context, meetingID string) (int64, error)
+	Resume(ctx context.Context, meetingID string) (int64, error)
 	Stop(ctx context.Context, meetingID string, recordingEndSample int64) error
 }
 
@@ -114,6 +120,7 @@ type StartMeetingInput struct {
 type RuntimeService struct {
 	meetings           *Service
 	repository         *meetingrepository.Repository
+	transactions       *database.TransactionManager
 	coordinator        *RecordingCoordinator
 	capture            port.AudioCapture
 	clock              clock.Clock
@@ -162,7 +169,8 @@ func NewRuntimeService(dependencies RuntimeDependencies) *RuntimeService {
 	}
 	return &RuntimeService{
 		meetings: dependencies.Meetings, repository: dependencies.Repository,
-		coordinator: dependencies.Coordinator, capture: dependencies.Capture, clock: dependencies.Clock, ids: dependencies.IDs,
+		transactions: dependencies.Transactions,
+		coordinator:  dependencies.Coordinator, capture: dependencies.Capture, clock: dependencies.Clock, ids: dependencies.IDs,
 		workspaceRoot: dependencies.WorkspaceRoot, availableBytes: dependencies.AvailableBytes,
 		minimumFreeBytes:   dependencies.MinimumFreeBytes,
 		persistedPCM:       dependencies.PersistedPCMObserver,
@@ -178,6 +186,108 @@ func NewRuntimeService(dependencies RuntimeDependencies) *RuntimeService {
 	}
 }
 
+// PauseForTurn 原子登记 ASR 投递暂停；本地录音继续写入，不得丢弃 PCM。
+func (service *RuntimeService) PauseForTurn(ctx context.Context, meetingID string, turnID string) error {
+	if service == nil || ctx == nil || meetingID == "" || turnID == "" || service.transactions == nil || service.repository == nil || service.coordinator == nil || service.transcript == nil || service.clock == nil || service.ids == nil {
+		return apperr.Dependency(apperr.CodeMeetingMediaPauseFailed, fmt.Errorf("媒体暂停依赖无效"), apperr.WithOp("meeting.media.pause.validate"))
+	}
+	now := service.clock.Now().UnixMilli()
+	pause := models.MeetingMediaPause{
+		ID: service.ids.New(), MeetingID: meetingID, AgentTurnID: turnID,
+		Reason: "agent_voice_turn", State: "pausing", StartedAt: now, CreatedAt: now, UpdatedAt: now,
+	}
+	if err := service.transactions.WithinTransaction(ctx, func(tx *gorm.DB) error {
+		return service.repository.CreateMediaPause(ctx, tx, pause)
+	}); err != nil {
+		return apperr.Dependency(apperr.CodeMeetingMediaPauseFailed, err, apperr.WithOp("meeting.media.pause.create"))
+	}
+	boundary, err := service.transcript.Pause(ctx, meetingID)
+	if err != nil {
+		service.recoverASRAfterPauseFailure(meetingID)
+		service.failMediaPause(turnID, apperr.CodeASRPauseDrainFailed.ErrorCode)
+		return apperr.Dependency(apperr.CodeASRPauseDrainFailed, err, apperr.WithOp("meeting.media.pause.asr"))
+	}
+	if err = service.transactions.WithinTransaction(ctx, func(tx *gorm.DB) error {
+		return service.repository.MarkMediaPaused(ctx, tx, turnID, boundary, boundary, service.clock.Now().UnixMilli())
+	}); err != nil {
+		service.recoverASRAfterPauseFailure(meetingID)
+		service.failMediaPause(turnID, apperr.CodeMeetingMediaPauseFailed.ErrorCode)
+		return apperr.Dependency(apperr.CodeMeetingMediaPauseFailed, err, apperr.WithOp("meeting.media.pause.commit"))
+	}
+	return nil
+}
+
+// ResumeAfterTurn 在 turn 终态后恢复新的 ASR session；本地录音在整个期间持续写入。
+func (service *RuntimeService) ResumeAfterTurn(ctx context.Context, meetingID string, turnID string) error {
+	if service == nil || ctx == nil || meetingID == "" || turnID == "" {
+		return apperr.Dependency(apperr.CodeMeetingMediaResumeFailed, fmt.Errorf("媒体恢复参数无效"), apperr.WithOp("meeting.media.resume.validate"))
+	}
+	meeting, err := service.repository.GetMeeting(ctx, meetingID)
+	if err != nil {
+		return apperr.Dependency(apperr.CodeMeetingMediaResumeFailed, err, apperr.WithOp("meeting.media.resume.meeting"))
+	}
+	if meeting.LifecycleState != "recording" {
+		return service.FinalizePausedTurn(ctx, meetingID, turnID)
+	}
+	if _, boundaryErr := service.currentPauseBoundary(ctx, turnID); boundaryErr != nil {
+		service.failMediaPause(turnID, apperr.CodeMeetingMediaResumeFailed.ErrorCode)
+		return apperr.Dependency(apperr.CodeMeetingMediaResumeFailed, boundaryErr, apperr.WithOp("meeting.media.resume.pause_fact"))
+	}
+	resumeBoundary, asrErr := service.transcript.Resume(ctx, meetingID)
+	if asrErr != nil {
+		service.failMediaPause(turnID, apperr.CodeMeetingMediaResumeFailed.ErrorCode)
+		return apperr.Dependency(apperr.CodeMeetingMediaResumeFailed, asrErr, apperr.WithOp("meeting.media.resume.asr"))
+	}
+	completeErr := service.transactions.WithinTransaction(ctx, func(tx *gorm.DB) error {
+		return service.repository.CompleteMediaPause(ctx, tx, turnID, resumeBoundary, 0, service.clock.Now().UnixMilli())
+	})
+	if completeErr != nil {
+		return apperr.Dependency(apperr.CodeMeetingMediaResumeFailed, completeErr, apperr.WithOp("meeting.media.resume.commit"))
+	}
+	return nil
+}
+
+// FinalizePausedTurn 在会议收尾竞态下关闭暂停事实但不重新打开录音门。
+func (service *RuntimeService) FinalizePausedTurn(ctx context.Context, _ string, turnID string) error {
+	if service == nil || service.transactions == nil || turnID == "" {
+		return nil
+	}
+	now := service.clock.Now().UnixMilli()
+	return service.transactions.WithinTransaction(ctx, func(tx *gorm.DB) error {
+		return service.repository.FailMediaPause(ctx, tx, turnID, apperr.CodeAgentTurnCancelled.ErrorCode, now)
+	})
+}
+
+// currentPauseBoundary 读取已确认逻辑边界；读取失败时返回 0 并让后续恢复返回稳定错误。
+func (service *RuntimeService) currentPauseBoundary(ctx context.Context, turnID string) (int64, error) {
+	pause, err := service.repository.GetMediaPause(ctx, turnID)
+	if err != nil {
+		return 0, fmt.Errorf("读取媒体暂停边界失败：%w", err)
+	}
+	if pause.LogicalSample == nil {
+		return 0, fmt.Errorf("媒体暂停边界尚未确认")
+	}
+	return *pause.LogicalSample, nil
+}
+
+// recoverASRAfterPauseFailure 在 Codex 启动前尽力恢复实时转写；本地录音从未暂停。
+func (service *RuntimeService) recoverASRAfterPauseFailure(meetingID string) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	_, _ = service.transcript.Resume(ctx, meetingID)
+}
+
+// failMediaPause 尽力收口失败事实，原始 cause 由调用方返回并记录。
+func (service *RuntimeService) failMediaPause(turnID string, errorCode string) {
+	if service == nil || service.transactions == nil {
+		return
+	}
+	now := service.clock.Now().UnixMilli()
+	_ = service.transactions.WithinTransaction(context.Background(), func(tx *gorm.DB) error {
+		return service.repository.FailMediaPause(context.Background(), tx, turnID, errorCode, now)
+	})
+}
+
 // MicrophoneState 返回录音运行时的真实麦克风状态，不根据页面计时猜测。
 func (service *RuntimeService) MicrophoneState() string {
 	if service == nil || service.coordinator == nil {
@@ -187,6 +297,18 @@ func (service *RuntimeService) MicrophoneState() string {
 		return "capturing"
 	}
 	return "stopped"
+}
+
+// RealtimeASRState 用持久化媒体暂停事实覆盖瞬时 ASR 状态，供页面刷新后稳定重建。
+func (service *RuntimeService) RealtimeASRState(ctx context.Context, meetingID string, fallback string) string {
+	if service == nil || service.repository == nil || ctx == nil || meetingID == "" {
+		return fallback
+	}
+	paused, err := service.repository.HasActiveMediaPause(ctx, meetingID)
+	if err == nil && paused {
+		return "paused_for_ai"
+	}
+	return fallback
 }
 
 // EndMeeting 幂等执行唯一安全收尾；并发调用复用同一结果。

@@ -12,11 +12,71 @@ import (
 	"meet-sieve/internal/infra/clock"
 	"meet-sieve/internal/infra/database"
 	"meet-sieve/internal/infra/identity"
+	"meet-sieve/internal/port"
 	transcriptrepository "meet-sieve/internal/repository/transcript"
 	"meet-sieve/models"
 
 	"gorm.io/gorm"
 )
+
+// TestEventService_CommandCandidateIsHiddenUntilReleased 验证指令用途与 final 原子提交且所有转写投影排除候选。
+func TestEventService_CommandCandidateIsHiddenUntilReleased(t *testing.T) {
+	service, db := newEventServiceForTest(t,
+		"33333333-3333-4333-8333-333333333333", "44444444-4444-4444-8444-444444444444",
+		"55555555-5555-4555-8555-555555555555",
+	)
+	projectionInvalidated := false
+	classifier := &candidateClassifier{projectionInvalidated: &projectionInvalidated}
+	service.classifier = classifier
+	service.onPersisted = func(string, PersistedEvent) { projectionInvalidated = true }
+	created, err := service.PersistFinal(context.Background(), FinalInput{
+		MeetingID: testMeetingID, ASRSessionID: testSessionID, ProviderResultID: "voice-command",
+		Text: "哈喽，会议助手，上面都说什么了？", Range: mustSampleRange(t, 0, 16000), LastSentSample: 64000,
+	})
+	if err != nil {
+		t.Fatalf("持久化语音指令 final 失败：%v", err)
+	}
+	if classifier.committed != created.EntityID || classifier.rolledBack != "" || !classifier.commitAfterNotification {
+		t.Fatalf("分类事务结果错误：%+v", classifier)
+	}
+	var relation models.AgentVoiceCommandUtterance
+	if err = db.Where("utterance_id = ?", created.EntityID).Take(&relation).Error; err != nil || relation.State != "candidate" {
+		t.Fatalf("候选关系未与 final 原子提交：relation=%+v err=%v", relation, err)
+	}
+	repository := transcriptrepository.NewRepository(db)
+	entries, err := NewTimelineService(repository).List(context.Background(), testMeetingID, 0, 100)
+	if err != nil || len(entries) != 0 {
+		t.Fatalf("候选指令不得进入转写时间线：entries=%+v err=%v", entries, err)
+	}
+	rows, err := repository.LoadRawRecordRows(context.Background(), testMeetingID)
+	if err != nil || len(rows) != 0 {
+		t.Fatalf("候选指令不得进入原始记录：rows=%+v err=%v", rows, err)
+	}
+	if err = db.Model(&models.AgentVoiceCommandUtterance{}).Where("id = ?", relation.ID).Update("state", "released").Error; err != nil {
+		t.Fatal(err)
+	}
+	entries, err = NewTimelineService(repository).List(context.Background(), testMeetingID, 0, 100)
+	if err != nil || len(entries) != 1 || entries[0].Text != "哈喽，会议助手，上面都说什么了？" {
+		t.Fatalf("释放后必须恢复普通发言：entries=%+v err=%v", entries, err)
+	}
+}
+
+type candidateClassifier struct {
+	committed               string
+	rolledBack              string
+	projectionInvalidated   *bool
+	commitAfterNotification bool
+}
+
+func (classifier *candidateClassifier) PrepareFinal(_ context.Context, candidate port.TranscriptFinalCandidate) port.TranscriptFinalClassification {
+	return port.TranscriptFinalClassification{Token: candidate.UtteranceID, CommandID: candidate.UtteranceID, Position: 0, Candidate: true}
+}
+
+func (classifier *candidateClassifier) CommitFinal(token string) {
+	classifier.committed = token
+	classifier.commitAfterNotification = classifier.projectionInvalidated != nil && *classifier.projectionInvalidated
+}
+func (classifier *candidateClassifier) RollbackFinal(token string) { classifier.rolledBack = token }
 
 const (
 	testMeetingID = "11111111-1111-4111-8111-111111111111"
@@ -124,6 +184,16 @@ func TestTimelineServiceListsFinalAndGapByCursor(t *testing.T) {
 	after, err := timeline.List(context.Background(), testMeetingID, 1, 100)
 	if err != nil || len(after) != 1 || after[0].Seq != 2 {
 		t.Fatalf("Timeline afterSeq 错误：%+v err=%v", after, err)
+	}
+}
+
+// TestEventOccurredAtRestoresDiscardedWallTime 验证逻辑样本压缩后仍能映射回真实会议墙钟时间。
+func TestEventOccurredAtRestoresDiscardedWallTime(t *testing.T) {
+	startedAt := int64(1_000)
+	meeting := models.Meeting{StartedAt: &startedAt}
+	occurredAt := eventOccurredAt(meeting, mustSampleRange(t, 16_000, 32_000), 32_000)
+	if occurredAt != 4_000 {
+		t.Fatalf("暂停样本墙钟映射错误：got=%d want=4000", occurredAt)
 	}
 }
 

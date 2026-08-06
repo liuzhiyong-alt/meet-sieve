@@ -62,7 +62,7 @@ func TestStep9LifecycleBindingsExposeFrozenMethods(t *testing.T) {
 		Type    reflect.Type
 		Methods []string
 	}{
-		{reflect.TypeOf((*wailstransport.DeletionBinding)(nil)), []string{"PreviewRecordingDeletion", "DeleteRecording", "PreviewMeetingDeletion", "DeleteMeeting", "GetDeletionJob", "RetryDeletion"}},
+		{reflect.TypeOf((*wailstransport.DeletionBinding)(nil)), []string{"PreviewMeetingDeletion", "DeleteMeeting", "GetDeletionJob", "RetryDeletion"}},
 		{reflect.TypeOf((*wailstransport.DiagnosticBinding)(nil)), []string{"StartStorageScan", "GetStorageScan", "ExportGlobalDiagnostic", "ExportMeetingDiagnostic", "OpenLogDirectory"}},
 		{reflect.TypeOf((*wailstransport.ResourceBinding)(nil)), []string{"OpenResource", "RevealResource", "OpenExternalLink"}},
 	}
@@ -71,6 +71,12 @@ func TestStep9LifecycleBindingsExposeFrozenMethods(t *testing.T) {
 			if _, found := binding.Type.MethodByName(method); !found {
 				t.Fatalf("Step 9 Binding 缺少方法 %s", method)
 			}
+		}
+	}
+	deletionType := reflect.TypeOf((*wailstransport.DeletionBinding)(nil))
+	for _, forbidden := range []string{"PreviewRecordingDeletion", "DeleteRecording"} {
+		if _, found := deletionType.MethodByName(forbidden); found {
+			t.Fatalf("删除 Binding 不应继续暴露仅删除录音的新入口 %s", forbidden)
 		}
 	}
 }

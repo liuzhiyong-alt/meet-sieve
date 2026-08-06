@@ -47,10 +47,16 @@ func TestVerifyResources_RejectsVoiceModel(t *testing.T) {
 	t.Parallel()
 
 	directory := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(directory, "models"), 0o700); err != nil {
+		t.Fatalf("创建测试资源目录失败：%v", err)
+	}
 	for _, filename := range []string{"onnxruntime.dll", "ONNXRUNTIME-LICENSE.txt", "campplus.onnx"} {
 		if err := os.WriteFile(filepath.Join(directory, filename), []byte("asset"), 0o600); err != nil {
 			t.Fatalf("写入测试资源失败：%v", err)
 		}
+	}
+	if err := os.WriteFile(filepath.Join(directory, "models", "voice-matching-profile.json"), []byte("profile"), 0o600); err != nil {
+		t.Fatalf("写入测试 profile 失败：%v", err)
 	}
 	if err := verifyResources(directory); err == nil || !strings.Contains(err.Error(), "声纹模型") {
 		t.Fatalf("资源目录内置模型应被拒绝：%v", err)
@@ -71,4 +77,5 @@ FunctionEnd
 Function un.onInit
     !insertmacro EnsureMeetSieveNotRunning
 FunctionEnd
+File "/oname=voice-matching-profile.json" "voice-matching-profile.json"
 `

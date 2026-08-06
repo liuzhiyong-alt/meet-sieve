@@ -34,6 +34,51 @@ type lazySpeakerProcessor struct {
 	onChanged    func(meetingID string, trackID string)
 }
 
+// lazyContinuityProcessor 为每条 pending evidence 动态读取模型/profile 并执行短窗路由。
+type lazyContinuityProcessor struct {
+	voice        *VoiceModule
+	repository   *speakerrepository.Repository
+	transactions *database.TransactionManager
+	audio        speakerservice.EvidenceAudioReader
+	clock        clock.Clock
+	onRouted     func(meetingID string, trackID string, projectionChanged bool)
+}
+
+// Ready 仅在模型和带 continuity 的 schema v2 档案均可用时消费任务。
+func (processor *lazyContinuityProcessor) Ready(context.Context) bool {
+	if processor == nil || processor.voice == nil {
+		return false
+	}
+	_, profile, err := processor.voice.speakerAutomation()
+	return err == nil && profile.Continuity != nil
+}
+
+// Process 创建短生命周期 ContinuityRouter，保证模型热切换后读取最新合法依赖。
+func (processor *lazyContinuityProcessor) Process(ctx context.Context, evidenceID string, finalizing bool) error {
+	if processor == nil || processor.voice == nil {
+		return apperr.Biz(apperr.CodeSpeakerModelUnavailable, apperr.WithOp("speaker.continuity.voice"))
+	}
+	encoder, profile, err := processor.voice.speakerAutomation()
+	if err != nil {
+		return err
+	}
+	router := speakerservice.NewContinuityRouter(speakerservice.ContinuityRouterDependencies{
+		Repository: processor.repository, Transactions: processor.transactions, Audio: processor.audio,
+		Encoder: encoder, Profile: profile, IDs: identity.NewUUIDGenerator(), Clock: processor.clock,
+		OnRouted: processor.onRouted,
+	})
+	return router.Process(ctx, evidenceID, finalizing)
+}
+
+// Ready 动态检查模型和正式校准档案；未就绪时不消费可恢复的 SQLite 任务。
+func (processor *lazySpeakerProcessor) Ready(context.Context) bool {
+	if processor == nil || processor.voice == nil {
+		return false
+	}
+	state, _ := processor.voice.speakerAutomationStatus()
+	return state == string(speakerdomain.AutomationReady)
+}
+
 // Process 只在模型与真实校准档案均就绪时创建一次短生命周期 Runner。
 func (processor *lazySpeakerProcessor) Process(ctx context.Context, trackID string, finalizing bool) error {
 	if processor == nil || processor.voice == nil {
@@ -71,9 +116,12 @@ func (module *VoiceModule) speakerAutomation() (port.VoiceEncoder, speakerdomain
 
 // speakerAutomationStatus 把动态模型/profile 门禁转换为独立 UI 状态。
 func (module *VoiceModule) speakerAutomationStatus() (string, string) {
-	_, _, err := module.speakerAutomation()
-	if err == nil {
+	_, profile, err := module.speakerAutomation()
+	if err == nil && profile.Continuity != nil {
 		return string(speakerdomain.AutomationReady), ""
+	}
+	if err == nil {
+		return string(speakerdomain.AutomationProfileMismatch), apperr.CodeSpeakerProfileMismatch.ErrorCode
 	}
 	var appError *apperr.AppError
 	if errors.As(err, &appError) {

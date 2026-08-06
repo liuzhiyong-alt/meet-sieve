@@ -63,10 +63,20 @@ export interface WakeTestEnvelope {
   }
 }
 
+export interface WakeCommandEnvelope {
+  data?: {
+    meeting_id: string
+    state: string
+    error_code?: string
+    revision: number
+  }
+}
+
 /** normalizeSettings 补齐 Wails 可选字段，保持 Pinia 状态形状稳定。 */
 function normalizeSettings(value: {
   wake_word: string
   codex_executable_path: string
+  probed_at: number
   updated_at: number
   availability: {
     state: string
@@ -114,6 +124,7 @@ export const useAgentStore = defineStore('agent', {
     settings: {
       wake_word: 'AI 助手',
       codex_executable_path: '',
+      probed_at: 0,
       updated_at: 0,
       availability: {
         state: 'unchecked',
@@ -130,12 +141,19 @@ export const useAgentStore = defineStore('agent', {
       asr_state: 'idle',
       error_code: '',
     },
+    wakeCommand: {
+      meeting_id: '',
+      state: 'idle',
+      error_code: '',
+      revision: 0,
+    },
     loading: false,
     saving: false,
     probing: false,
     retrying: false,
     asking: false,
     errorMessage: '',
+    wakeTestError: '',
     notice: '',
   }),
   getters: {
@@ -199,6 +217,12 @@ export const useAgentStore = defineStore('agent', {
       if (this.meetingID !== meetingID) {
         this.meetingID = meetingID
         this.timeline = []
+        this.wakeCommand = {
+          meeting_id: meetingID,
+          state: 'idle',
+          error_code: '',
+          revision: 0,
+        }
       }
       const result = await GetAgentState(meetingID)
       if (result.code !== 200 || !result.data) {
@@ -278,13 +302,19 @@ export const useAgentStore = defineStore('agent', {
     },
     /** startWakeTest 启动真实 ASR 三次测试。 */
     async startWakeTest(): Promise<void> {
+      this.wakeTestError = ''
       const result = await StartWakeWordTest()
-      if (result.code !== 200 || !result.data)
+      if (result.code !== 200 || !result.data) {
         this.errorMessage = result.message
-      else this.wakeTest = normalizeWakeTest(result.data)
+        this.wakeTestError =
+          result.errorCode === 'MEETING_AUDIO_PERMISSION_DENIED'
+            ? `${result.message}。请在系统隐私设置中允许 MeetSieve 使用麦克风后重试。`
+            : result.message
+      } else this.wakeTest = normalizeWakeTest(result.data)
     },
     /** stopWakeTest 停止并等待麦克风和 ASR 释放。 */
     async stopWakeTest(): Promise<void> {
+      this.wakeTestError = ''
       const result = await StopWakeWordTest()
       if (result.code !== 200 || !result.data)
         this.errorMessage = result.message
@@ -326,6 +356,17 @@ export const useAgentStore = defineStore('agent', {
           ...event.data,
           error_code: event.data.error_code ?? '',
         }
+    },
+    /** applyWakeCommandEvent 合并不含指令文本的会中唤醒状态。 */
+    applyWakeCommandEvent(event: WakeCommandEnvelope): void {
+      const data = event.data
+      if (
+        !data ||
+        data.meeting_id !== this.meetingID ||
+        data.revision <= this.wakeCommand.revision
+      )
+        return
+      this.wakeCommand = { ...data, error_code: data.error_code ?? '' }
     },
   },
 })

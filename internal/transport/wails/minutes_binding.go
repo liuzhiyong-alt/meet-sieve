@@ -9,18 +9,26 @@ import (
 	"meet-sieve/models"
 )
 
-// MinutesServices 是纪要查询、生成和版本命令集合。
+// MinutesServices 是纪要查询、生成、设置和底层兼容命令集合。
 type MinutesServices struct {
 	Repository *minutesrepository.Repository
 	Generation *minutesservice.GenerationService
+	Settings   *minutesservice.SettingsService
 	Versions   *minutesservice.VersionService
 	Projector  *minutesservice.MinuteProjector
+}
+
+// MinutesSettingsDTO 是会议纪要要求设置的独立契约。
+type MinutesSettingsDTO struct {
+	Prompt    string `json:"prompt"`
+	IsDefault bool   `json:"is_default"`
+	UpdatedAt int64  `json:"updated_at"`
 }
 
 // MinutesServiceProvider 返回当前工作目录的纪要服务。
 type MinutesServiceProvider func() (MinutesServices, error)
 
-// MinutesBinding 暴露用户主动生成和不可变版本操作。
+// MinutesBinding 暴露单份纪要交互；版本命令只保留给旧调用兼容。
 type MinutesBinding struct {
 	services MinutesServiceProvider
 	context  ContextProvider
@@ -48,6 +56,35 @@ func (binding *MinutesBinding) GetMinutesState(meetingID string) Result[MinutesS
 		}
 		return mapMinutesState(meetingID, record, services.Generation.State(), services.Projector.State(meetingID)), nil
 	})
+}
+
+// GetMinutesSettings 返回生成会议纪要时使用的业务要求。
+func (binding *MinutesBinding) GetMinutesSettings() Result[MinutesSettingsDTO] {
+	return Invoke(binding.boundary, "wails.minutes.settings.get", func(string) (MinutesSettingsDTO, error) {
+		services, err := binding.services()
+		if err != nil {
+			return MinutesSettingsDTO{}, err
+		}
+		view, err := services.Settings.Get(context.Background())
+		return mapMinutesSettings(view), err
+	})
+}
+
+// SaveMinutesSettings 独立保存业务要求；空内容表示恢复默认要求。
+func (binding *MinutesBinding) SaveMinutesSettings(prompt string) Result[MinutesSettingsDTO] {
+	return Invoke(binding.boundary, "wails.minutes.settings.save", func(string) (MinutesSettingsDTO, error) {
+		services, err := binding.services()
+		if err != nil {
+			return MinutesSettingsDTO{}, err
+		}
+		view, err := services.Settings.Save(context.Background(), prompt)
+		return mapMinutesSettings(view), err
+	})
+}
+
+// mapMinutesSettings 显式转换设置服务投影。
+func mapMinutesSettings(view minutesservice.SettingsView) MinutesSettingsDTO {
+	return MinutesSettingsDTO{Prompt: view.Prompt, IsDefault: view.IsDefault, UpdatedAt: view.UpdatedAt}
 }
 
 // GenerateMinutes 同步运行用户主动生成；前端 Promise 可用 Stop 并发取消。

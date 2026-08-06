@@ -10,7 +10,7 @@ BUILD_MODE ?= production
 BUILD_COMMIT := $(shell git rev-parse --short=12 HEAD)
 BUILD_TIME := $(shell date -u '+%Y-%m-%dT%H:%M:%SZ')
 
-.PHONY: bootstrap assets dev fmt lint typecheck test test-race test-contract test-asr-real smoke build build-windows-amd64 package-windows verify-package clean
+.PHONY: bootstrap assets calibrate-voice verify-voice-profile dev fmt lint typecheck test test-race test-contract test-asr-real guest-embed smoke build build-windows-amd64 package-windows verify-package clean
 
 # bootstrap 安装 mise 声明的工具并按 lockfile 恢复前端依赖。
 bootstrap:
@@ -23,9 +23,23 @@ bootstrap:
 assets:
 	mise exec -- go run ./buildtools/cmd/assets -all
 
+# calibrate-voice 仅接受显式真实数据和本机已锁资源，验收通过后才写正式档案。
+calibrate-voice:
+	test -n "$(VOICE_CALIBRATION_MANIFEST)"
+	test -n "$(VOICE_MODEL_PATH)"
+	test -n "$(VOICE_RUNTIME_PATH)"
+	mise exec -- go run ./buildtools/cmd/calibratevoice \
+		-manifest "$(VOICE_CALIBRATION_MANIFEST)" \
+		-model "$(VOICE_MODEL_PATH)" \
+		-runtime "$(VOICE_RUNTIME_PATH)"
+
 # dev 从 Wails 配置所在目录启动本地桌面开发环境。
 dev:
 	cd cmd/meetsieve && GOCACHE="$(GOCACHE)" $(WAILS_COMMAND) dev -nocolour
+
+# verify-voice-profile 阻止缺少真实校准记录或模型身份不匹配的发布构建。
+verify-voice-profile:
+	mise exec -- go run ./buildtools/cmd/verifyvoiceprofile
 
 # fmt 仅格式化项目源码和前端配置，不触碰依赖或构建产物。
 fmt:
@@ -62,15 +76,22 @@ test-asr-real:
 	test -n "$$MEETSIEVE_VOLC_API_KEY"
 	mise exec -- go test -tags=asrreal -v ./tests/e2e/asr -count=1
 
+# guest-embed 验证构建产物会同步到 Go embed 目录，防止二进制丢失 /join 访客入口。
+guest-embed:
+	mise exec -- pnpm --dir frontend build:guest
+	mise exec -- pnpm --dir frontend build:embed
+	test -f cmd/meetsieve/frontend/dist/guest/guest.html
+
 # build 生成当前 macOS arm64 的 Wails production 应用包。
-build: assets
+build: assets verify-voice-profile
 	cd cmd/meetsieve && GOCACHE="$(GOCACHE)" $(WAILS_COMMAND) build -m -nocolour -trimpath \
 		-ldflags "-X meet-sieve/internal/app/buildinfo.Version=$(BUILD_VERSION) -X meet-sieve/internal/app/buildinfo.Commit=$(BUILD_COMMIT) -X meet-sieve/internal/app/buildinfo.BuildTime=$(BUILD_TIME) -X meet-sieve/internal/app/buildinfo.BuildMode=$(BUILD_MODE)"
 	LC_ALL=C perl -0pi -e 's/[ \t]+$$//mg; s/\n+\z/\n/' frontend/wailsjs/go/models.ts
 	mkdir -p build/bin/MeetSieve.app/Contents/Resources/lib
 	cp .cache/third_party/extracted/darwin-arm64/onnxruntime-osx-arm64-1.26.0/lib/libonnxruntime.1.26.0.dylib build/bin/MeetSieve.app/Contents/Resources/lib/
 	cp .cache/third_party/extracted/darwin-arm64/onnxruntime-osx-arm64-1.26.0/LICENSE build/bin/MeetSieve.app/Contents/Resources/ONNXRUNTIME-LICENSE.txt
-	if test -f models/voice-matching-profile.json; then mkdir -p build/bin/MeetSieve.app/Contents/Resources/models; cp models/voice-matching-profile.json build/bin/MeetSieve.app/Contents/Resources/models/; fi
+	mkdir -p build/bin/MeetSieve.app/Contents/Resources/models
+	cp models/voice-matching-profile.json build/bin/MeetSieve.app/Contents/Resources/models/
 	codesign --force --deep --sign - build/bin/MeetSieve.app
 
 # smoke 运行真实音频、ONNX、Codex smoke，并确认 production .app 能保持启动后正常退出。
@@ -91,8 +112,9 @@ smoke: assets
 			grep -q '"msg":"Wails event round-trip completed".*"payload":"step0-smoke"'
 
 # build-windows-amd64 在固定 Docker 工具链中生成包含 CGO 依赖的 GUI PE。
-build-windows-amd64: assets
+build-windows-amd64: assets verify-voice-profile guest-embed
 	mise exec -- pnpm --dir frontend build
+	mise exec -- pnpm --dir frontend build:embed
 	docker build --platform linux/amd64 -t $(WINDOWS_IMAGE) buildtools/windows
 	mkdir -p .cache/windows-go-build .cache/windows-go-mod
 	docker run --rm --platform linux/amd64 \
@@ -108,8 +130,9 @@ build-windows-amd64: assets
 		$(WINDOWS_IMAGE)
 
 # package-windows 使用同一固定镜像生成包含动态库和许可证的 NSIS 壳。
-package-windows: assets
+package-windows: assets verify-voice-profile guest-embed
 	mise exec -- pnpm --dir frontend build
+	mise exec -- pnpm --dir frontend build:embed
 	docker build --platform linux/amd64 -t $(WINDOWS_IMAGE) buildtools/windows
 	mkdir -p .cache/windows-go-build .cache/windows-go-mod
 	docker run --rm --platform linux/amd64 \

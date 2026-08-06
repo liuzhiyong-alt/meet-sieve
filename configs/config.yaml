@@ -20,10 +20,10 @@ recording:
   first_frame_timeout_seconds: 5
   minimum_free_space_gib: 1
 asr:
-  endpoint: wss://openspeech.bytedance.com/api/v3/sauc/bigmodel
+  endpoint: wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async
   resource_id: volc.seedasr.sauc.duration
   connect_timeout_seconds: 10
-  pcm_queue_samples: 32000
+  pcm_queue_samples: 240000
   final_queue_capacity: 128
   final_persist_timeout_seconds: 5
   tail_timeout_seconds: 15

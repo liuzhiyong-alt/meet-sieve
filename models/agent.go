@@ -40,6 +40,22 @@ type AgentTurn struct {
 // TableName 返回 AgentTurn 的显式数据库表名。
 func (AgentTurn) TableName() string { return "agent_turns" }
 
+// AgentVoiceCommandUtterance 映射一条语音指令对持久 ASR final 的用途关系。
+type AgentVoiceCommandUtterance struct {
+	ID          string  `gorm:"column:id"`
+	MeetingID   string  `gorm:"column:meeting_id"`
+	CommandID   string  `gorm:"column:command_id"`
+	UtteranceID string  `gorm:"column:utterance_id"`
+	AgentTurnID *string `gorm:"column:agent_turn_id"`
+	Position    int     `gorm:"column:position"`
+	State       string  `gorm:"column:state"`
+	CreatedAt   int64   `gorm:"column:created_at"`
+	UpdatedAt   int64   `gorm:"column:updated_at"`
+}
+
+// TableName 返回 AgentVoiceCommandUtterance 的显式数据库表名。
+func (AgentVoiceCommandUtterance) TableName() string { return "agent_voice_command_utterances" }
+
 // SyncBatch 映射同步到 Codex 的事件批次。
 type SyncBatch struct {
 	ID             string  `gorm:"column:id"`

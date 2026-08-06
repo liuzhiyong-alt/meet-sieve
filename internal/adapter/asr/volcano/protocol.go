@@ -20,6 +20,7 @@ const (
 
 	flagNoSequence       = 0x0
 	flagPositiveSequence = 0x1
+	flagLastPacket       = 0x2
 	flagNegativeSequence = 0x3
 
 	serializationNone = 0x0
@@ -45,24 +46,20 @@ func EncodeFullClientRequest(payload []byte) ([]byte, error) {
 	return encodePayloadFrame(messageFullClientRequest, flagNoSequence, serializationJSON, compressionGzip, nil, compressed), nil
 }
 
-// EncodeAudioOnlyRequest 编码有序 PCM 音频帧；last 会使用负序号明确结束输入。
-func EncodeAudioOnlyRequest(sequence int32, last bool, pcm []byte) ([]byte, error) {
-	if sequence <= 0 || len(pcm) == 0 {
+// EncodeAudioOnlyRequest 编码优化流式端点的无序号 PCM 帧；last 使用空尾包结束输入。
+func EncodeAudioOnlyRequest(last bool, pcm []byte) ([]byte, error) {
+	if (!last && len(pcm) == 0) || (last && len(pcm) != 0) {
 		return nil, fmt.Errorf("audio only request 参数无效")
 	}
 	compressed, err := gzipPayload(pcm)
 	if err != nil {
 		return nil, fmt.Errorf("压缩 audio only request 失败：%w", err)
 	}
-	flag := byte(flagPositiveSequence)
-	wireSequence := sequence
+	flag := byte(flagNoSequence)
 	if last {
-		flag = flagNegativeSequence
-		wireSequence = -sequence
+		flag = flagLastPacket
 	}
-	sequenceBytes := make([]byte, 4)
-	binary.BigEndian.PutUint32(sequenceBytes, uint32(wireSequence))
-	return encodePayloadFrame(messageAudioOnlyRequest, flag, serializationNone, compressionGzip, sequenceBytes, compressed), nil
+	return encodePayloadFrame(messageAudioOnlyRequest, flag, serializationNone, compressionGzip, nil, compressed), nil
 }
 
 // DecodeServerFrame 严格解析 full response、ACK 和 error，未知类型或截断长度直接失败。
@@ -77,7 +74,11 @@ func DecodeServerFrame(data []byte) (ServerFrame, error) {
 	}
 	switch header.messageType {
 	case messageFullServerResponse:
-		frame.Sequence, frame.Payload, err = decodeSequencedPayload(body, header.compression)
+		if header.flags == flagNoSequence {
+			frame.Payload, err = decodeUnsequencedPayload(body, header.compression)
+		} else {
+			frame.Sequence, frame.Payload, err = decodeSequencedPayload(body, header.compression)
+		}
 	case messageServerACK:
 		frame.Sequence, frame.Payload, err = decodeACK(body, header.compression)
 	case messageServerError:
@@ -95,7 +96,7 @@ func DecodeServerFrame(data []byte) (ServerFrame, error) {
 func validateServerFlags(header frameHeader) error {
 	switch header.messageType {
 	case messageFullServerResponse:
-		if header.flags != flagPositiveSequence && header.flags != flagNegativeSequence {
+		if header.flags != flagNoSequence && header.flags != flagPositiveSequence && header.flags != flagNegativeSequence {
 			return fmt.Errorf("火山响应 sequence flag 不兼容")
 		}
 	case messageServerACK:
@@ -108,6 +109,15 @@ func validateServerFlags(header frameHeader) error {
 		}
 	}
 	return nil
+}
+
+// decodeUnsequencedPayload 解析优化流式端点不携带 sequence 的响应正文。
+func decodeUnsequencedPayload(body []byte, compression byte) ([]byte, error) {
+	payload, err := decodeSizedPayload(body)
+	if err != nil {
+		return nil, err
+	}
+	return decompressPayload(payload, compression)
 }
 
 type frameHeader struct {

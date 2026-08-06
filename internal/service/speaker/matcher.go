@@ -168,3 +168,16 @@ func dotProduct(left port.Embedding, right port.Embedding) float64 {
 	}
 	return result
 }
+
+// CosineSimilarity 规范化两个 embedding 后计算 cosine，供连续性路由和校准共用。
+func CosineSimilarity(left port.Embedding, right port.Embedding, dimension int) (float64, error) {
+	normalizedLeft, err := normalizeEmbedding(left, dimension)
+	if err != nil {
+		return 0, err
+	}
+	normalizedRight, err := normalizeEmbedding(right, dimension)
+	if err != nil {
+		return 0, err
+	}
+	return dotProduct(normalizedLeft, normalizedRight), nil
+}

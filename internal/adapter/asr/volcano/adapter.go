@@ -17,6 +17,12 @@ import (
 
 const adapterEventCapacity = 128
 
+const maxTimestampToleranceSamples int64 = 16000 / 5
+
+const audioPacketSamples int64 = 16000 / 5
+
+const audioPacketBytes = int(audioPacketSamples * 2)
+
 // AdapterConfig 描述火山实时 ASR adapter 的固定连接参数和当前凭据。
 type AdapterConfig struct {
 	Endpoint       string
@@ -64,14 +70,31 @@ func (adapter *Adapter) Start(ctx context.Context, request port.RealtimeTranscri
 		_ = connection.Close()
 		return nil, apperr.Dependency(apperr.CodeASRProtocolIncompatible, err, apperr.WithOp("asr.volcano.initial_encode"))
 	}
-	if err = connection.WriteMessage(websocket.BinaryMessage, initialFrame); err != nil {
+	if err = writeInitialFrame(connection, initialFrame, adapter.config.ConnectTimeout); err != nil {
 		_ = connection.Close()
 		return nil, apperr.Dependency(apperr.CodeASRStreamInterrupted, err, apperr.WithOp("asr.volcano.initial_write"))
 	}
 	providerSessionID := responseHeader(response, "X-Tt-Logid")
-	session := newSession(connection, localSessionID, providerSessionID, request.StartSample)
+	session := newSession(connection, localSessionID, providerSessionID, request.StartSample, adapter.config.ConnectTimeout)
 	go session.readLoop()
 	return session, nil
+}
+
+// writeInitialFrame 限制握手后的首次协议写入，避免 TCP 建连成功后永久卡住。
+func writeInitialFrame(connection *websocket.Conn, frame []byte, timeout time.Duration) error {
+	if connection == nil || len(frame) == 0 || timeout <= 0 {
+		return fmt.Errorf("实时转写初始化写入参数无效")
+	}
+	if err := connection.SetWriteDeadline(time.Now().Add(timeout)); err != nil {
+		return fmt.Errorf("设置实时转写初始化写入超时失败：%w", err)
+	}
+	if err := connection.WriteMessage(websocket.BinaryMessage, frame); err != nil {
+		return err
+	}
+	if err := connection.SetWriteDeadline(time.Time{}); err != nil {
+		return fmt.Errorf("清理实时转写初始化写入超时失败：%w", err)
+	}
+	return nil
 }
 
 // validate 确保生产 adapter 不使用空 endpoint、无超时或缺失凭据。
@@ -124,13 +147,15 @@ type session struct {
 	localSessionID    string
 	providerSessionID string
 	inputStartSample  int64
+	writeTimeout      time.Duration
 
-	writeMu        sync.Mutex
-	pending        *port.AudioFrame
-	nextSequence   int32
-	acceptedEnd    int64
-	lastSentSample int64
-	stopping       bool
+	writeMu          sync.Mutex
+	acceptedEnd      int64
+	lastSentSample   int64
+	lastFrameSamples int64
+	pendingPCM       []byte
+	responseSeq      int32
+	stopping         bool
 
 	events     chan port.TranscriptionEvent
 	done       chan struct{}
@@ -139,13 +164,13 @@ type session struct {
 }
 
 // newSession 创建一个单 reader/单 writer session，并预先发布连接已建立事实。
-func newSession(connection *websocket.Conn, localSessionID string, providerSessionID string, inputStartSample int64) *session {
-	session := &session{connection: connection, localSessionID: localSessionID, providerSessionID: providerSessionID, inputStartSample: inputStartSample, acceptedEnd: inputStartSample, events: make(chan port.TranscriptionEvent, adapterEventCapacity), done: make(chan struct{})}
+func newSession(connection *websocket.Conn, localSessionID string, providerSessionID string, inputStartSample int64, writeTimeout time.Duration) *session {
+	session := &session{connection: connection, localSessionID: localSessionID, providerSessionID: providerSessionID, inputStartSample: inputStartSample, writeTimeout: writeTimeout, acceptedEnd: inputStartSample, lastSentSample: inputStartSample, events: make(chan port.TranscriptionEvent, adapterEventCapacity), done: make(chan struct{})}
 	session.events <- port.TranscriptionEvent{Type: port.TranscriptionSessionStarted, SessionID: localSessionID, ProviderSessionID: providerSessionID}
 	return session
 }
 
-// WriteFrame 校验连续性并保持最后一帧，便于 Stop 用负 sequence 明确提交音频尾部。
+// WriteFrame 校验连续性，并把操作系统回调重新分包为火山建议的 200 ms PCM。
 func (session *session) WriteFrame(ctx context.Context, frame port.AudioFrame) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -159,19 +184,58 @@ func (session *session) WriteFrame(ctx context.Context, frame port.AudioFrame) e
 	if session.stopping || frame.StartSample != session.acceptedEnd {
 		return fmt.Errorf("实时转写 PCM session 已停止或样本不连续")
 	}
-	if session.pending != nil {
-		if err := session.writePendingLocked(false); err != nil {
-			session.requestClose()
-			return apperr.Dependency(apperr.CodeASRStreamInterrupted, err, apperr.WithOp("asr.volcano.audio_write"))
-		}
-	}
-	copyFrame := port.AudioFrame{StartSample: frame.StartSample, PCM: append([]byte(nil), frame.PCM...)}
-	session.pending = &copyFrame
 	session.acceptedEnd = frame.StartSample + samples
+	session.pendingPCM = append(session.pendingPCM, frame.PCM...)
+	for len(session.pendingPCM) >= audioPacketBytes {
+		if err := session.writePCMChunkLocked(ctx, session.pendingPCM[:audioPacketBytes]); err != nil {
+			return err
+		}
+		session.pendingPCM = session.pendingPCM[audioPacketBytes:]
+	}
+	if len(session.pendingPCM) == 0 {
+		session.pendingPCM = nil
+	}
 	return nil
 }
 
-// LastSentSample 返回已实际写入 WebSocket 的最后样本边界，不把仍保留的尾帧算作已发送。
+// writePCMChunkLocked 发送一个普通音频包，调用方必须持有 writeMu。
+func (session *session) writePCMChunkLocked(ctx context.Context, pcm []byte) error {
+	wireFrame, err := EncodeAudioOnlyRequest(false, pcm)
+	if err != nil {
+		return apperr.Dependency(apperr.CodeASRProtocolIncompatible, err, apperr.WithOp("asr.volcano.audio_encode"))
+	}
+	if err = session.writeMessageLocked(ctx, wireFrame); err != nil {
+		session.requestClose()
+		return apperr.Dependency(apperr.CodeASRStreamInterrupted, err, apperr.WithOp("asr.volcano.audio_write"))
+	}
+	samples := int64(len(pcm) / 2)
+	session.lastSentSample += samples
+	session.lastFrameSamples = samples
+	return nil
+}
+
+// writeMessageLocked 为会中每次 PCM 写入设置 deadline，调用方必须持有 writeMu。
+func (session *session) writeMessageLocked(ctx context.Context, frame []byte) error {
+	if ctx == nil || session.writeTimeout <= 0 {
+		return fmt.Errorf("实时转写写入超时参数无效")
+	}
+	deadline := time.Now().Add(session.writeTimeout)
+	if contextDeadline, ok := ctx.Deadline(); ok && contextDeadline.Before(deadline) {
+		deadline = contextDeadline
+	}
+	if err := session.connection.SetWriteDeadline(deadline); err != nil {
+		return fmt.Errorf("设置实时转写写入超时失败：%w", err)
+	}
+	if err := session.connection.WriteMessage(websocket.BinaryMessage, frame); err != nil {
+		return err
+	}
+	if err := session.connection.SetWriteDeadline(time.Time{}); err != nil {
+		return fmt.Errorf("清理实时转写写入超时失败：%w", err)
+	}
+	return nil
+}
+
+// LastSentSample 返回已实际写入 WebSocket 的最后样本边界。
 func (session *session) LastSentSample() int64 {
 	if session == nil {
 		return 0
@@ -184,7 +248,7 @@ func (session *session) LastSentSample() int64 {
 // Events 返回只读业务事件流；channel 只由 session reader 关闭。
 func (session *session) Events() <-chan port.TranscriptionEvent { return session.events }
 
-// Stop 发送唯一负 sequence 音频尾包，并等待服务端最后响应或 context 超时。
+// Stop 发送优化流式协议的空尾包，并等待服务端最后响应或 context 超时。
 func (session *session) Stop(ctx context.Context) error {
 	session.writeMu.Lock()
 	if session.stopping {
@@ -192,33 +256,25 @@ func (session *session) Stop(ctx context.Context) error {
 		return session.waitDone(ctx)
 	}
 	session.stopping = true
-	if session.pending == nil {
-		session.writeMu.Unlock()
-		session.requestClose()
-		return session.waitDone(ctx)
+	var err error
+	// 停止时先提交不足 200 ms 的真实尾部音频，再发送空负包。
+	if len(session.pendingPCM) > 0 {
+		err = session.writePCMChunkLocked(ctx, session.pendingPCM)
+		session.pendingPCM = nil
 	}
-	err := session.writePendingLocked(true)
+	var frame []byte
+	if err == nil {
+		frame, err = EncodeAudioOnlyRequest(true, nil)
+	}
+	if err == nil {
+		err = session.writeMessageLocked(ctx, frame)
+	}
 	session.writeMu.Unlock()
 	if err != nil {
 		session.requestClose()
 		return apperr.Dependency(apperr.CodeASRStreamInterrupted, err, apperr.WithOp("asr.volcano.commit"))
 	}
 	return session.waitDone(ctx)
-}
-
-// writePendingLocked 是 session 唯一 WebSocket writer，调用方必须持有 writeMu。
-func (session *session) writePendingLocked(last bool) error {
-	session.nextSequence++
-	frame, err := EncodeAudioOnlyRequest(session.nextSequence, last, session.pending.PCM)
-	if err != nil {
-		return err
-	}
-	if err = session.connection.WriteMessage(websocket.BinaryMessage, frame); err != nil {
-		return err
-	}
-	session.lastSentSample = session.pending.StartSample + int64(len(session.pending.PCM)/2)
-	session.pending = nil
-	return nil
 }
 
 // waitDone 在超时或取消时主动终结连接，确保 reader goroutine 可退出。
@@ -244,12 +300,12 @@ func (session *session) readLoop() {
 			return
 		}
 		if messageType != websocket.BinaryMessage {
-			session.publishFailure(apperr.CodeASRProtocolIncompatible.ErrorCode, false, fmt.Errorf("火山返回非二进制消息"))
+			session.publishFailure(apperr.CodeASRProtocolIncompatible.ErrorCode, true, fmt.Errorf("火山返回非二进制消息"))
 			return
 		}
 		frame, err := DecodeServerFrame(data)
 		if err != nil {
-			session.publishFailure(apperr.CodeASRProtocolIncompatible.ErrorCode, false, err)
+			session.publishFailure(apperr.CodeASRProtocolIncompatible.ErrorCode, true, err)
 			return
 		}
 		if session.handleServerFrame(frame) || frame.Sequence < 0 {
@@ -269,20 +325,37 @@ func (session *session) handleServerFrame(frame ServerFrame) bool {
 	}
 	session.writeMu.Lock()
 	lastSentSample := session.lastSentSample
+	timestampTolerance := timestampToleranceSamples(session.lastFrameSamples)
 	session.writeMu.Unlock()
-	events, err := ParseTranscriptionEvents(frame.Payload, session.localSessionID, session.providerSessionID, frame.Sequence, session.inputStartSample, lastSentSample)
+	responseSequence := frame.Sequence
+	if responseSequence == 0 {
+		session.responseSeq++
+		responseSequence = session.responseSeq
+	}
+	events, err := parseTranscriptionEvents(frame.Payload, session.localSessionID, session.providerSessionID, responseSequence, session.inputStartSample, lastSentSample, timestampTolerance)
 	if err != nil {
-		session.publishFailure(apperr.CodeASRProtocolIncompatible.ErrorCode, false, err)
+		session.publishFailure(apperr.CodeASRProtocolIncompatible.ErrorCode, true, err)
 		return true
 	}
 	for _, event := range events {
 		event.LastSentSample = lastSentSample
 		if !session.publish(event) {
-			session.publishFailure(apperr.CodeASREventBackpressure.ErrorCode, true, fmt.Errorf("实时转写事件队列已满"))
+			session.publishFailure(apperr.CodeASREventBackpressure.ErrorCode, false, fmt.Errorf("实时转写事件队列已满"))
 			return true
 		}
 	}
 	return false
+}
+
+// timestampToleranceSamples 只容忍一个实际发送 PCM 帧或毫秒取整带来的边界抖动。
+func timestampToleranceSamples(lastFrameSamples int64) int64 {
+	if lastFrameSamples < 16 {
+		return 16
+	}
+	if lastFrameSamples > maxTimestampToleranceSamples {
+		return maxTimestampToleranceSamples
+	}
+	return lastFrameSamples
 }
 
 // publish 对 partial 允许覆盖丢弃；final 和生命周期事件队列满时必须终止 session。

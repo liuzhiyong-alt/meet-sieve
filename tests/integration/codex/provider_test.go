@@ -5,8 +5,6 @@ package codex_test
 import (
 	"bufio"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -24,9 +22,12 @@ import (
 func TestProvider_LongLivedTurnAndApproval(t *testing.T) {
 	executable := providerHelperExecutable(t)
 	schemaContent := []byte(`{"type":"object"}`)
-	digest := sha256.Sum256(schemaContent)
+	digest, err := codex.CanonicalSchemaDigest(schemaContent)
+	if err != nil {
+		t.Fatalf("计算测试 schema 摘要失败：%v", err)
+	}
 	verifier := codex.NewSchemaVerifier(providerSchemaRunner{content: schemaContent}, codex.SchemaContract{
-		Version: "test", Files: map[string]string{"required.json": hex.EncodeToString(digest[:])},
+		Version: "test", Files: map[string]string{"required.json": digest},
 	}, t.TempDir())
 	provider := codex.NewProviderWithVerifier(executable, verifier)
 

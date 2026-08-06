@@ -61,11 +61,21 @@ type ASRTimelineEntryDTO struct {
 // ASRPartialEventDTO 是不持久化的会中临时文本事件，Seq 固定为 0。
 type ASRPartialEventDTO struct {
 	MeetingID   string `json:"meeting_id"`
+	SessionID   string `json:"session_id"`
+	Generation  int64  `json:"generation"`
 	ResultID    string `json:"result_id"`
 	Revision    int64  `json:"revision"`
 	Text        string `json:"text"`
 	StartSample int64  `json:"start_sample"`
 	EndSample   int64  `json:"end_sample"`
+}
+
+// ASRPartialClearEventDTO 通知页面清除一个物理 session 或指定 result 的临时文本。
+type ASRPartialClearEventDTO struct {
+	MeetingID  string `json:"meeting_id"`
+	SessionID  string `json:"session_id"`
+	Generation int64  `json:"generation"`
+	ResultID   string `json:"result_id,omitempty"`
 }
 
 // ASRStateEventDTO 是独立实时转写状态事件。

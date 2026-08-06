@@ -37,6 +37,7 @@ type TranscriptionFailure struct {
 // TranscriptionEvent 描述一次可排序的实时转写输出。
 type TranscriptionEvent struct {
 	Type              TranscriptionEventType
+	Generation        int64
 	Revision          int64
 	MeetingID         string
 	ResultID          string

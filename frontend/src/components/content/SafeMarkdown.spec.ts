@@ -22,4 +22,24 @@ describe('SafeMarkdown', () => {
     expect(wrapper.html()).not.toContain('href="javascript:')
     expect(wrapper.text()).toContain('[图片：远程图]')
   })
+
+  it('渲染会议纪要常用的标题、列表和表格语法', () => {
+    const wrapper = mount(SafeMarkdown, {
+      props: {
+        content:
+          '# 决策\n\n- 发布 Alpha\n\n| 负责人 | 截止日期 |\n| --- | --- |\n| 刘毅 | 周五 |',
+      },
+    })
+
+    expect(wrapper.get('[role="heading"][aria-level="2"]').text()).toBe('决策')
+    expect(wrapper.get('li').text()).toBe('发布 Alpha')
+    expect(wrapper.findAll('th').map((cell) => cell.text())).toEqual([
+      '负责人',
+      '截止日期',
+    ])
+    expect(wrapper.findAll('td').map((cell) => cell.text())).toEqual([
+      '刘毅',
+      '周五',
+    ])
+  })
 })

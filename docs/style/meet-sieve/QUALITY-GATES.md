@@ -27,7 +27,7 @@
 - [ ] 新组件已登记到 `components.manifest.json`。
 - [ ] 没有通过页面局部覆盖制造近似变体。
 - [ ] 异步组件覆盖 Loading、Success、Error、Disabled。
-- [ ] Primary Button 在同一页面或操作区保持唯一。
+- [ ] Primary Button 在同一页面或操作区保持唯一；规范明确为同级入口的 Codex 接续复制动作除外。
 - [ ] Danger Action 明确对象和永久后果。
 
 ## 4. Product States

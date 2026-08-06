@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
-	"sync"
 
 	domainagent "meet-sieve/internal/domain/agent"
 	"meet-sieve/internal/infra/apperr"
@@ -22,6 +21,7 @@ type AgentSettingsView struct {
 	WakeWord       string
 	ExecutablePath string
 	Availability   port.AgentAvailability
+	ProbedAt       int64
 	UpdatedAt      int64
 }
 
@@ -36,22 +36,14 @@ type SettingsService struct {
 	repository *agentrepository.Repository
 	provider   port.AgentProvider
 	clock      clock.Clock
-	mu         sync.Mutex
-	lastProbe  port.AgentAvailability
 }
 
 // NewSettingsService 创建 Codex 设置服务；构造阶段不探测外部进程。
 func NewSettingsService(repository *agentrepository.Repository, provider port.AgentProvider, currentClock clock.Clock) *SettingsService {
-	return &SettingsService{
-		repository: repository, provider: provider, clock: currentClock,
-		lastProbe: port.AgentAvailability{
-			State: port.AgentAvailabilityUnchecked, AccountState: port.AgentAccountUnknown,
-			ProtocolState: port.AgentProtocolUnchecked, Message: "尚未检测",
-		},
-	}
+	return &SettingsService{repository: repository, provider: provider, clock: currentClock}
 }
 
-// Get 返回当前设置和进程内最近一次脱敏探测结果。
+// Get 返回当前设置和 SQLite 中最近一次脱敏探测结果。
 func (service *SettingsService) Get(ctx context.Context) (AgentSettingsView, error) {
 	if service == nil || service.repository == nil {
 		return AgentSettingsView{}, fmt.Errorf("Codex 设置服务未初始化")
@@ -60,12 +52,14 @@ func (service *SettingsService) Get(ctx context.Context) (AgentSettingsView, err
 	if err != nil {
 		return AgentSettingsView{}, err
 	}
-	service.mu.Lock()
-	availability := service.lastProbe
-	service.mu.Unlock()
 	return AgentSettingsView{
 		WakeWord: settings.WakeWord, ExecutablePath: stringValue(settings.CodexExecutablePath),
-		Availability: availability, UpdatedAt: settings.UpdatedAt,
+		Availability: port.AgentAvailability{
+			State: port.AgentAvailabilityState(settings.CodexAvailabilityState), Version: settings.CodexVersion,
+			AccountState:  port.AgentAccountState(settings.CodexAccountState),
+			ProtocolState: port.AgentProtocolState(settings.CodexProtocolState), Message: settings.CodexProbeMessage,
+		},
+		ProbedAt: optionalInt64Value(settings.CodexProbedAt), UpdatedAt: settings.UpdatedAt,
 	}, nil
 }
 
@@ -85,18 +79,12 @@ func (service *SettingsService) Save(ctx context.Context, input SaveAgentSetting
 	if err := service.repository.UpdateSettings(ctx, wake.Value, executablePath, service.clock.Now().UnixMilli()); err != nil {
 		return AgentSettingsView{}, err
 	}
-	service.mu.Lock()
-	service.lastProbe = port.AgentAvailability{
-		State: port.AgentAvailabilityUnchecked, AccountState: port.AgentAccountUnknown,
-		ProtocolState: port.AgentProtocolUnchecked, Message: "设置已更新，尚未检测",
-	}
-	service.mu.Unlock()
 	return service.Get(ctx)
 }
 
 // Probe 使用已保存 executable 执行 schema、握手和登录探测。
 func (service *SettingsService) Probe(ctx context.Context) (port.AgentAvailability, error) {
-	if service == nil || service.repository == nil || service.provider == nil {
+	if service == nil || service.repository == nil || service.provider == nil || service.clock == nil {
 		return port.AgentAvailability{}, fmt.Errorf("Codex 设置服务未初始化")
 	}
 	settings, err := service.repository.GetSettings(ctx)
@@ -104,10 +92,32 @@ func (service *SettingsService) Probe(ctx context.Context) (port.AgentAvailabili
 		return port.AgentAvailability{}, err
 	}
 	availability, probeErr := service.provider.CheckAvailability(ctx, port.AgentAvailabilityRequest{ExecutablePath: stringValue(settings.CodexExecutablePath)})
-	service.mu.Lock()
-	service.lastProbe = availability
-	service.mu.Unlock()
+	availability = normalizeAvailability(availability, probeErr)
+	if err := service.repository.UpdateProbeSnapshot(ctx, string(availability.State), availability.Version, string(availability.AccountState), string(availability.ProtocolState), availability.Message, service.clock.Now().UnixMilli()); err != nil {
+		return availability, err
+	}
 	return availability, probeErr
+}
+
+// normalizeAvailability 防止 provider 失败时把零值或底层错误写入稳定设置投影。
+func normalizeAvailability(value port.AgentAvailability, probeErr error) port.AgentAvailability {
+	if !value.State.Valid() {
+		value.State = port.AgentAvailabilityUnavailable
+	}
+	if !value.AccountState.Valid() {
+		value.AccountState = port.AgentAccountUnknown
+	}
+	if !value.ProtocolState.Valid() {
+		value.ProtocolState = port.AgentProtocolUnchecked
+	}
+	if strings.TrimSpace(value.Message) == "" {
+		if probeErr != nil {
+			value.Message = "检测失败，请重试"
+		} else {
+			value.Message = "检测完成"
+		}
+	}
+	return value
 }
 
 // validateExecutableSetting 解析裸命令或绝对路径，但不拆分 shell 参数。
@@ -141,6 +151,14 @@ func validateExecutableSetting(value string) (*string, error) {
 func stringValue(value *string) string {
 	if value == nil {
 		return ""
+	}
+	return *value
+}
+
+// optionalInt64Value 安全读取可选时间戳；未检测时返回零。
+func optionalInt64Value(value *int64) int64 {
+	if value == nil {
+		return 0
 	}
 	return *value
 }

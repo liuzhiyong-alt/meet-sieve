@@ -11,6 +11,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/http/httptest"
 	"strconv"
 	"sync"
 	"time"
@@ -66,6 +67,7 @@ type Dependencies struct {
 	IDs             identity.Generator
 	Random          io.Reader
 	Handler         http.Handler
+	ReadinessCheck  func() error
 	ListenerFactory ListenerFactory
 	ServerFactory   ServerFactory
 	Sessions        SessionRevoker
@@ -101,6 +103,7 @@ type Runtime struct {
 	ids             identity.Generator
 	random          io.Reader
 	handler         http.Handler
+	readinessCheck  func() error
 	listenerFactory ListenerFactory
 	serverFactory   ServerFactory
 	sessions        SessionRevoker
@@ -139,6 +142,7 @@ func NewRuntime(dependencies Dependencies) *Runtime {
 	}
 	return &Runtime{
 		ids: dependencies.IDs, random: dependencies.Random, handler: dependencies.Handler,
+		readinessCheck:  dependencies.ReadinessCheck,
 		listenerFactory: dependencies.ListenerFactory, serverFactory: dependencies.ServerFactory,
 		sessions: dependencies.Sessions, uploads: dependencies.Uploads,
 		snapshot: Snapshot{State: StateDisabled},
@@ -232,9 +236,14 @@ func (runtime *Runtime) startGeneration(ctx context.Context, request StartReques
 	runtime.setSnapshot(Snapshot{
 		State: StateStarting, MeetingID: request.MeetingID, InterfaceID: request.InterfaceID, Address: request.Address,
 	})
+	if err := runtime.verifyGuestEntry(); err != nil {
+		appErr := mapStartError(err)
+		runtime.setFailed(request, appErr.ErrorCode)
+		return runtime.Snapshot(), appErr
+	}
 	created, err := runtime.buildGeneration(ctx, request)
 	if err != nil {
-		appErr := apperr.Dependency(apperr.CodeLANStartFailed, err, apperr.WithOp("lan.runtime.start"))
+		appErr := mapStartError(err)
 		runtime.setFailed(request, appErr.ErrorCode)
 		return runtime.Snapshot(), appErr
 	}
@@ -247,6 +256,35 @@ func (runtime *Runtime) startGeneration(ctx context.Context, request StartReques
 	runtime.mu.Unlock()
 	go runtime.serve(created)
 	return runtime.Snapshot(), nil
+}
+
+// verifyGuestEntry 只在入口和资源均通过本机 handler 检查后允许发布 LAN 链接。
+func (runtime *Runtime) verifyGuestEntry() error {
+	if runtime.readinessCheck != nil {
+		if err := runtime.readinessCheck(); err != nil {
+			return apperr.Dependency(apperr.CodeLANGuestAssetsMissing, err, apperr.WithOp("lan.runtime.assets"))
+		}
+	}
+	request := httptest.NewRequest(http.MethodGet, "/join", nil)
+	recorder := httptest.NewRecorder()
+	runtime.handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK || recorder.Header().Get("Content-Type") != "text/html; charset=utf-8" {
+		return apperr.Dependency(
+			apperr.CodeLANGuestSelfCheckFailed,
+			fmt.Errorf("访客入口自检失败: status=%d content_type=%q", recorder.Code, recorder.Header().Get("Content-Type")),
+			apperr.WithOp("lan.runtime.guest_entry"),
+		)
+	}
+	return nil
+}
+
+// mapStartError 保留已分类的资源与自检失败，其他启动异常收敛为稳定 LAN 启动错误。
+func mapStartError(cause error) *apperr.AppError {
+	appErr := apperr.Normalize(cause)
+	if appErr.ErrorCode == apperr.CodeLANGuestAssetsMissing.ErrorCode || appErr.ErrorCode == apperr.CodeLANGuestSelfCheckFailed.ErrorCode {
+		return appErr
+	}
+	return apperr.Dependency(apperr.CodeLANStartFailed, cause, apperr.WithOp("lan.runtime.start"))
 }
 
 // buildGeneration 创建未发布的 generation，失败时不留可用令牌或 Listener。

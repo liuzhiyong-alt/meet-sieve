@@ -81,6 +81,30 @@ const stores = vi.hoisted(() => ({
     applyWakeTestEvent: vi.fn(),
     stopWakeTest: vi.fn().mockResolvedValue(undefined),
   },
+  minutes: {
+    settings: {
+      prompt: '默认会议纪要要求',
+      is_default: true,
+      updated_at: 1,
+    },
+    settingsLoading: false,
+    settingsSaving: false,
+    settingsError: '',
+    settingsNotice: '',
+    loadSettings: vi.fn().mockResolvedValue(undefined),
+    saveSettings: vi.fn().mockImplementation(async (prompt: string) => {
+      stores.minutes.settings.prompt = prompt
+      stores.minutes.settings.is_default = false
+      stores.minutes.settings.updated_at += 1
+      return true
+    }),
+    restoreDefault: vi.fn().mockImplementation(async () => {
+      stores.minutes.settings.prompt = '默认会议纪要要求'
+      stores.minutes.settings.is_default = true
+      stores.minutes.settings.updated_at += 1
+      return true
+    }),
+  },
 }))
 
 vi.mock('../../../wailsjs/runtime/runtime', () => ({
@@ -108,6 +132,9 @@ vi.mock('../../stores/meeting', () => ({
   useMeetingStore: () => stores.meeting,
 }))
 vi.mock('../../stores/agent', () => ({ useAgentStore: () => stores.agent }))
+vi.mock('../../stores/minutes', () => ({
+  useMinutesStore: () => stores.minutes,
+}))
 
 import GeneralSettingsView from './GeneralSettingsView.vue'
 import { dirtyEditRegistry } from '../../router/dirty'
@@ -139,6 +166,8 @@ describe('GeneralSettingsView 通用设置', () => {
     vi.clearAllMocks()
     stores.workspace.settings.restartRequired = false
     stores.asr.settings.requires_api_key_upgrade = false
+    stores.minutes.settings.prompt = '默认会议纪要要求'
+    stores.minutes.settings.is_default = true
   })
 
   it('将工作目录和存储诊断作为两个独立配置卡片', async () => {
@@ -172,16 +201,103 @@ describe('GeneralSettingsView 通用设置', () => {
     expect(wrapper.findAll('input[type="radio"]')).toHaveLength(0)
   })
 
+  it('五项配置使用统一的标题和说明层级', async () => {
+    const wrapper = await mountGeneralSettings('audio')
+    const sections = [
+      {
+        name: 'audio',
+        title: '#audio-settings-title',
+        lead: '默认麦克风独立保存；测试结果不会修改设置。',
+      },
+      {
+        name: 'asr',
+        title: '#asr-settings-title',
+        lead: '一个 APP Key 同时用于实时转写与缺口补录。',
+      },
+      {
+        name: 'codex',
+        title: '#codex-settings-title',
+        lead: 'Codex 使用你本机已有的登录、工具与原生权限配置。',
+      },
+      {
+        name: 'minutes',
+        title: '#minutes-settings-title',
+        lead: '自定义会议纪要的内容重点、详略程度和表达方式。',
+      },
+      {
+        name: 'voice-model',
+        title: '#voice-model-title',
+        lead: '管理本机声纹模型的下载、离线导入与完整性校验。',
+      },
+    ]
+
+    for (const section of sections) {
+      await wrapper.setProps({ section: section.name })
+
+      expect(wrapper.get(section.title).element.tagName).toBe('H2')
+      expect(wrapper.get('.ms-settings-card .ms-card-head .ms-help').text()).toContain(
+        section.lead,
+      )
+      expect(wrapper.findAll('h1')).toHaveLength(1)
+    }
+
+    wrapper.unmount()
+  })
+
   it('未修改设置时切换所有分类都不产生 dirty 状态', async () => {
     const wrapper = await mountGeneralSettings()
 
-    for (const section of ['audio', 'asr', 'codex', 'voice-model']) {
+    for (const section of ['audio', 'asr', 'codex', 'minutes', 'voice-model']) {
       await wrapper.setProps({ section })
       expect(dirtyEditRegistry.dirtyEditors()).toHaveLength(0)
     }
     await wrapper.setProps({ section: 'asr' })
     expect(wrapper.get('#asr-api-key').attributes('autocomplete')).toBe(
       'new-password',
+    )
+    wrapper.unmount()
+  })
+
+  it('会议纪要分类回填默认要求并独立保存修改', async () => {
+    const wrapper = await mountGeneralSettings('minutes')
+
+    expect(wrapper.text()).toContain(
+      '自定义会议纪要的内容重点、详略程度和表达方式。',
+    )
+    expect(wrapper.text()).not.toContain('MeetSieve 会始终依据会议记录生成')
+    expect(wrapper.get('#minutes-prompt').attributes('rows')).toBe('10')
+    expect(wrapper.get('#minutes-prompt').element).toHaveProperty(
+      'value',
+      '默认会议纪要要求',
+    )
+    await wrapper.get('#minutes-prompt').setValue('突出决策和负责人')
+    expect(
+      dirtyEditRegistry.dirtyEditors().map((editor) => editor.label),
+    ).toEqual(['会议纪要设置'])
+
+    await wrapper.get('button.ms-button--primary').trigger('click')
+    await flushPromises()
+    expect(stores.minutes.saveSettings).toHaveBeenCalledWith('突出决策和负责人')
+    wrapper.unmount()
+  })
+
+  it('自定义会议纪要要求可以恢复为当前默认值', async () => {
+    stores.minutes.settings.prompt = '突出风险'
+    stores.minutes.settings.is_default = false
+    const wrapper = await mountGeneralSettings('minutes')
+
+    expect(wrapper.text()).toContain('已自定义')
+    const restoreButton = wrapper
+      .findAll('button')
+      .find((button) => button.text() === '恢复默认要求')
+    expect(restoreButton).toBeDefined()
+    await restoreButton?.trigger('click')
+    await flushPromises()
+
+    expect(stores.minutes.restoreDefault).toHaveBeenCalled()
+    expect(wrapper.get('#minutes-prompt').element).toHaveProperty(
+      'value',
+      '默认会议纪要要求',
     )
     wrapper.unmount()
   })

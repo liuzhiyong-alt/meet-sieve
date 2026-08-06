@@ -32,9 +32,11 @@ func TestService_ListMeetingsSignsCursorsAndMapsChangedFilter(t *testing.T) {
 }
 
 type queryRepositoryStub struct {
-	page    queryrepository.MeetingPage
-	meeting *queryrepository.MeetingSummaryRow
-	facts   queryrepository.RecoveryFactsRow
+	page            queryrepository.MeetingPage
+	meeting         *queryrepository.MeetingSummaryRow
+	facts           queryrepository.RecoveryFactsRow
+	transcriptRows  []queryrepository.TranscriptRow
+	transcriptState queryrepository.SeqPageState
 }
 
 // ListMeetings 返回测试指定的只读页。
@@ -52,14 +54,14 @@ func (stub *queryRepositoryStub) GetMeeting(_ context.Context, _ string) (*query
 	return stub.meeting, nil
 }
 
-// ListTranscript 返回空页，本测试不使用。
-func (stub *queryRepositoryStub) ListTranscript(_ context.Context, _ string, _ int64, _ int64, _ int) ([]queryrepository.TranscriptRow, bool, error) {
-	return nil, false, nil
+// ListTranscript 返回测试指定的原始记录与页边界。
+func (stub *queryRepositoryStub) ListTranscript(_ context.Context, _ string, _ int64, _ int64, _ int) ([]queryrepository.TranscriptRow, queryrepository.SeqPageState, error) {
+	return stub.transcriptRows, stub.transcriptState, nil
 }
 
 // ListContent 返回空页，本测试不使用。
-func (stub *queryRepositoryStub) ListContent(_ context.Context, _ string, _ int64, _ int64, _ int) ([]queryrepository.ContentRow, bool, error) {
-	return nil, false, nil
+func (stub *queryRepositoryStub) ListContent(_ context.Context, _ string, _ int64, _ int64, _ int) ([]queryrepository.ContentRow, queryrepository.SeqPageState, error) {
+	return nil, queryrepository.SeqPageState{}, nil
 }
 
 // CountStatus 返回零，本测试不使用。
@@ -97,7 +99,7 @@ func TestPrimaryActionForProjectsOneStableAction(t *testing.T) {
 		{name: "保存恢复", status: querydomain.StatusRecoveryRequired, wantKind: "recover_meeting", wantTarget: "meeting-1"},
 		{name: "缺口冲突", status: querydomain.StatusGapConflict, gapID: "gap-1", wantKind: "resolve_gap", wantTarget: "gap-1"},
 		{name: "补转写", status: querydomain.StatusGapPending, gapID: "gap-2", wantKind: "open_gap", wantTarget: "gap-2"},
-		{name: "纪要确认", status: querydomain.StatusMinuteCandidate, wantKind: "confirm_minutes", wantTarget: "meeting-1"},
+		{name: "纪要已生成", status: querydomain.StatusMinuteCandidate, wantKind: "open_meeting", wantTarget: "meeting-1"},
 		{name: "Codex 未同步", status: querydomain.StatusAgentUnsynced, wantKind: "open_meeting", wantTarget: "meeting-1"},
 		{name: "已保存", status: querydomain.StatusSaved, wantKind: "open_meeting", wantTarget: "meeting-1"},
 	}
@@ -110,5 +112,33 @@ func TestPrimaryActionForProjectsOneStableAction(t *testing.T) {
 				t.Fatalf("主动作投影错误：%+v", action)
 			}
 		})
+	}
+}
+
+// TestService_ListTranscriptProjectsSafeSpeakerLabels 验证详情页不会暴露 ASR 或事件内部标识。
+func TestService_ListTranscriptProjectsSafeSpeakerLabels(t *testing.T) {
+	stub := &queryRepositoryStub{
+		transcriptRows: []queryrepository.TranscriptRow{
+			{Seq: 1, Kind: "utterance.final", SpeakerName: "张三"},
+			{Seq: 2, Kind: "utterance.final", ClusterDisplayNo: 2},
+			{Seq: 3, Kind: "utterance.final", TrackDisplayNo: 3},
+			{Seq: 4, Kind: "utterance.final"},
+			{Seq: 5, Kind: "ai.answer"},
+		},
+		transcriptState: queryrepository.SeqPageState{HasPrevious: true, HasNext: true},
+	}
+
+	page, err := queryservice.NewService(stub).ListTranscript(context.Background(), queryservice.SeqPageInput{MeetingID: "meeting"})
+	if err != nil {
+		t.Fatalf("读取原始记录失败：%v", err)
+	}
+	want := []string{"张三", "未知说话人 2", "说话人 3", "未识别说话人", ""}
+	for index, item := range page.Items {
+		if item.SpeakerDisplay != want[index] {
+			t.Fatalf("第 %d 条说话人展示错误：got=%q want=%q", index+1, item.SpeakerDisplay, want[index])
+		}
+	}
+	if !page.HasPrevious || !page.HasNext {
+		t.Fatalf("分页方向未透传：%+v", page)
 	}
 }

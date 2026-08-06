@@ -136,6 +136,10 @@ var (
 	CodeMeetingRecoveryRequired = Code{Value: 409, ErrorCode: "MEETING_RECOVERY_REQUIRED", Message: "上次会议异常中断，不能继续原录音", Kind: KindBusiness, Retryable: true}
 	// CodeMeetingRecoveryFailed 表示自动恢复未能完成但原文件仍被保留。
 	CodeMeetingRecoveryFailed = Code{Value: 500, ErrorCode: "MEETING_RECOVERY_FAILED", Message: "现有录音已保留，但自动恢复未完成", Kind: KindSystem, Retryable: true}
+	// CodeMeetingMediaPauseFailed 表示语音 AI turn 前无法确认录音与 ASR 均已暂停。
+	CodeMeetingMediaPauseFailed = Code{Value: 500, ErrorCode: "MEETING_MEDIA_PAUSE_FAILED", Message: "无法安全暂停录音和转写，未执行本次 AI 请求", Kind: KindSystem, Retryable: true}
+	// CodeMeetingMediaResumeFailed 表示 AI turn 终态后录音或 ASR 未完整恢复。
+	CodeMeetingMediaResumeFailed = Code{Value: 500, ErrorCode: "MEETING_MEDIA_RESUME_FAILED", Message: "AI 已结束，但录音或实时转写尚未完整恢复", Kind: KindSystem, Retryable: true}
 	// CodeASRFinalInvalid 表示 provider final 事件缺少 Step 4 所需的稳定字段或样本范围非法。
 	CodeASRFinalInvalid = Code{Value: 400, ErrorCode: "ASR_FINAL_INVALID", Message: "实时转写结果无效，已保留录音", Kind: KindValidation}
 	// CodeASRSettingsInvalid 表示当前鉴权模式缺少必填凭据或字段动作无效。
@@ -158,12 +162,14 @@ var (
 	CodeASREventBackpressure = Code{Value: 409, ErrorCode: "ASR_EVENT_BACKPRESSURE", Message: "实时转写处理繁忙，已保留录音", Kind: KindBusiness, Retryable: true}
 	// CodeASRStreamInterrupted 表示实时转写流中断，调用方应按既定退避策略重连。
 	CodeASRStreamInterrupted = Code{Value: 502, ErrorCode: "ASR_STREAM_INTERRUPTED", Message: "实时转写连接中断，正在重试", Kind: KindDependency, Retryable: true}
+	// CodeASRPauseDrainFailed 表示 AI 执行前无法安全排空并停止 ASR 边界前数据。
+	CodeASRPauseDrainFailed = Code{Value: 502, ErrorCode: "ASR_PAUSE_DRAIN_FAILED", Message: "无法安全暂停实时转写，未执行本次 AI 请求", Kind: KindDependency, Retryable: true}
 	// CodeAgentExecutableInvalid 表示 Codex 可执行文件不可用。
 	CodeAgentExecutableInvalid = Code{Value: 409, ErrorCode: "AGENT_EXECUTABLE_INVALID", Message: "Codex 可执行文件不可用，请检查设置", Kind: KindBusiness, Retryable: true}
 	// CodeAgentNotLoggedIn 表示用户尚未在 Codex 中登录。
 	CodeAgentNotLoggedIn = Code{Value: 502, ErrorCode: "AGENT_NOT_LOGGED_IN", Message: "Codex 尚未登录，请先在外部完成登录", Kind: KindDependency, Retryable: true}
 	// CodeAgentProtocolIncompatible 表示必要 app-server 协议契约不兼容。
-	CodeAgentProtocolIncompatible = Code{Value: 502, ErrorCode: "AGENT_PROTOCOL_INCOMPATIBLE", Message: "当前 Codex 版本暂不兼容", Kind: KindDependency}
+	CodeAgentProtocolIncompatible = Code{Value: 502, ErrorCode: "AGENT_PROTOCOL_INCOMPATIBLE", Message: "Codex 必要接口发生变化，AI 暂不可用；录音和实时转写不受影响", Kind: KindDependency}
 	// CodeAgentApprovalUnsupported 表示原生审批请求无法安全呈现。
 	CodeAgentApprovalUnsupported = Code{Value: 502, ErrorCode: "AGENT_APPROVAL_UNSUPPORTED", Message: "Codex 审批请求无法安全处理，当前操作已拒绝", Kind: KindDependency}
 	// CodeAgentApprovalExpired 表示原生审批已随 turn 终结或超时失效。
@@ -222,6 +228,10 @@ var (
 	CodeLANInterfaceUnavailable = Code{Value: 503, ErrorCode: "LAN_INTERFACE_UNAVAILABLE", Message: "没有可用的私有网络，请选择其他网络", Kind: KindBusiness, Retryable: true}
 	// CodeLANStartFailed 表示局域网访客页未能启动，但不影响会议录音。
 	CodeLANStartFailed = Code{Value: 503, ErrorCode: "LAN_START_FAILED", Message: "访客页启动失败，录音和实时转写不受影响", Kind: KindSystem, Retryable: true}
+	// CodeLANGuestAssetsMissing 表示安装包缺少访客页入口或必要静态资源。
+	CodeLANGuestAssetsMissing = Code{Value: 503, ErrorCode: "LAN_GUEST_ASSETS_MISSING", Message: "访客页资源不完整，请更新或重新安装 MeetSieve", Kind: KindSystem, Retryable: true}
+	// CodeLANGuestSelfCheckFailed 表示访客入口未通过本机 handler 自检，不能对外宣称已运行。
+	CodeLANGuestSelfCheckFailed = Code{Value: 503, ErrorCode: "LAN_GUEST_SELF_CHECK_FAILED", Message: "访客页入口未能启动，请重新启动访客页", Kind: KindSystem, Retryable: true}
 	// CodeLANGenerationChanged 表示请求属于已经停止的访客页实例。
 	CodeLANGenerationChanged = Code{Value: 409, ErrorCode: "LAN_GENERATION_CHANGED", Message: "访客入口已更新，请重新扫码进入", Kind: KindBusiness, Retryable: true}
 	// CodeLANSessionInvalid 表示访客会话凭据无效。

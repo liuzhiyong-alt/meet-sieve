@@ -65,44 +65,56 @@ func NewWakeMatcher(wake WakeWord) *WakeMatcher {
 
 // Match 返回唤醒词后的非空问题；不匹配时返回空字符串。
 func (matcher *WakeMatcher) Match(finalText string) string {
+	matched, question := matcher.MatchPrefix(finalText)
+	if !matched {
+		return ""
+	}
+	return question
+}
+
+// MatchPrefix 匹配句首唤醒词，并允许 ASR 在唤醒词内部增删空白或常见标点。
+// 返回 matched=true、question="" 表示只识别到了唤醒词，调用方可以继续等待后续 final。
+func (matcher *WakeMatcher) MatchPrefix(finalText string) (matched bool, question string) {
 	if matcher == nil || matcher.wake.Value == "" {
-		return ""
+		return false, ""
 	}
-	normalized := norm.NFKC.String(finalText)
-	runes := []rune(normalized)
-	start := skipLeadingSeparators(runes)
-	wakeRunes := []rune(matcher.wake.Value)
-	if start+len(wakeRunes) > len(runes) || string(runes[start:start+len(wakeRunes)]) != matcher.wake.Value {
-		return ""
+	input := []rune(norm.NFKC.String(finalText))
+	wakeKey := significantRunes(matcher.wake.Value)
+	position := skipLeadingSeparators(input)
+	for _, expected := range wakeKey {
+		for position < len(input) && isSeparator(input[position]) {
+			position++
+		}
+		if position >= len(input) || unicode.ToLower(input[position]) != unicode.ToLower(expected) {
+			return false, ""
+		}
+		position++
 	}
-	end := start + len(wakeRunes)
-	if end == len(runes) || !isSeparator(runes[end]) {
-		return ""
+	if position < len(input) && !isSeparator(input[position]) {
+		return false, ""
 	}
-	for end < len(runes) && isSeparator(runes[end]) {
-		end++
+	for position < len(input) && isSeparator(input[position]) {
+		position++
 	}
-	return strings.TrimSpace(string(runes[end:]))
+	return true, strings.TrimSpace(string(input[position:]))
 }
 
 // MatchWakeOnly 判断 final 是否只包含句首唤醒词和允许的首尾分隔符。
 // 该入口仅用于设置页真实三次测试，不会放宽会中提问必须含非空问题的规则。
 func (matcher *WakeMatcher) MatchWakeOnly(finalText string) bool {
-	if matcher == nil || matcher.wake.Value == "" {
-		return false
-	}
-	runes := []rune(norm.NFKC.String(finalText))
-	start := skipLeadingSeparators(runes)
-	wakeRunes := []rune(matcher.wake.Value)
-	if start+len(wakeRunes) > len(runes) || string(runes[start:start+len(wakeRunes)]) != matcher.wake.Value {
-		return false
-	}
-	for _, current := range runes[start+len(wakeRunes):] {
+	matched, question := matcher.MatchPrefix(finalText)
+	return matched && question == ""
+}
+
+// significantRunes 生成仅用于比较的唤醒 key，不改变用户保存和页面展示的原值。
+func significantRunes(value string) []rune {
+	result := make([]rune, 0, utf8.RuneCountInString(value))
+	for _, current := range []rune(norm.NFKC.String(value)) {
 		if !isSeparator(current) {
-			return false
+			result = append(result, current)
 		}
 	}
-	return true
+	return result
 }
 
 // skipLeadingSeparators 最多跳过六个句首空白或常见标点。

@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -10,6 +11,7 @@ import (
 	transcriptdomain "meet-sieve/internal/domain/transcript"
 	"meet-sieve/internal/infra/apperr"
 	"meet-sieve/internal/port"
+	agentrepository "meet-sieve/internal/repository/agent"
 )
 
 const wakeWordTestRequired = 3
@@ -104,7 +106,7 @@ func (service *WakeWordTestService) Start(ctx context.Context) (WakeWordTestStat
 	format := port.AudioFormat{SampleRate: 16000, BitsPerSample: 16, Channels: 1}
 	stream, err := service.dependencies.Capture.Start(ctx, deviceID, format)
 	if err != nil {
-		return WakeWordTestState{}, err
+		return WakeWordTestState{}, mapWakeTestAudioError(err)
 	}
 	session, err := service.dependencies.Transcriber(credentials).Start(ctx, port.RealtimeTranscriptionRequest{MeetingID: "wake-word-test", Format: format})
 	if err != nil {
@@ -149,14 +151,16 @@ func (service *WakeWordTestService) State() WakeWordTestState {
 	return service.state
 }
 
-// run 用有界队列连接采集与远端写入，并在所有终态统一释放资源。
+// run 用有界队列连接采集与远端写入，并复用会中 6/3/60 秒完整指令判定。
 func (service *WakeWordTestService) run(ctx context.Context, stream port.AudioStream, session port.RealtimeTranscriptionSession, matcher *domainagent.WakeMatcher, done chan struct{}) {
 	frames := make(chan port.AudioFrame, 64)
+	observedFrames := make(chan port.AudioFrame, 64)
 	errors := make(chan error, 2)
-	go readWakeTestFrames(ctx, stream, frames, errors)
+	go readWakeTestFrames(ctx, stream, frames, observedFrames, errors)
 	go writeWakeTestFrames(ctx, session, frames, errors)
 	defer service.finishRun(stream, session, done)
 	seen := make(map[string]struct{})
+	collector := &wakeCommandCollector{}
 	matched := 0
 	for {
 		select {
@@ -172,6 +176,14 @@ func (service *WakeWordTestService) run(ctx context.Context, stream port.AudioSt
 				service.setTerminal(WakeWordTestFailed, matched, "failed", apperr.Normalize(err).ErrorCode)
 				return
 			}
+		case frame := <-observedFrames:
+			if command := collector.observeFrame(frame); command != nil {
+				matched = service.completeWakeTestCommand(collector, matched)
+				if matched >= wakeWordTestRequired {
+					service.setTerminal(WakeWordTestPassed, matched, "connected", "")
+					return
+				}
+			}
 		case event, ok := <-session.Events():
 			if !ok {
 				service.setTerminal(WakeWordTestFailed, matched, "failed", apperr.CodeASRStreamInterrupted.ErrorCode)
@@ -184,18 +196,27 @@ func (service *WakeWordTestService) run(ctx context.Context, stream port.AudioSt
 			if event.Type != port.TranscriptionFinal || alreadySeenWakeFinal(seen, event) {
 				continue
 			}
-			if matcher.MatchWakeOnly(event.Text) {
-				matched++
-			} else {
-				matched = 0
+			_, command := collector.observeFinal(agentrepository.WakeFinal{
+				UtteranceID: wakeTestResultID(event), MeetingID: "wake-word-test", Text: event.Text,
+				StartSample: event.StartSample, EndSample: event.EndSample,
+			}, matcher, "wake-test")
+			if command != nil {
+				matched = service.completeWakeTestCommand(collector, matched)
 			}
 			if matched >= wakeWordTestRequired {
 				service.setTerminal(WakeWordTestPassed, matched, "connected", "")
 				return
 			}
-			service.setProgress(matched)
 		}
 	}
+}
+
+// completeWakeTestCommand 只验证完整语音收集链路，不执行 Codex，也不写入会议事实。
+func (service *WakeWordTestService) completeWakeTestCommand(collector *wakeCommandCollector, matched int) int {
+	collector.complete()
+	matched++
+	service.setProgress(matched)
+	return matched
 }
 
 // loadInputs 校验唤醒词和凭据，并解析当前或系统默认麦克风。
@@ -285,12 +306,23 @@ func (service *WakeWordTestService) validate() error {
 }
 
 // readWakeTestFrames 把麦克风 PCM 放入固定容量队列，满时立即失败。
-func readWakeTestFrames(ctx context.Context, stream port.AudioStream, frames chan<- port.AudioFrame, failures chan<- error) {
+func readWakeTestFrames(ctx context.Context, stream port.AudioStream, frames chan<- port.AudioFrame, observed chan<- port.AudioFrame, failures chan<- error) {
 	for {
 		frame, err := stream.ReadFrames(ctx)
 		if err != nil {
 			select {
 			case failures <- err:
+			default:
+			}
+			return
+		}
+		select {
+		case observed <- frame:
+		case <-ctx.Done():
+			return
+		default:
+			select {
+			case failures <- apperr.Biz(apperr.CodeASREventBackpressure, apperr.WithOp("agent.wake_test.observer")):
 			default:
 			}
 			return
@@ -307,6 +339,22 @@ func readWakeTestFrames(ctx context.Context, stream port.AudioStream, frames cha
 			return
 		}
 	}
+}
+
+// wakeTestResultID 返回测试 final 的稳定幂等身份。
+func wakeTestResultID(event port.TranscriptionEvent) string {
+	if event.ProviderResultID != "" {
+		return event.ProviderResultID
+	}
+	return event.ResultID
+}
+
+// mapWakeTestAudioError 把底层麦克风错误转换为 Wails 可展示的稳定业务错误。
+func mapWakeTestAudioError(cause error) error {
+	if errors.Is(cause, port.ErrAudioPermissionDenied) {
+		return apperr.Dependency(apperr.CodeMeetingAudioPermissionDenied, cause, apperr.WithOp("agent.wake_test.capture"))
+	}
+	return apperr.Dependency(apperr.CodeMeetingAudioDeviceUnavailable, cause, apperr.WithOp("agent.wake_test.capture"))
 }
 
 // writeWakeTestFrames 只把内存帧发送给临时 ASR session。

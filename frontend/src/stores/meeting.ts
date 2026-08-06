@@ -194,7 +194,7 @@ export const useMeetingStore = defineStore('meeting', {
       this.current = result.data
       return true
     },
-    /** startNewMeeting 离开恢复结果页，新会议仍会创建新的 UUID 和录音流。 */
+    /** startNewMeeting 离开已结束或中断会议，新会议仍会创建新的 UUID 和录音流。 */
     startNewMeeting(): void {
       this.current = null
       this.screen = 'start'

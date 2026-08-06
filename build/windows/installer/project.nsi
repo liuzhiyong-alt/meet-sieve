@@ -109,6 +109,9 @@ Section
     !insertmacro wails.files
     File "/oname=onnxruntime.dll" "..\..\bin\windows-resources\onnxruntime.dll"
     File "/oname=ONNXRUNTIME-LICENSE.txt" "..\..\bin\windows-resources\ONNXRUNTIME-LICENSE.txt"
+    SetOutPath "$INSTDIR\models"
+    File "/oname=voice-matching-profile.json" "..\..\bin\windows-resources\models\voice-matching-profile.json"
+    SetOutPath $INSTDIR
 
     CreateShortcut "$SMPROGRAMS\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"
     CreateShortCut "$DESKTOP\${INFO_PRODUCTNAME}.lnk" "$INSTDIR\${PRODUCT_EXECUTABLE}"

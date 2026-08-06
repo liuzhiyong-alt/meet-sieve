@@ -44,6 +44,27 @@ type ASRSession struct {
 // TableName 返回 ASRSession 的显式数据库表名。
 func (ASRSession) TableName() string { return "asr_sessions" }
 
+// MeetingMediaPause 映射语音 AI turn 独占的媒体暂停边界与丢弃样本。
+type MeetingMediaPause struct {
+	ID                  string  `gorm:"column:id"`
+	MeetingID           string  `gorm:"column:meeting_id"`
+	AgentTurnID         string  `gorm:"column:agent_turn_id"`
+	Reason              string  `gorm:"column:reason"`
+	State               string  `gorm:"column:state"`
+	LogicalSample       *int64  `gorm:"column:logical_sample"`
+	PhysicalStartSample *int64  `gorm:"column:physical_start_sample"`
+	PhysicalEndSample   *int64  `gorm:"column:physical_end_sample"`
+	DiscardedSamples    int64   `gorm:"column:discarded_samples"`
+	StartedAt           int64   `gorm:"column:started_at"`
+	EndedAt             *int64  `gorm:"column:ended_at"`
+	LastErrorCode       *string `gorm:"column:last_error_code"`
+	CreatedAt           int64   `gorm:"column:created_at"`
+	UpdatedAt           int64   `gorm:"column:updated_at"`
+}
+
+// TableName 返回 MeetingMediaPause 的显式数据库表名。
+func (MeetingMediaPause) TableName() string { return "meeting_media_pauses" }
+
 // ASRGap 映射实时转写过程中的音频缺口。
 type ASRGap struct {
 	ID            string  `gorm:"column:id"`

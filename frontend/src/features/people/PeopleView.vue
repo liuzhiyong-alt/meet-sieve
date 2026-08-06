@@ -339,7 +339,7 @@ function trapDialogFocus(event: KeyboardEvent): void {
 
 /** closeVoice 关闭前先取消仍在进行的设备录音。 */
 async function closeVoice(): Promise<void> {
-  if (voice.startingRecording) return
+  if (voice.startingRecording || voice.processing) return
   if (voice.recording) await voice.cancelRecording()
   stopTimer()
   voiceMember.value = undefined
@@ -707,7 +707,7 @@ onBeforeUnmount(() => {
         </div>
         <BaseButton
           variant="quiet"
-          :disabled="voice.startingRecording"
+          :disabled="voice.startingRecording || voice.processing"
           @click="closeVoice"
           >关闭</BaseButton
         >
@@ -720,6 +720,12 @@ onBeforeUnmount(() => {
         <div>
           <strong>声纹操作未完成</strong>
           <p>{{ voice.errorMessage }}</p>
+        </div>
+      </div>
+      <div v-if="voice.notice" class="ms-notice" role="status">
+        <div>
+          <strong>声纹样本已保存</strong>
+          <p>{{ voice.notice }}</p>
         </div>
       </div>
       <div class="ms-tabs" role="tablist" aria-label="声纹采集方式">

@@ -6,20 +6,12 @@ export function DeleteMeeting(arg1) {
   return window['go']['wails']['DeletionBinding']['DeleteMeeting'](arg1);
 }
 
-export function DeleteRecording(arg1) {
-  return window['go']['wails']['DeletionBinding']['DeleteRecording'](arg1);
-}
-
 export function GetDeletionJob(arg1) {
   return window['go']['wails']['DeletionBinding']['GetDeletionJob'](arg1);
 }
 
 export function PreviewMeetingDeletion(arg1) {
   return window['go']['wails']['DeletionBinding']['PreviewMeetingDeletion'](arg1);
-}
-
-export function PreviewRecordingDeletion(arg1) {
-  return window['go']['wails']['DeletionBinding']['PreviewRecordingDeletion'](arg1);
 }
 
 export function RetryDeletion(arg1) {

@@ -38,6 +38,30 @@ func TestRegisterWebRoutes(t *testing.T) {
 	}
 }
 
+// TestValidateWebAssets 验证构建产物缺少入口或被入口引用的资源时不能被视为可服务。
+func TestValidateWebAssets(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name   string
+		assets fstest.MapFS
+		wantOK bool
+	}{
+		{name: "complete", assets: fstest.MapFS{"guest.html": &fstest.MapFile{Data: []byte(`<script src="/guest-assets/assets/guest.js"></script>`)}, "assets/guest.js": &fstest.MapFile{Data: []byte("export{}")}}, wantOK: true},
+		{name: "missing entry", assets: fstest.MapFS{}, wantOK: false},
+		{name: "missing referenced asset", assets: fstest.MapFS{"guest.html": &fstest.MapFile{Data: []byte(`<link href="/guest-assets/assets/guest.css">`)}}, wantOK: false},
+	}
+	for _, test := range tests {
+		test := test
+		t.Run(test.name, func(t *testing.T) {
+			err := ValidateWebAssets(test.assets)
+			if (err == nil) != test.wantOK {
+				t.Fatalf("资源预检结果错误：err=%v", err)
+			}
+		})
+	}
+}
+
 // performWebRequest 执行无网络监听的 Guest 静态资源请求。
 func performWebRequest(handler http.Handler, target string) *httptest.ResponseRecorder {
 	request := httptest.NewRequest(http.MethodGet, target, nil)

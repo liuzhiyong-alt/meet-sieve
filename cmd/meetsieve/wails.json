@@ -7,7 +7,7 @@
   "wailsjsdir": "../../frontend",
   "frontend:install": "pnpm install --frozen-lockfile",
   "frontend:build": "pnpm build",
-  "frontend:dev:watcher": "pnpm dev",
+  "frontend:dev:watcher": "pnpm dev:wails",
   "frontend:dev:serverUrl": "auto",
   "author": {
     "name": "MeetSieve",

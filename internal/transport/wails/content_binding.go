@@ -57,27 +57,28 @@ type TimelineChangedEventDTO struct {
 
 // TimelineEntryDTO 是通过 kind 判别的统一会中事件。
 type TimelineEntryDTO struct {
-	Seq           int64  `json:"seq"`
-	Kind          string `json:"kind"`
-	OccurredAt    int64  `json:"occurred_at"`
-	Source        string `json:"source"`
-	EntityID      string `json:"entity_id,omitempty"`
-	DisplayName   string `json:"display_name,omitempty"`
-	Text          string `json:"text,omitempty"`
-	ContentFormat string `json:"content_format,omitempty"`
-	SpeakerKey    string `json:"speaker_key,omitempty"`
-	SpeakerLabel  string `json:"speaker_label,omitempty"`
-	StartSample   int64  `json:"start_sample,omitempty"`
-	EndSample     int64  `json:"end_sample,omitempty"`
-	State         string `json:"state,omitempty"`
-	Reason        string `json:"reason,omitempty"`
-	ResourceKind  string `json:"resource_kind,omitempty"`
-	OriginalName  string `json:"original_name,omitempty"`
-	MediaType     string `json:"media_type,omitempty"`
-	SizeBytes     int64  `json:"size_bytes,omitempty"`
-	SHA256        string `json:"sha256,omitempty"`
-	URL           string `json:"url,omitempty"`
-	Description   string `json:"description,omitempty"`
+	Seq             int64  `json:"seq"`
+	Kind            string `json:"kind"`
+	OccurredAt      int64  `json:"occurred_at"`
+	Source          string `json:"source"`
+	EntityID        string `json:"entity_id,omitempty"`
+	DisplayName     string `json:"display_name,omitempty"`
+	Text            string `json:"text,omitempty"`
+	ContentFormat   string `json:"content_format,omitempty"`
+	SpeakerKey      string `json:"speaker_key,omitempty"`
+	SpeakerLabel    string `json:"speaker_label,omitempty"`
+	SpeakerRevision int    `json:"speaker_revision,omitempty"`
+	StartSample     int64  `json:"start_sample,omitempty"`
+	EndSample       int64  `json:"end_sample,omitempty"`
+	State           string `json:"state,omitempty"`
+	Reason          string `json:"reason,omitempty"`
+	ResourceKind    string `json:"resource_kind,omitempty"`
+	OriginalName    string `json:"original_name,omitempty"`
+	MediaType       string `json:"media_type,omitempty"`
+	SizeBytes       int64  `json:"size_bytes,omitempty"`
+	SHA256          string `json:"sha256,omitempty"`
+	URL             string `json:"url,omitempty"`
+	Description     string `json:"description,omitempty"`
 }
 
 // SendMeetingMessageDTO 是主持人发送 Markdown 消息的幂等输入。
@@ -213,7 +214,8 @@ func (binding *ContentBinding) GetLiveMeetingStatus(meetingID string) Result[Liv
 		status := LiveMeetingStatusDTO{
 			StartedAt: meeting.StartedAt, EndedAt: meeting.EndedAt, RecordingState: meeting.LifecycleState,
 			MicrophoneState: services.Runtime.MicrophoneState(), LocalSaveState: meeting.LocalSaveState,
-			RealtimeASRState: meeting.RealtimeASRState, LatestFinalAt: latestFinalAt, AgentState: meeting.AgentState,
+			RealtimeASRState: services.Runtime.RealtimeASRState(ctx, meetingID, meeting.RealtimeASRState),
+			LatestFinalAt:    latestFinalAt, AgentState: meeting.AgentState,
 		}
 		if services.LAN != nil {
 			status.LANState = string(services.LAN.Snapshot().State)
@@ -301,7 +303,8 @@ func mapTimelineEntryDTO(entry contentservice.TimelineEntry) TimelineEntryDTO {
 		Seq: entry.Seq, Kind: entry.Kind, OccurredAt: entry.OccurredAt, Source: entry.Source,
 		EntityID: entry.EntityID, DisplayName: entry.DisplayName, Text: entry.Text,
 		ContentFormat: entry.ContentFormat, SpeakerKey: entry.SpeakerKey, SpeakerLabel: entry.SpeakerLabel,
-		StartSample: entry.StartSample, EndSample: entry.EndSample, State: entry.State, Reason: entry.Reason,
+		SpeakerRevision: entry.SpeakerRevision,
+		StartSample:     entry.StartSample, EndSample: entry.EndSample, State: entry.State, Reason: entry.Reason,
 		ResourceKind: entry.ResourceKind, OriginalName: entry.OriginalName, MediaType: entry.MediaType,
 		SizeBytes: entry.SizeBytes, SHA256: entry.SHA256, URL: entry.URL, Description: entry.Description,
 	}

@@ -18,7 +18,7 @@ func TestStep8BindingsExposeFrozenMethods(t *testing.T) {
 	}{
 		{reflect.TypeOf((*wailstransport.FinalizationBinding)(nil)), []string{"GetFinalizationState", "RetryFinalization", "RetryAgentFinalSync"}},
 		{reflect.TypeOf((*wailstransport.GapBinding)(nil)), []string{"GetGapState", "StartGapCompensation", "StopGapCompensation", "RetryGapCompensation", "GetGapConflict", "ResolveGapConflict"}},
-		{reflect.TypeOf((*wailstransport.MinutesBinding)(nil)), []string{"GetMinutesState", "GenerateMinutes", "StopMinutesGeneration", "SaveMinuteDraft", "ConfirmMinute", "ListMinuteVersions", "RestoreMinuteVersion"}},
+		{reflect.TypeOf((*wailstransport.MinutesBinding)(nil)), []string{"GetMinutesState", "GetMinutesSettings", "SaveMinutesSettings", "GenerateMinutes", "StopMinutesGeneration", "SaveMinuteDraft", "ConfirmMinute", "ListMinuteVersions", "RestoreMinuteVersion"}},
 	}
 	for _, test := range tests {
 		for _, name := range test.methods {
