@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -20,15 +19,17 @@ import (
 type AgentSettingsView struct {
 	WakeWord       string
 	ExecutablePath string
+	ProxyPort      int
 	Availability   port.AgentAvailability
 	ProbedAt       int64
 	UpdatedAt      int64
 }
 
-// SaveAgentSettingsInput 是设置页允许修改的两个字段。
+// SaveAgentSettingsInput 是设置页允许修改的 Codex 启动配置。
 type SaveAgentSettingsInput struct {
 	WakeWord       string
 	ExecutablePath string
+	ProxyPort      int
 }
 
 // SettingsService 管理唤醒词、单 executable 和脱敏可用性探测。
@@ -54,6 +55,7 @@ func (service *SettingsService) Get(ctx context.Context) (AgentSettingsView, err
 	}
 	return AgentSettingsView{
 		WakeWord: settings.WakeWord, ExecutablePath: stringValue(settings.CodexExecutablePath),
+		ProxyPort: proxyPortValue(settings.CodexProxyPort),
 		Availability: port.AgentAvailability{
 			State: port.AgentAvailabilityState(settings.CodexAvailabilityState), Version: settings.CodexVersion,
 			AccountState:  port.AgentAccountState(settings.CodexAccountState),
@@ -76,7 +78,11 @@ func (service *SettingsService) Save(ctx context.Context, input SaveAgentSetting
 	if err != nil {
 		return AgentSettingsView{}, err
 	}
-	if err := service.repository.UpdateSettings(ctx, wake.Value, executablePath, service.clock.Now().UnixMilli()); err != nil {
+	proxyPort, err := validateProxyPort(input.ProxyPort)
+	if err != nil {
+		return AgentSettingsView{}, err
+	}
+	if err := service.repository.UpdateSettings(ctx, wake.Value, executablePath, proxyPort, service.clock.Now().UnixMilli()); err != nil {
 		return AgentSettingsView{}, err
 	}
 	return service.Get(ctx)
@@ -91,7 +97,9 @@ func (service *SettingsService) Probe(ctx context.Context) (port.AgentAvailabili
 	if err != nil {
 		return port.AgentAvailability{}, err
 	}
-	availability, probeErr := service.provider.CheckAvailability(ctx, port.AgentAvailabilityRequest{ExecutablePath: stringValue(settings.CodexExecutablePath)})
+	availability, probeErr := service.provider.CheckAvailability(ctx, port.AgentAvailabilityRequest{
+		ExecutablePath: stringValue(settings.CodexExecutablePath), ProxyPort: proxyPortValue(settings.CodexProxyPort),
+	})
 	availability = normalizeAvailability(availability, probeErr)
 	if err := service.repository.UpdateProbeSnapshot(ctx, string(availability.State), availability.Version, string(availability.AccountState), string(availability.ProtocolState), availability.Message, service.clock.Now().UnixMilli()); err != nil {
 		return availability, err
@@ -129,22 +137,18 @@ func validateExecutableSetting(value string) (*string, error) {
 	if strings.ContainsAny(trimmed, "\r\n\x00") {
 		return nil, apperr.Biz(apperr.CodeAgentExecutableInvalid, apperr.WithOp("agent.settings.executable"))
 	}
-	resolved := trimmed
 	if !filepath.IsAbs(trimmed) {
 		if strings.ContainsAny(trimmed, `/\\`) || strings.Contains(trimmed, " ") {
 			return nil, apperr.Biz(apperr.CodeAgentExecutableInvalid, apperr.WithOp("agent.settings.executable"))
 		}
-		path, err := exec.LookPath(trimmed)
-		if err != nil {
-			return nil, apperr.Biz(apperr.CodeAgentExecutableInvalid, apperr.WithOp("agent.settings.executable"))
-		}
-		resolved = path
+		// 裸命令由 Codex Launcher 使用桌面增强 PATH 解析，保存阶段不依赖当前进程 PATH。
+		return &trimmed, nil
 	}
-	info, err := os.Stat(resolved)
+	info, err := os.Stat(trimmed)
 	if err != nil || info.IsDir() || (runtime.GOOS != "windows" && info.Mode()&0o111 == 0) {
 		return nil, apperr.Biz(apperr.CodeAgentExecutableInvalid, apperr.WithOp("agent.settings.executable"))
 	}
-	return &resolved, nil
+	return &trimmed, nil
 }
 
 // stringValue 安全读取可选字符串。
@@ -161,4 +165,23 @@ func optionalInt64Value(value *int64) int64 {
 		return 0
 	}
 	return *value
+}
+
+// proxyPortValue 将数据库中的 NULL 映射为 UI 和启动链统一使用的直连值。
+func proxyPortValue(value *int) int {
+	if value == nil {
+		return 0
+	}
+	return *value
+}
+
+// validateProxyPort 只接受本机 HTTP(S) 代理的有效端口；零值表示不使用代理。
+func validateProxyPort(value int) (*int, error) {
+	if value == 0 {
+		return nil, nil
+	}
+	if value < 1 || value > 65535 {
+		return nil, apperr.Biz(apperr.CodeAgentProxyPortInvalid, apperr.WithOp("agent.settings.proxy"))
+	}
+	return &value, nil
 }

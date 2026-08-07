@@ -74,6 +74,7 @@ func (state AgentProtocolState) Valid() bool {
 // AgentAvailabilityRequest 描述检测 provider 所需的本机配置。
 type AgentAvailabilityRequest struct {
 	ExecutablePath string
+	ProxyPort      int
 }
 
 // AgentAvailability 描述本机智能体是否可以使用。
@@ -91,6 +92,7 @@ type StartAgentSessionRequest struct {
 	WorkingDirectory string
 	Prompt           string
 	ExecutablePath   string
+	ProxyPort        int
 }
 
 // ResumeAgentSessionRequest 描述恢复既有智能体会话的请求。
@@ -99,6 +101,7 @@ type ResumeAgentSessionRequest struct {
 	ProviderSessionID string
 	WorkingDirectory  string
 	ExecutablePath    string
+	ProxyPort         int
 }
 
 // AgentSession 是智能体会话的稳定业务身份。

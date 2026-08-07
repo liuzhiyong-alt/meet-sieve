@@ -189,14 +189,14 @@ func (repository *Repository) EndSession(ctx context.Context, sessionID string, 
 	})
 }
 
-// GetSettings 返回 wake word 与 executable；凭据字段不在此服务读取范围。
+// GetSettings 返回唤醒词和 Codex 启动配置；凭据字段不在此服务读取范围。
 func (repository *Repository) GetSettings(ctx context.Context) (models.Settings, error) {
 	if repository == nil || repository.reader == nil {
 		return models.Settings{}, fmt.Errorf("读取 Codex 设置：Repository 不可用")
 	}
 	var settings models.Settings
 	err := repository.reader.WithContext(ctx).Select(
-		"id", "singleton_key", "wake_word", "codex_executable_path",
+		"id", "singleton_key", "wake_word", "codex_executable_path", "codex_proxy_port",
 		"codex_availability_state", "codex_version", "codex_account_state",
 		"codex_protocol_state", "codex_probe_message", "codex_probed_at",
 		"created_at", "updated_at",
@@ -208,18 +208,18 @@ func (repository *Repository) GetSettings(ctx context.Context) (models.Settings,
 	return settings, nil
 }
 
-// UpdateSettings 保存设置；只有 executable 真正变化时才让既有检测快照失效。
-func (repository *Repository) UpdateSettings(ctx context.Context, wakeWord string, executablePath *string, updatedAt int64) error {
+// UpdateSettings 保存设置；Codex 启动配置真正变化时才让既有检测快照失效。
+func (repository *Repository) UpdateSettings(ctx context.Context, wakeWord string, executablePath *string, proxyPort *int, updatedAt int64) error {
 	if repository == nil || repository.transactions == nil || wakeWord == "" {
 		return fmt.Errorf("保存 Codex 设置：参数无效")
 	}
 	return repository.transactions.WithinTransaction(ctx, func(tx *gorm.DB) error {
 		var current models.Settings
-		if err := tx.WithContext(ctx).Select("codex_executable_path").Where("singleton_key = 1").Take(&current).Error; err != nil {
+		if err := tx.WithContext(ctx).Select("codex_executable_path", "codex_proxy_port").Where("singleton_key = 1").Take(&current).Error; err != nil {
 			return fmt.Errorf("读取 Codex 原设置失败：%w", err)
 		}
-		updates := map[string]any{"wake_word": wakeWord, "codex_executable_path": executablePath, "updated_at": updatedAt}
-		if optionalStringChanged(current.CodexExecutablePath, executablePath) {
+		updates := map[string]any{"wake_word": wakeWord, "codex_executable_path": executablePath, "codex_proxy_port": proxyPort, "updated_at": updatedAt}
+		if optionalStringChanged(current.CodexExecutablePath, executablePath) || optionalIntChanged(current.CodexProxyPort, proxyPort) {
 			updates["codex_availability_state"] = "unchecked"
 			updates["codex_version"] = ""
 			updates["codex_account_state"] = "unknown"
@@ -262,6 +262,14 @@ func (repository *Repository) UpdateProbeSnapshot(ctx context.Context, state str
 
 // optionalStringChanged 判断两个数据库可选字符串是否发生语义变化。
 func optionalStringChanged(left *string, right *string) bool {
+	if left == nil || right == nil {
+		return left != nil || right != nil
+	}
+	return *left != *right
+}
+
+// optionalIntChanged 判断两个可选端口是否发生语义变化。
+func optionalIntChanged(left *int, right *int) bool {
 	if left == nil || right == nil {
 		return left != nil || right != nil
 	}

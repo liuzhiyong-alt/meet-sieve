@@ -76,6 +76,7 @@ export interface WakeCommandEnvelope {
 function normalizeSettings(value: {
   wake_word: string
   codex_executable_path: string
+  codex_proxy_port: number
   probed_at: number
   updated_at: number
   availability: {
@@ -124,6 +125,7 @@ export const useAgentStore = defineStore('agent', {
     settings: {
       wake_word: 'AI 助手',
       codex_executable_path: '',
+      codex_proxy_port: 0,
       probed_at: 0,
       updated_at: 0,
       availability: {
@@ -173,10 +175,11 @@ export const useAgentStore = defineStore('agent', {
       }
       this.settings = normalizeSettings(result.data)
     },
-    /** saveSettings 保存两个明确字段，不保存账号或权限。 */
+    /** saveSettings 保存 Codex 启动配置，不保存账号或权限。 */
     async saveSettings(
       wakeWord: string,
       executablePath: string,
+      proxyPort: number,
     ): Promise<boolean> {
       this.saving = true
       this.errorMessage = ''
@@ -184,6 +187,7 @@ export const useAgentStore = defineStore('agent', {
       const result = await SaveAgentSettings({
         wake_word: wakeWord,
         codex_executable_path: executablePath,
+        codex_proxy_port: proxyPort,
       })
       this.saving = false
       if (result.code !== 200 || !result.data) {
@@ -191,7 +195,10 @@ export const useAgentStore = defineStore('agent', {
         return false
       }
       this.settings = normalizeSettings(result.data)
-      this.notice = 'Codex 设置已保存'
+      this.notice =
+        proxyPort > 0
+          ? 'Codex 设置已保存；新代理会在下次启动或重试 AI 时生效'
+          : 'Codex 设置已保存'
       return true
     },
     /** probe 真实检查 executable、schema、握手和登录状态。 */
@@ -206,7 +213,12 @@ export const useAgentStore = defineStore('agent', {
           version: result.data.version ?? '',
         }
       if (result.code !== 200 || !result.data) {
-        this.errorMessage = result.message
+        const probeMessage = result.message
+        // 后端已保存本次失败快照；重新读取，避免继续展示上一次成功状态。
+        const settingsResult = await GetAgentSettings()
+        if (settingsResult.code === 200 && settingsResult.data)
+          this.settings = normalizeSettings(settingsResult.data)
+        this.errorMessage = probeMessage
         return false
       }
       return true

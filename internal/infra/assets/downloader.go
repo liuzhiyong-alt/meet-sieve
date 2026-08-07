@@ -4,9 +4,12 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	"meet-sieve/internal/infra/filesystem"
@@ -25,6 +28,21 @@ func NewDownloader(client *http.Client) *Downloader {
 		client = &http.Client{Timeout: downloadTimeout}
 	}
 	return &Downloader{client: client}
+}
+
+// NewLocalProxyHTTPClient 创建不继承进程环境的下载客户端；零端口表示直接访问外网。
+func NewLocalProxyHTTPClient(proxyPort int) (*http.Client, error) {
+	if proxyPort < 0 || proxyPort > 65535 {
+		return nil, fmt.Errorf("本机代理端口不合法")
+	}
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	// 设置页的零值语义是直连，不能让开发终端环境中的代理悄然改变该行为。
+	transport.Proxy = nil
+	if proxyPort > 0 {
+		proxyURL := &url.URL{Scheme: "http", Host: net.JoinHostPort("127.0.0.1", strconv.Itoa(proxyPort))}
+		transport.Proxy = http.ProxyURL(proxyURL)
+	}
+	return &http.Client{Timeout: downloadTimeout, Transport: transport}, nil
 }
 
 // Fetch 下载或复用已校验的归档，返回 cache 中的绝对路径。

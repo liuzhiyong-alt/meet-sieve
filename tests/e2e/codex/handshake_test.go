@@ -60,6 +60,27 @@ func TestCodexProviderAvailability_VerifiesSchemaAndLogin(t *testing.T) {
 	t.Logf("Codex Provider 可用：version=%s", availability.Version)
 }
 
+// TestCodexLauncher_ResolvesDesktopEnvironment 验证 Finder 风格精简 PATH 下仍能启动用户配置的 Codex 入口。
+func TestCodexLauncher_ResolvesDesktopEnvironment(t *testing.T) {
+	executable := os.Getenv("MEETSIEVE_DESKTOP_CODEX_PATH")
+	if executable == "" {
+		t.Skip("设置 MEETSIEVE_DESKTOP_CODEX_PATH 后执行桌面启动环境验证")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	spec, err := codex.NewLauncher().Resolve(ctx, executable, 0)
+	if err != nil {
+		t.Fatalf("桌面环境解析 Codex 失败：%v", err)
+	}
+	output, err := spec.CommandContext(ctx, "--version").Output()
+	if err != nil {
+		t.Fatalf("桌面环境启动 Codex 失败：%v", err)
+	}
+	if !strings.HasPrefix(strings.TrimSpace(string(output)), "codex-cli ") {
+		t.Fatalf("Codex 版本输出不正确：%q", output)
+	}
+}
+
 // TestCodexProviderThreeTurnsAndResume 验证真实 thread 中三轮结构化输出及跨进程恢复。
 // 该测试会调用真实模型，默认跳过；发布前通过显式环境变量执行，避免普通 CI 产生外部费用。
 func TestCodexProviderThreeTurnsAndResume(t *testing.T) {

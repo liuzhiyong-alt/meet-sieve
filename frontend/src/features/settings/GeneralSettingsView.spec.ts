@@ -72,12 +72,14 @@ const stores = vi.hoisted(() => ({
     settings: {
       updated_at: 0,
       codex_executable_path: '',
+      codex_proxy_port: 0,
       wake_word: 'AI 助手',
       availability: {},
     },
     wakeTest: { state: 'idle', matched: 0, required: 3 },
     saving: false,
     loadSettings: vi.fn().mockResolvedValue(undefined),
+    saveSettings: vi.fn().mockResolvedValue(true),
     applyWakeTestEvent: vi.fn(),
     stopWakeTest: vi.fn().mockResolvedValue(undefined),
   },
@@ -168,6 +170,7 @@ describe('GeneralSettingsView 通用设置', () => {
     stores.asr.settings.requires_api_key_upgrade = false
     stores.minutes.settings.prompt = '默认会议纪要要求'
     stores.minutes.settings.is_default = true
+    stores.agent.settings.codex_proxy_port = 0
   })
 
   it('将工作目录和存储诊断作为两个独立配置卡片', async () => {
@@ -235,9 +238,9 @@ describe('GeneralSettingsView 通用设置', () => {
       await wrapper.setProps({ section: section.name })
 
       expect(wrapper.get(section.title).element.tagName).toBe('H2')
-      expect(wrapper.get('.ms-settings-card .ms-card-head .ms-help').text()).toContain(
-        section.lead,
-      )
+      expect(
+        wrapper.get('.ms-settings-card .ms-card-head .ms-help').text(),
+      ).toContain(section.lead)
       expect(wrapper.findAll('h1')).toHaveLength(1)
     }
 
@@ -278,6 +281,30 @@ describe('GeneralSettingsView 通用设置', () => {
     await wrapper.get('button.ms-button--primary').trigger('click')
     await flushPromises()
     expect(stores.minutes.saveSettings).toHaveBeenCalledWith('突出决策和负责人')
+    wrapper.unmount()
+  })
+
+  it('Codex 代理端口使用已有设置字段保存，并允许 0 表示直连', async () => {
+    const wrapper = await mountGeneralSettings('codex')
+    const proxyPort = wrapper.get('#codex-proxy-port')
+
+    expect(proxyPort.attributes('min')).toBe('0')
+    expect(proxyPort.attributes('max')).toBe('65535')
+    expect(wrapper.text()).toContain('填写 0 表示关闭代理')
+    expect(wrapper.text()).toContain('供 Codex 与下载官方声纹模型使用')
+
+    await proxyPort.setValue('65400')
+    expect(
+      dirtyEditRegistry.dirtyEditors().map((editor) => editor.label),
+    ).toEqual(['Codex 设置'])
+
+    const saveButton = wrapper
+      .findAll('button.ms-button--primary')
+      .find((button) => button.text() === '保存更改')
+    expect(saveButton).toBeDefined()
+    await saveButton?.trigger('click')
+    await flushPromises()
+    expect(stores.agent.saveSettings).toHaveBeenCalledWith('AI 助手', '', 65400)
     wrapper.unmount()
   })
 

@@ -101,9 +101,13 @@ func (module *VoiceModule) Stop() error {
 	return module.runtime.Close()
 }
 
-// Download 下载并安装唯一锁定官方包，成功后立即激活 encoder。
-func (module *VoiceModule) Download(ctx context.Context) (VoiceModuleStatus, error) {
-	if _, err := module.manager.Download(ctx); err != nil {
+// Download 下载并安装唯一锁定官方包，使用设置页保存的本机代理端口，成功后立即激活 encoder。
+func (module *VoiceModule) Download(ctx context.Context, proxyPort int) (VoiceModuleStatus, error) {
+	client, err := assets.NewLocalProxyHTTPClient(proxyPort)
+	if err != nil {
+		return module.Status(), apperr.Dependency(apperr.CodeVoiceModelUnavailable, err, apperr.WithOp("voice.model.download"))
+	}
+	if _, err := module.manager.DownloadWithClient(ctx, client); err != nil {
 		return module.Status(), apperr.Dependency(apperr.CodeVoiceModelUnavailable, err, apperr.WithOp("voice.model.download"))
 	}
 	if err := module.activateInstalledModel(); err != nil {

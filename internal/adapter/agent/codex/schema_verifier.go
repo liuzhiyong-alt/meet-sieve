@@ -9,8 +9,8 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -27,16 +27,16 @@ type SchemaContract struct {
 
 // SchemaCommandRunner 隔离版本查询与 schema 生成进程，便于验证缓存和失败清理。
 type SchemaCommandRunner interface {
-	Version(ctx context.Context, executablePath string) (string, error)
-	Generate(ctx context.Context, executablePath string, outputDirectory string) error
+	Version(ctx context.Context, spec LaunchSpec) (string, error)
+	Generate(ctx context.Context, spec LaunchSpec, outputDirectory string) error
 }
 
 // CommandSchemaRunner 使用用户指定的 Codex executable 执行官方 schema 生成命令。
 type CommandSchemaRunner struct{}
 
 // Version 返回 Codex CLI 的版本身份。
-func (CommandSchemaRunner) Version(ctx context.Context, executablePath string) (string, error) {
-	output, err := exec.CommandContext(ctx, executablePath, "--version").Output()
+func (CommandSchemaRunner) Version(ctx context.Context, spec LaunchSpec) (string, error) {
+	output, err := spec.CommandContext(ctx, "--version").Output()
 	if err != nil {
 		return "", fmt.Errorf("读取 provider 版本失败: %w", err)
 	}
@@ -48,10 +48,9 @@ func (CommandSchemaRunner) Version(ctx context.Context, executablePath string) (
 }
 
 // Generate 调用 app-server 官方命令，把 schema 写入一次性目录。
-func (CommandSchemaRunner) Generate(ctx context.Context, executablePath string, outputDirectory string) error {
-	command := exec.CommandContext(
+func (CommandSchemaRunner) Generate(ctx context.Context, spec LaunchSpec, outputDirectory string) error {
+	command := spec.CommandContext(
 		ctx,
-		executablePath,
 		"app-server",
 		"generate-json-schema",
 		"--out",
@@ -89,18 +88,18 @@ func NewSchemaVerifier(runner SchemaCommandRunner, contract SchemaContract, temp
 }
 
 // Verify 按 executable 路径、版本和 mtime 缓存兼容结论，并保证临时目录始终清理。
-func (verifier *SchemaVerifier) Verify(ctx context.Context, executablePath string) error {
+func (verifier *SchemaVerifier) Verify(ctx context.Context, spec LaunchSpec) error {
 	verifier.mu.Lock()
 	defer verifier.mu.Unlock()
 
-	identity, err := verifier.loadIdentity(ctx, executablePath)
+	identity, err := verifier.loadIdentity(ctx, spec)
 	if err != nil {
 		return err
 	}
 	if verifier.verifiedKey == identity {
 		return nil
 	}
-	if err := verifier.generateAndValidate(ctx, executablePath); err != nil {
+	if err := verifier.generateAndValidate(ctx, spec); err != nil {
 		return err
 	}
 	verifier.verifiedKey = identity
@@ -108,30 +107,31 @@ func (verifier *SchemaVerifier) Verify(ctx context.Context, executablePath strin
 }
 
 // loadIdentity 读取缓存所需身份，不把可执行文件路径写入用户消息。
-func (verifier *SchemaVerifier) loadIdentity(ctx context.Context, executablePath string) (string, error) {
-	info, err := os.Stat(executablePath)
+func (verifier *SchemaVerifier) loadIdentity(ctx context.Context, spec LaunchSpec) (string, error) {
+	info, err := os.Stat(spec.SourcePath)
 	if err != nil || info.IsDir() {
 		return "", apperr.Biz(
 			apperr.CodeAgentExecutableInvalid,
 			apperr.WithOp("agent.schema.executable"),
 		)
 	}
-	version, err := verifier.runner.Version(ctx, executablePath)
+	version, err := verifier.runner.Version(ctx, spec)
 	if err != nil {
 		return "", mapSchemaCommandError(err, "agent.schema.version")
 	}
-	return fmt.Sprintf("%s\x00%s\x00%d", executablePath, version, info.ModTime().UnixNano()), nil
+	pathDigest := sha256.Sum256([]byte(environmentValue(spec.Env, "PATH", runtime.GOOS == "windows")))
+	return fmt.Sprintf("%s\x00%s\x00%d\x00%x", spec.SourcePath, version, info.ModTime().UnixNano(), pathDigest), nil
 }
 
 // generateAndValidate 原子执行生成与必要文件校验，任何失败都不更新缓存。
-func (verifier *SchemaVerifier) generateAndValidate(ctx context.Context, executablePath string) error {
+func (verifier *SchemaVerifier) generateAndValidate(ctx context.Context, spec LaunchSpec) error {
 	directory, err := os.MkdirTemp(verifier.temporaryRoot, "meetsieve-codex-schema-")
 	if err != nil {
-		return protocolIncompatible(err, "agent.schema.temp")
+		return apperr.Dependency(apperr.CodeAgentLaunchFailed, err, apperr.WithOp("agent.schema.temp"))
 	}
 	defer func() { _ = os.RemoveAll(directory) }()
 
-	if err := verifier.runner.Generate(ctx, executablePath, directory); err != nil {
+	if err := verifier.runner.Generate(ctx, spec, directory); err != nil {
 		return mapSchemaCommandError(err, "agent.schema.generate")
 	}
 	if err := validateRequiredSchemas(directory, verifier.contract.Files); err != nil {
@@ -140,7 +140,7 @@ func (verifier *SchemaVerifier) generateAndValidate(ctx context.Context, executa
 	return nil
 }
 
-// mapSchemaCommandError 区分调用方取消、外部命令超时和真实协议不兼容。
+// mapSchemaCommandError 区分调用方取消、外部命令超时、已分类错误和普通启动失败。
 func mapSchemaCommandError(cause error, operation string) error {
 	if errors.Is(cause, context.Canceled) {
 		return apperr.Biz(apperr.CodeCanceled, apperr.WithOp(operation))
@@ -148,7 +148,11 @@ func mapSchemaCommandError(cause error, operation string) error {
 	if errors.Is(cause, context.DeadlineExceeded) {
 		return apperr.Dependency(apperr.CodeDependencyTimeout, cause, apperr.WithOp(operation))
 	}
-	return protocolIncompatible(cause, operation)
+	var appErr *apperr.AppError
+	if errors.As(cause, &appErr) {
+		return cause
+	}
+	return apperr.Dependency(apperr.CodeAgentLaunchFailed, cause, apperr.WithOp(operation))
 }
 
 // validateRequiredSchemas 只校验必要文件，允许 provider 增加与当前实现无关的 schema。

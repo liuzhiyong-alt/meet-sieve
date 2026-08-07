@@ -22,7 +22,7 @@ type schemaRunner struct {
 }
 
 // Version 返回测试控制的 provider 版本。
-func (runner *schemaRunner) Version(context.Context, string) (string, error) {
+func (runner *schemaRunner) Version(context.Context, codex.LaunchSpec) (string, error) {
 	return runner.version, runner.versionErr
 }
 
@@ -48,7 +48,7 @@ func TestSchemaVerifier_PreservesCancellationAndTimeout(t *testing.T) {
 				t.Fatalf("创建测试 executable 失败：%v", err)
 			}
 			verifier := codex.NewSchemaVerifier(&schemaRunner{versionErr: test.cause}, contractFor("required.json", []byte(`{}`)), root)
-			err := verifier.Verify(context.Background(), executable)
+			err := verifier.Verify(context.Background(), testLaunchSpec(executable))
 			if normalized := apperr.Normalize(err); normalized.ErrorCode != test.errorCode {
 				t.Fatalf("Schema 命令错误分类错误：got=%s want=%s err=%v", normalized.ErrorCode, test.errorCode, err)
 			}
@@ -56,8 +56,49 @@ func TestSchemaVerifier_PreservesCancellationAndTimeout(t *testing.T) {
 	}
 }
 
+// TestSchemaVerifier_PreservesClassifiedLaunchError 验证启动环境错误不会被覆盖成协议不兼容。
+func TestSchemaVerifier_PreservesClassifiedLaunchError(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	executable := filepath.Join(root, "codex")
+	if err := os.WriteFile(executable, []byte("binary"), 0o700); err != nil {
+		t.Fatalf("创建测试 executable 失败：%v", err)
+	}
+	runtimeErr := apperr.Dependency(
+		apperr.CodeAgentRuntimeMissing,
+		errors.New("node missing"),
+		apperr.WithOp("agent.launch.runtime"),
+	)
+	verifier := codex.NewSchemaVerifier(&schemaRunner{versionErr: runtimeErr}, contractFor("required.json", []byte(`{}`)), root)
+	err := verifier.Verify(context.Background(), testLaunchSpec(executable))
+	if normalized := apperr.Normalize(err); normalized.ErrorCode != apperr.CodeAgentRuntimeMissing.ErrorCode {
+		t.Fatalf("已分类启动错误被错误覆盖：got=%s err=%v", normalized.ErrorCode, err)
+	}
+}
+
+// TestSchemaVerifier_MapsCommandFailureToLaunchError 验证命令异常退出与 schema 语义漂移使用不同错误码。
+func TestSchemaVerifier_MapsCommandFailureToLaunchError(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	executable := filepath.Join(root, "codex")
+	if err := os.WriteFile(executable, []byte("binary"), 0o700); err != nil {
+		t.Fatalf("创建测试 executable 失败：%v", err)
+	}
+	verifier := codex.NewSchemaVerifier(
+		&schemaRunner{version: "codex-cli test", generateErr: errors.New("process exited")},
+		contractFor("required.json", []byte(`{}`)),
+		root,
+	)
+	err := verifier.Verify(context.Background(), testLaunchSpec(executable))
+	if normalized := apperr.Normalize(err); normalized.ErrorCode != apperr.CodeAgentLaunchFailed.ErrorCode {
+		t.Fatalf("命令失败错误码不正确：got=%s err=%v", normalized.ErrorCode, err)
+	}
+}
+
 // Generate 把测试 schema 写入 verifier 提供的一次性目录。
-func (runner *schemaRunner) Generate(_ context.Context, _ string, outputDirectory string) error {
+func (runner *schemaRunner) Generate(_ context.Context, _ codex.LaunchSpec, outputDirectory string) error {
 	runner.generateCount++
 	runner.lastOutput = outputDirectory
 	if runner.generateErr != nil {
@@ -88,10 +129,10 @@ func TestSchemaVerifier_CachesByExecutableVersionAndMtime(t *testing.T) {
 	runner := &schemaRunner{version: "codex-cli test", files: map[string][]byte{"v2/TurnStartParams.json": content}}
 	verifier := codex.NewSchemaVerifier(runner, contractFor("v2/TurnStartParams.json", content), tempRoot)
 
-	if err := verifier.Verify(context.Background(), executable); err != nil {
+	if err := verifier.Verify(context.Background(), testLaunchSpec(executable)); err != nil {
 		t.Fatalf("首次校验失败：%v", err)
 	}
-	if err := verifier.Verify(context.Background(), executable); err != nil {
+	if err := verifier.Verify(context.Background(), testLaunchSpec(executable)); err != nil {
 		t.Fatalf("缓存校验失败：%v", err)
 	}
 	if runner.generateCount != 1 {
@@ -99,14 +140,14 @@ func TestSchemaVerifier_CachesByExecutableVersionAndMtime(t *testing.T) {
 	}
 
 	runner.version = "codex-cli changed"
-	if err := verifier.Verify(context.Background(), executable); err != nil {
+	if err := verifier.Verify(context.Background(), testLaunchSpec(executable)); err != nil {
 		t.Fatalf("版本变化后校验失败：%v", err)
 	}
 	changed := time.Now().Add(time.Second)
 	if err := os.Chtimes(executable, changed, changed); err != nil {
 		t.Fatalf("修改 executable mtime 失败：%v", err)
 	}
-	if err := verifier.Verify(context.Background(), executable); err != nil {
+	if err := verifier.Verify(context.Background(), testLaunchSpec(executable)); err != nil {
 		t.Fatalf("mtime 变化后校验失败：%v", err)
 	}
 	if runner.generateCount != 3 {
@@ -142,7 +183,7 @@ func TestSchemaVerifier_FailsClosedOnMissingInvalidOrSemanticDrift(t *testing.T)
 			}
 			runner := &schemaRunner{version: "codex-cli test", files: test.files}
 			verifier := codex.NewSchemaVerifier(runner, test.contract, root)
-			err := verifier.Verify(context.Background(), executable)
+			err := verifier.Verify(context.Background(), testLaunchSpec(executable))
 			if err == nil {
 				t.Fatal("不兼容 schema 不应通过")
 			}
@@ -168,7 +209,7 @@ func TestSchemaVerifier_AcceptsJSONRepresentationOnlyChange(t *testing.T) {
 	baseline := []byte(`{"type":"object","properties":{"threadId":{"type":"string"},"cwd":{"type":"string"}}}`)
 	reordered := []byte("{\n  \"properties\": {\"cwd\": {\"type\": \"string\"}, \"threadId\": {\"type\": \"string\"}},\n  \"type\": \"object\"\n}")
 	verifier := codex.NewSchemaVerifier(&schemaRunner{version: "codex-cli upgraded", files: map[string][]byte{"required.json": reordered}}, contractFor("required.json", baseline), root)
-	if err := verifier.Verify(context.Background(), executable); err != nil {
+	if err := verifier.Verify(context.Background(), testLaunchSpec(executable)); err != nil {
 		t.Fatalf("仅 JSON 表示变化不应阻断：%v", err)
 	}
 }
@@ -188,7 +229,7 @@ func TestSchemaVerifier_IgnoresNonRequiredSchemas(t *testing.T) {
 		"future.json":   []byte(`{"new":true}`),
 	}}
 	verifier := codex.NewSchemaVerifier(runner, contractFor("required.json", required), root)
-	if err := verifier.Verify(context.Background(), executable); err != nil {
+	if err := verifier.Verify(context.Background(), testLaunchSpec(executable)); err != nil {
 		t.Fatalf("非必要 schema 不应导致失败：%v", err)
 	}
 }
@@ -200,4 +241,9 @@ func contractFor(path string, content []byte) codex.SchemaContract {
 		panic(err)
 	}
 	return codex.SchemaContract{Version: "test", Files: map[string]string{path: digest}}
+}
+
+// testLaunchSpec 为 schema verifier 测试构造最小启动身份。
+func testLaunchSpec(executable string) codex.LaunchSpec {
+	return codex.LaunchSpec{Command: executable, SourcePath: executable, Env: os.Environ()}
 }

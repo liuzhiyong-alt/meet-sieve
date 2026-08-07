@@ -30,6 +30,7 @@ type Settings struct {
 	WakeWord               string  `gorm:"column:wake_word"`
 	MinutePrompt           *string `gorm:"column:minute_prompt"`
 	CodexExecutablePath    *string `gorm:"column:codex_executable_path"`
+	CodexProxyPort         *int    `gorm:"column:codex_proxy_port"`
 	CodexAvailabilityState string  `gorm:"column:codex_availability_state"`
 	CodexVersion           string  `gorm:"column:codex_version"`
 	CodexAccountState      string  `gorm:"column:codex_account_state"`

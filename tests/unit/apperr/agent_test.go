@@ -19,6 +19,8 @@ func TestAgentCodes_ProvideStableSafeSemantics(t *testing.T) {
 		retryable bool
 	}{
 		{apperr.CodeAgentExecutableInvalid, "AGENT_EXECUTABLE_INVALID", apperr.KindBusiness, true},
+		{apperr.CodeAgentRuntimeMissing, "AGENT_RUNTIME_MISSING", apperr.KindDependency, true},
+		{apperr.CodeAgentLaunchFailed, "AGENT_LAUNCH_FAILED", apperr.KindDependency, true},
 		{apperr.CodeAgentNotLoggedIn, "AGENT_NOT_LOGGED_IN", apperr.KindDependency, true},
 		{apperr.CodeAgentProtocolIncompatible, "AGENT_PROTOCOL_INCOMPATIBLE", apperr.KindDependency, false},
 		{apperr.CodeAgentApprovalUnsupported, "AGENT_APPROVAL_UNSUPPORTED", apperr.KindDependency, false},
@@ -27,6 +29,7 @@ func TestAgentCodes_ProvideStableSafeSemantics(t *testing.T) {
 		{apperr.CodeAgentBusy, "AGENT_BUSY", apperr.KindBusiness, true},
 		{apperr.CodeAgentQuestionInvalid, "AGENT_QUESTION_INVALID", apperr.KindValidation, false},
 		{apperr.CodeAgentWakeWordInvalid, "AGENT_WAKE_WORD_INVALID", apperr.KindValidation, false},
+		{apperr.CodeAgentProxyPortInvalid, "AGENT_PROXY_PORT_INVALID", apperr.KindValidation, false},
 		{apperr.CodeAgentTurnTimeout, "AGENT_TURN_TIMEOUT", apperr.KindDependency, true},
 		{apperr.CodeAgentTurnCancelled, "AGENT_TURN_CANCELLED", apperr.KindCanceled, true},
 		{apperr.CodeAgentOutputInvalid, "AGENT_OUTPUT_INVALID", apperr.KindDependency, true},

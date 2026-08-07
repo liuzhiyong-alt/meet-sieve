@@ -319,7 +319,14 @@ func run() error {
 			}), nil
 	}, boundary)
 	directoryDialogBinding := wailstransport.NewDirectoryDialogBinding(func() context.Context { return wailsContext }, boundary)
-	voiceModelBinding := wailstransport.NewVoiceModelBinding(voiceModule, func() context.Context { return wailsContext }, boundary)
+	voiceModelBinding := wailstransport.NewVoiceModelBinding(voiceModule, func() context.Context { return wailsContext }, boundary, func(ctx context.Context) (int, error) {
+		services, serviceErr := meetingModule.Current()
+		if serviceErr != nil {
+			return 0, serviceErr
+		}
+		settings, settingsErr := services.AgentSettings.Get(ctx)
+		return settings.ProxyPort, settingsErr
+	})
 	voiceBinding := wailstransport.NewVoiceBinding(
 		voiceWorkspaceServices.Current,
 		bootstrap.Dependencies.AudioEnumerator,

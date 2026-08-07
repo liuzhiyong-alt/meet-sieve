@@ -21,12 +21,16 @@ type VoiceModelDTO struct {
 	Location     string `json:"location"`
 }
 
+// VoiceModelProxyPortProvider 返回当前工作目录保存的本机 HTTP(S) 代理端口。
+type VoiceModelProxyPortProvider func(context.Context) (int, error)
+
 // VoiceModelBinding 暴露官方模型状态、下载与同包离线导入。
 type VoiceModelBinding struct {
 	module          *application.VoiceModule
 	contextProvider ContextProvider
 	boundary        *Boundary
 	afterActivate   func(context.Context) error
+	proxyPort       VoiceModelProxyPortProvider
 }
 
 // SetAfterActivate 登记模型激活后恢复 pending 样本与重建向量的回调。
@@ -37,8 +41,8 @@ func (binding *VoiceModelBinding) SetAfterActivate(callback func(context.Context
 }
 
 // NewVoiceModelBinding 创建声纹模型设置 binding。
-func NewVoiceModelBinding(module *application.VoiceModule, contextProvider ContextProvider, boundary *Boundary) *VoiceModelBinding {
-	return &VoiceModelBinding{module: module, contextProvider: contextProvider, boundary: boundary}
+func NewVoiceModelBinding(module *application.VoiceModule, contextProvider ContextProvider, boundary *Boundary, proxyPort VoiceModelProxyPortProvider) *VoiceModelBinding {
+	return &VoiceModelBinding{module: module, contextProvider: contextProvider, boundary: boundary, proxyPort: proxyPort}
 }
 
 // GetVoiceModelState 返回当前模型与运行时的只读状态。
@@ -58,7 +62,11 @@ func (binding *VoiceModelBinding) DownloadOfficialVoiceModel() Result[VoiceModel
 		if err != nil {
 			return VoiceModelDTO{}, err
 		}
-		status, err := binding.module.Download(ctx)
+		proxyPort, err := binding.currentProxyPort(ctx)
+		if err != nil {
+			return VoiceModelDTO{}, err
+		}
+		status, err := binding.module.Download(ctx, proxyPort)
 		if err == nil && binding.afterActivate != nil {
 			err = binding.afterActivate(ctx)
 		}
@@ -97,6 +105,14 @@ func (binding *VoiceModelBinding) currentContext() (context.Context, error) {
 		return nil, fmt.Errorf("声纹模型设置尚未准备")
 	}
 	return binding.contextProvider(), nil
+}
+
+// currentProxyPort 缺少工作目录配置时保持直连，避免影响离线导入和状态读取。
+func (binding *VoiceModelBinding) currentProxyPort(ctx context.Context) (int, error) {
+	if binding == nil || binding.proxyPort == nil {
+		return 0, nil
+	}
+	return binding.proxyPort(ctx)
 }
 
 // mapVoiceModelDTO 将内部状态映射为设计稿登记的四类展示状态。

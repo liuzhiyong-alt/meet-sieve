@@ -508,6 +508,13 @@ func (module *MeetingModule) buildServices(reader *gorm.DB, transactions *databa
 			}
 			return *current.CodexExecutablePath, nil
 		},
+		ProxyPort: func(ctx context.Context) (int, error) {
+			current, err := agentRepository.GetSettings(ctx)
+			if err != nil || current.CodexProxyPort == nil {
+				return 0, err
+			}
+			return *current.CodexProxyPort, nil
+		},
 	})
 	agentSettings := agentservice.NewSettingsService(agentRepository, agentProvider, currentClock)
 	agentWakeTest := agentservice.NewWakeWordTestService(agentservice.WakeWordTestDependencies{

@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os/exec"
 	"time"
 
 	"meet-sieve/internal/infra/apperr"
@@ -20,8 +19,12 @@ const (
 
 // Config 描述 Codex app-server 可执行文件和固定参数。
 type Config struct {
+	// Command 保留直接构造 Client 的兼容入口。
 	Command string
-	Args    []string
+	// Args 是本次 Codex 子进程的业务参数。
+	Args []string
+	// Launch 是 Provider 预先解析并在所有调用中复用的启动计划。
+	Launch LaunchSpec
 }
 
 // InitializeResult 是握手成功后需要记录的服务端信息。
@@ -146,10 +149,13 @@ func dependencyError(cause error, op string) error {
 
 // startProcess 校验命令并启动隐藏窗口策略已配置的 Codex 子进程。
 func startProcess(config Config) (*process, error) {
-	if config.Command == "" {
+	spec := config.Launch
+	if spec.Command == "" {
+		spec = LaunchSpec{Command: config.Command, SourcePath: config.Command}
+	}
+	if spec.Command == "" {
 		return nil, fmt.Errorf("Codex 命令不能为空")
 	}
-	command := exec.Command(config.Command, config.Args...)
-	configureProcess(command)
+	command := spec.CommandWithoutContext(config.Args...)
 	return newProcess(command)
 }

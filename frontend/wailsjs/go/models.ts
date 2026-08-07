@@ -313,6 +313,7 @@ export namespace wails {
 	export class AgentSettingsDTO {
 	    wake_word: string;
 	    codex_executable_path: string;
+	    codex_proxy_port: number;
 	    availability: AgentAvailabilityDTO;
 	    probed_at: number;
 	    updated_at: number;
@@ -325,6 +326,7 @@ export namespace wails {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.wake_word = source["wake_word"];
 	        this.codex_executable_path = source["codex_executable_path"];
+	        this.codex_proxy_port = source["codex_proxy_port"];
 	        this.availability = this.convertValues(source["availability"], AgentAvailabilityDTO);
 	        this.probed_at = source["probed_at"];
 	        this.updated_at = source["updated_at"];
@@ -5141,6 +5143,7 @@ export namespace wails {
 	export class SaveAgentSettingsDTO {
 	    wake_word: string;
 	    codex_executable_path: string;
+	    codex_proxy_port: number;
 
 	    static createFrom(source: any = {}) {
 	        return new SaveAgentSettingsDTO(source);
@@ -5150,6 +5153,7 @@ export namespace wails {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.wake_word = source["wake_word"];
 	        this.codex_executable_path = source["codex_executable_path"];
+	        this.codex_proxy_port = source["codex_proxy_port"];
 	    }
 	}
 	export class SendMeetingMessageDTO {

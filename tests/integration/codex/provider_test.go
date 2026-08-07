@@ -134,12 +134,12 @@ func writeCompletedTurn(encoder *json.Encoder) {
 type providerSchemaRunner struct{ content []byte }
 
 // Version 返回测试 schema 身份。
-func (runner providerSchemaRunner) Version(context.Context, string) (string, error) {
+func (runner providerSchemaRunner) Version(context.Context, codex.LaunchSpec) (string, error) {
 	return "codex-cli test", nil
 }
 
 // Generate 写入测试所需的单个冻结 schema。
-func (runner providerSchemaRunner) Generate(_ context.Context, _ string, outputDirectory string) error {
+func (runner providerSchemaRunner) Generate(_ context.Context, _ codex.LaunchSpec, outputDirectory string) error {
 	return os.WriteFile(filepath.Join(outputDirectory, "required.json"), runner.content, 0o600)
 }
 

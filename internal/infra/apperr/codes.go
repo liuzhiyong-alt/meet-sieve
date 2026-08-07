@@ -166,6 +166,10 @@ var (
 	CodeASRPauseDrainFailed = Code{Value: 502, ErrorCode: "ASR_PAUSE_DRAIN_FAILED", Message: "无法安全暂停实时转写，未执行本次 AI 请求", Kind: KindDependency, Retryable: true}
 	// CodeAgentExecutableInvalid 表示 Codex 可执行文件不可用。
 	CodeAgentExecutableInvalid = Code{Value: 409, ErrorCode: "AGENT_EXECUTABLE_INVALID", Message: "Codex 可执行文件不可用，请检查设置", Kind: KindBusiness, Retryable: true}
+	// CodeAgentRuntimeMissing 表示 Codex 脚本依赖的 Node.js 等运行时不可用。
+	CodeAgentRuntimeMissing = Code{Value: 502, ErrorCode: "AGENT_RUNTIME_MISSING", Message: "Codex 运行环境不完整，请检查 Node.js 或重新安装 Codex", Kind: KindDependency, Retryable: true}
+	// CodeAgentLaunchFailed 表示 Codex 入口存在，但当前桌面环境无法成功启动。
+	CodeAgentLaunchFailed = Code{Value: 502, ErrorCode: "AGENT_LAUNCH_FAILED", Message: "Codex 无法启动，请检查安装后重试", Kind: KindDependency, Retryable: true}
 	// CodeAgentNotLoggedIn 表示用户尚未在 Codex 中登录。
 	CodeAgentNotLoggedIn = Code{Value: 502, ErrorCode: "AGENT_NOT_LOGGED_IN", Message: "Codex 尚未登录，请先在外部完成登录", Kind: KindDependency, Retryable: true}
 	// CodeAgentProtocolIncompatible 表示必要 app-server 协议契约不兼容。
@@ -182,6 +186,8 @@ var (
 	CodeAgentQuestionInvalid = Code{Value: 400, ErrorCode: "AGENT_QUESTION_INVALID", Message: "问题为空或超过大小限制", Kind: KindValidation}
 	// CodeAgentWakeWordInvalid 表示唤醒词为空、包含空白或超过长度上限。
 	CodeAgentWakeWordInvalid = Code{Value: 400, ErrorCode: "AGENT_WAKE_WORD_INVALID", Message: "唤醒词格式不正确", Kind: KindValidation}
+	// CodeAgentProxyPortInvalid 表示本机 HTTP(S) 代理端口不在有效范围内。
+	CodeAgentProxyPortInvalid = Code{Value: 400, ErrorCode: "AGENT_PROXY_PORT_INVALID", Message: "本机代理端口应为 1 至 65535", Kind: KindValidation}
 	// CodeAgentTurnTimeout 表示智能体任务超过总时限。
 	CodeAgentTurnTimeout = Code{Value: 504, ErrorCode: "AGENT_TURN_TIMEOUT", Message: "AI 回答超时，未保存当前结果", Kind: KindDependency, Retryable: true}
 	// CodeAgentTurnCancelled 表示主持人停止了当前智能体任务。

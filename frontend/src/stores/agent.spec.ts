@@ -90,8 +90,50 @@ describe('agent store', () => {
     expect(store.wakeTest.matched).toBe(0)
   })
 
+  it('reloads persisted availability after a failed Codex probe', async () => {
+    bindings.ProbeAgent.mockResolvedValue({
+      code: 502,
+      message: 'Codex 运行环境不完整，请检查 Node.js 或重新安装 Codex',
+    })
+    bindings.GetAgentSettings.mockResolvedValue({
+      code: 200,
+      data: {
+        wake_word: 'AI 助手',
+        codex_executable_path: '/opt/homebrew/bin/codex',
+        codex_proxy_port: 65400,
+        probed_at: 1,
+        updated_at: 1,
+        availability: {
+          state: 'unavailable',
+          version: '',
+          account_state: 'unknown',
+          protocol_state: 'unchecked',
+          message: 'Codex 运行环境不可用',
+        },
+      },
+    })
+
+    const store = useAgentStore()
+    store.settings.availability = {
+      state: 'available',
+      version: 'codex-cli old',
+      account_state: 'logged_in',
+      protocol_state: 'compatible',
+      message: 'Codex 可用',
+    }
+
+    expect(await store.probe()).toBe(false)
+    expect(store.settings.availability.state).toBe('unavailable')
+    expect(store.settings.availability.protocol_state).toBe('unchecked')
+    expect(store.settings.codex_proxy_port).toBe(65400)
+    expect(store.errorMessage).toBe(
+      'Codex 运行环境不完整，请检查 Node.js 或重新安装 Codex',
+    )
+  })
+
   it('coalesces repeated retry actions while one request is running', async () => {
-    let resolveRetry: ((value: { code: number; data: boolean }) => void) | undefined
+    let resolveRetry:
+      ((value: { code: number; data: boolean }) => void) | undefined
     bindings.RetryAgent.mockReturnValue(
       new Promise((resolve) => {
         resolveRetry = resolve

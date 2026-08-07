@@ -26,6 +26,7 @@ type OrchestratorDependencies struct {
 	Clock         clock.Clock
 	WorkspaceRoot string
 	Executable    func(context.Context) (string, error)
+	ProxyPort     func(context.Context) (int, error)
 }
 
 // Orchestrator 持有进程内唯一活动 session；mutex 不包围数据库或 RPC I/O。
@@ -38,6 +39,7 @@ type Orchestrator struct {
 	clock      clock.Clock
 	workspace  string
 	executable func(context.Context) (string, error)
+	proxyPort  func(context.Context) (int, error)
 	mu         sync.Mutex
 	current    *port.AgentSession
 	initCancel context.CancelFunc
@@ -52,6 +54,7 @@ func NewOrchestrator(dependencies OrchestratorDependencies) *Orchestrator {
 		rawRecord: dependencies.RawRecord, ids: dependencies.IDs, clock: dependencies.Clock,
 		workspace:  dependencies.WorkspaceRoot,
 		executable: dependencies.Executable,
+		proxyPort:  dependencies.ProxyPort,
 	}
 }
 
@@ -132,7 +135,11 @@ func (orchestrator *Orchestrator) EnsurePostMeeting(ctx context.Context, meeting
 				return models.AgentSession{}, err
 			}
 		}
-		resumed, resumeErr := orchestrator.provider.ResumeSession(cancelContext, port.ResumeAgentSessionRequest{SessionID: previous.ID, ProviderSessionID: *previous.ThreadID, WorkingDirectory: workingDirectory, ExecutablePath: executable})
+		proxyPort, proxyErr := orchestrator.currentProxyPort(cancelContext)
+		if proxyErr != nil {
+			return models.AgentSession{}, proxyErr
+		}
+		resumed, resumeErr := orchestrator.provider.ResumeSession(cancelContext, port.ResumeAgentSessionRequest{SessionID: previous.ID, ProviderSessionID: *previous.ThreadID, WorkingDirectory: workingDirectory, ExecutablePath: executable, ProxyPort: proxyPort})
 		if resumeErr == nil {
 			if err := orchestrator.repository.ReopenPostMeetingSession(cancelContext, previous.ID, resumed.ProviderSessionID, orchestrator.clock.Now().UnixMilli()); err != nil {
 				_ = orchestrator.provider.CloseSession(context.Background(), previous.ID)
@@ -298,9 +305,13 @@ func (orchestrator *Orchestrator) openProviderSession(ctx context.Context, sessi
 			return port.AgentSession{}, err
 		}
 	}
+	proxyPort, err := orchestrator.currentProxyPort(ctx)
+	if err != nil {
+		return port.AgentSession{}, err
+	}
 	if previous != nil && previous.ThreadID != nil && *previous.ThreadID != "" {
 		resumed, err := orchestrator.provider.ResumeSession(ctx, port.ResumeAgentSessionRequest{
-			SessionID: sessionID, ProviderSessionID: *previous.ThreadID, WorkingDirectory: cwd, ExecutablePath: executable,
+			SessionID: sessionID, ProviderSessionID: *previous.ThreadID, WorkingDirectory: cwd, ExecutablePath: executable, ProxyPort: proxyPort,
 		})
 		if err == nil {
 			return resumed, nil
@@ -310,8 +321,16 @@ func (orchestrator *Orchestrator) openProviderSession(ctx context.Context, sessi
 		}
 	}
 	return orchestrator.provider.StartSession(ctx, port.StartAgentSessionRequest{
-		SessionID: sessionID, WorkingDirectory: cwd, Prompt: DeveloperInstructions, ExecutablePath: executable,
+		SessionID: sessionID, WorkingDirectory: cwd, Prompt: DeveloperInstructions, ExecutablePath: executable, ProxyPort: proxyPort,
 	})
+}
+
+// currentProxyPort 读取本场启动前的显式代理配置；未配置时保持 Codex 直连。
+func (orchestrator *Orchestrator) currentProxyPort(ctx context.Context) (int, error) {
+	if orchestrator.proxyPort == nil {
+		return 0, nil
+	}
+	return orchestrator.proxyPort(ctx)
 }
 
 // runInitializeTurn 从上次快照和当前 SQLite 范围构造非公开初始化结果。

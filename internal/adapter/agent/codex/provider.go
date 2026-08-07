@@ -19,6 +19,7 @@ const defaultRPCTimeout = 15 * time.Second
 // Provider 使用一个长生命周期 app-server 进程实现稳定 AgentProvider。
 type Provider struct {
 	executable string
+	launcher   *Launcher
 	verifier   *SchemaVerifier
 	mu         sync.Mutex
 	sessions   map[string]*sessionRuntime
@@ -28,6 +29,7 @@ type Provider struct {
 func NewProvider(executablePath string) *Provider {
 	return &Provider{
 		executable: executablePath,
+		launcher:   NewLauncher(),
 		verifier:   NewSchemaVerifier(CommandSchemaRunner{}, RequiredSchemaContract(), ""),
 		sessions:   make(map[string]*sessionRuntime),
 	}
@@ -35,26 +37,39 @@ func NewProvider(executablePath string) *Provider {
 
 // NewProviderWithVerifier 创建可注入 schema 校验器的 provider，供契约测试使用。
 func NewProviderWithVerifier(executablePath string, verifier *SchemaVerifier) *Provider {
-	return &Provider{executable: executablePath, verifier: verifier, sessions: make(map[string]*sessionRuntime)}
+	return &Provider{executable: executablePath, launcher: NewLauncher(), verifier: verifier, sessions: make(map[string]*sessionRuntime)}
 }
 
 // CheckAvailability 严格校验 executable、runtime schema、握手和登录状态。
 func (provider *Provider) CheckAvailability(ctx context.Context, request port.AgentAvailabilityRequest) (port.AgentAvailability, error) {
+	if provider == nil || provider.verifier == nil || provider.launcher == nil {
+		return unavailable(port.AgentProtocolUnchecked, port.AgentAccountUnknown, "Codex 可执行文件未配置"), executableInvalid()
+	}
 	executable := request.ExecutablePath
 	if executable == "" {
 		executable = provider.executable
 	}
-	if provider == nil || provider.verifier == nil || executable == "" {
+	if executable == "" {
 		return unavailable(port.AgentProtocolUnchecked, port.AgentAccountUnknown, "Codex 可执行文件未配置"), executableInvalid()
 	}
-	if err := provider.verifier.Verify(ctx, executable); err != nil {
-		return unavailable(port.AgentProtocolIncompatible, port.AgentAccountUnknown, "当前 Codex 版本暂不兼容"), err
-	}
-	version, err := (CommandSchemaRunner{}).Version(ctx, executable)
+	spec, err := provider.launcher.Resolve(ctx, executable, request.ProxyPort)
 	if err != nil {
-		return unavailable(port.AgentProtocolCompatible, port.AgentAccountUnknown, "无法读取 Codex 版本"), executableInvalid()
+		return unavailable(port.AgentProtocolUnchecked, port.AgentAccountUnknown, "Codex 运行环境不可用"), err
 	}
-	loggedIn, err := probeAccount(ctx, executable)
+	if err := provider.verifier.Verify(ctx, spec); err != nil {
+		protocol := port.AgentProtocolUnchecked
+		message := "Codex 运行环境不可用"
+		if apperr.Normalize(err).ErrorCode == apperr.CodeAgentProtocolIncompatible.ErrorCode {
+			protocol = port.AgentProtocolIncompatible
+			message = "当前 Codex 版本暂不兼容"
+		}
+		return unavailable(protocol, port.AgentAccountUnknown, message), err
+	}
+	version, err := (CommandSchemaRunner{}).Version(ctx, spec)
+	if err != nil {
+		return unavailable(port.AgentProtocolUnchecked, port.AgentAccountUnknown, "Codex 运行环境不可用"), mapSchemaCommandError(err, "agent.codex.version")
+	}
+	loggedIn, err := probeAccount(ctx, spec)
 	if err != nil {
 		return unavailable(port.AgentProtocolCompatible, port.AgentAccountUnknown, "Codex 探测失败"), err
 	}
@@ -75,13 +90,17 @@ func (provider *Provider) CheckAvailability(ctx context.Context, request port.Ag
 // StartSession 启动 app-server、完成握手并创建 thread。
 func (provider *Provider) StartSession(ctx context.Context, request port.StartAgentSessionRequest) (port.AgentSession, error) {
 	executable := provider.sessionExecutable(request.ExecutablePath)
-	if provider == nil || executable == "" || !filepath.IsAbs(request.WorkingDirectory) {
+	if provider == nil || provider.launcher == nil || executable == "" || !filepath.IsAbs(request.WorkingDirectory) {
 		return port.AgentSession{}, executableInvalid()
 	}
-	if err := provider.verifier.Verify(ctx, executable); err != nil {
+	spec, err := provider.launcher.Resolve(ctx, executable, request.ProxyPort)
+	if err != nil {
 		return port.AgentSession{}, err
 	}
-	runtime, err := provider.startRuntime(ctx, executable)
+	if err := provider.verifier.Verify(ctx, spec); err != nil {
+		return port.AgentSession{}, err
+	}
+	runtime, err := provider.startRuntime(ctx, spec)
 	if err != nil {
 		return port.AgentSession{}, err
 	}
@@ -105,13 +124,17 @@ func (provider *Provider) StartSession(ctx context.Context, request port.StartAg
 // ResumeSession 启动新 app-server 进程并恢复既有 thread。
 func (provider *Provider) ResumeSession(ctx context.Context, request port.ResumeAgentSessionRequest) (port.AgentSession, error) {
 	executable := provider.sessionExecutable(request.ExecutablePath)
-	if provider == nil || executable == "" || request.SessionID == "" || request.ProviderSessionID == "" || !filepath.IsAbs(request.WorkingDirectory) {
+	if provider == nil || provider.launcher == nil || executable == "" || request.SessionID == "" || request.ProviderSessionID == "" || !filepath.IsAbs(request.WorkingDirectory) {
 		return port.AgentSession{}, executableInvalid()
 	}
-	if err := provider.verifier.Verify(ctx, executable); err != nil {
+	spec, err := provider.launcher.Resolve(ctx, executable, request.ProxyPort)
+	if err != nil {
 		return port.AgentSession{}, err
 	}
-	runtime, err := provider.startRuntime(ctx, executable)
+	if err := provider.verifier.Verify(ctx, spec); err != nil {
+		return port.AgentSession{}, err
+	}
+	runtime, err := provider.startRuntime(ctx, spec)
 	if err != nil {
 		return port.AgentSession{}, err
 	}
@@ -171,8 +194,8 @@ func (provider *Provider) CloseSession(ctx context.Context, sessionID string) er
 }
 
 // startRuntime 启动进程并完成 initialize/account/read，尚不创建 thread。
-func (provider *Provider) startRuntime(ctx context.Context, executable string) (*sessionRuntime, error) {
-	process, err := startProcess(Config{Command: executable, Args: []string{"app-server", "--stdio"}})
+func (provider *Provider) startRuntime(ctx context.Context, spec LaunchSpec) (*sessionRuntime, error) {
+	process, err := startProcess(Config{Launch: spec, Args: []string{"app-server", "--stdio"}})
 	if err != nil {
 		return nil, apperr.Dependency(apperr.CodeAgentInitializeFailed, err, apperr.WithOp("agent.codex.process"))
 	}
@@ -228,8 +251,8 @@ func executableInvalid() error {
 }
 
 // probeAccount 启动短探测进程，只读取登录布尔值后安全关闭。
-func probeAccount(ctx context.Context, executable string) (bool, error) {
-	process, err := startProcess(Config{Command: executable, Args: []string{"app-server", "--stdio"}})
+func probeAccount(ctx context.Context, spec LaunchSpec) (bool, error) {
+	process, err := startProcess(Config{Launch: spec, Args: []string{"app-server", "--stdio"}})
 	if err != nil {
 		return false, apperr.Dependency(apperr.CodeAgentInitializeFailed, err, apperr.WithOp("agent.codex.probe.start"))
 	}

@@ -117,8 +117,8 @@ func TestRepository_FailInitializationIsIdempotent(t *testing.T) {
 	}
 }
 
-// TestRepository_PersistsProbeAndInvalidatesOnlyExecutableChange 验证页面重建可恢复检测结果，修改唤醒词不会误清空。
-func TestRepository_PersistsProbeAndInvalidatesOnlyExecutableChange(t *testing.T) {
+// TestRepository_PersistsProbeAndInvalidatesOnlyLaunchChange 验证页面重建可恢复检测结果，修改启动配置才清空。
+func TestRepository_PersistsProbeAndInvalidatesOnlyLaunchChange(t *testing.T) {
 	db := openAgentDatabase(t)
 	repository := agentrepository.NewRepository(db, database.NewTransactionManager(db))
 	ctx := context.Background()
@@ -141,7 +141,7 @@ func TestRepository_PersistsProbeAndInvalidatesOnlyExecutableChange(t *testing.T
 	if err != nil || settings.UpdatedAt != probedAt {
 		t.Fatalf("检测结果必须使用毫秒时间更新审计字段：settings=%+v err=%v", settings, err)
 	}
-	if err := repository.UpdateSettings(ctx, "会议助手", nil, wakeWordUpdatedAt); err != nil {
+	if err := repository.UpdateSettings(ctx, "会议助手", nil, nil, wakeWordUpdatedAt); err != nil {
 		t.Fatalf("只修改唤醒词失败：%v", err)
 	}
 	settings, err = repository.GetSettings(ctx)
@@ -149,12 +149,23 @@ func TestRepository_PersistsProbeAndInvalidatesOnlyExecutableChange(t *testing.T
 		t.Fatalf("只修改唤醒词不应清空检测结果：settings=%+v err=%v", settings, err)
 	}
 	path := "/opt/homebrew/bin/codex"
-	if err := repository.UpdateSettings(ctx, "会议助手", &path, executableUpdatedAt); err != nil {
+	if err := repository.UpdateSettings(ctx, "会议助手", &path, nil, executableUpdatedAt); err != nil {
 		t.Fatalf("修改 executable 失败：%v", err)
 	}
 	settings, err = repository.GetSettings(ctx)
 	if err != nil || settings.CodexAvailabilityState != "unchecked" || settings.CodexProbedAt != nil {
 		t.Fatalf("修改 executable 后必须让检测结果失效：settings=%+v err=%v", settings, err)
+	}
+	if err := repository.UpdateProbeSnapshot(ctx, "available", "1.2.3", "logged_in", "compatible", "Codex 可用", probedAt); err != nil {
+		t.Fatalf("恢复检测结果失败：%v", err)
+	}
+	proxyPort := 65400
+	if err := repository.UpdateSettings(ctx, "会议助手", &path, &proxyPort, executableUpdatedAt+1); err != nil {
+		t.Fatalf("修改代理端口失败：%v", err)
+	}
+	settings, err = repository.GetSettings(ctx)
+	if err != nil || settings.CodexAvailabilityState != "unchecked" || settings.CodexProbedAt != nil {
+		t.Fatalf("修改代理端口后必须让检测结果失效：settings=%+v err=%v", settings, err)
 	}
 }
 

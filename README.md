@@ -226,6 +226,8 @@ codex login status
 然后在“设置 → Codex”中：
 
 - “可执行文件路径”留空时使用系统 `PATH` 中的 `codex`；如果桌面应用找不到，可填写绝对路径；
+- MeetSieve 会为 Finder 启动场景补全用户级 `PATH`；Windows 启动链已实现注册表 `PATH` 合并和 npm `codex.cmd` 适配，发布前仍须完成 Windows 真机验收；
+- 如果提示“Codex 运行环境不完整”，请确认 `node --version` 与 `codex --version` 在同一系统用户下均可执行；
 - 点击“重新检测”，确认登录状态和协议状态；
 - 设置 AI 唤醒词，默认是“AI 助手”，建议使用 3～8 个中文字符；
 - 如需语音唤醒，先保存火山 APP Key 和麦克风，再完成 3 次真实唤醒测试。

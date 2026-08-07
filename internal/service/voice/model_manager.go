@@ -83,15 +83,31 @@ func (manager *ModelManager) Status() ModelStatus {
 
 // Download 下载锁定 GitHub Release 包，并复用离线导入的同一安装门禁。
 func (manager *ModelManager) Download(ctx context.Context) (ModelStatus, error) {
-	if manager == nil || manager.downloader == nil {
+	if manager == nil {
 		return ModelStatus{}, fmt.Errorf("声纹模型管理器尚未准备")
+	}
+	return manager.download(ctx, manager.downloader)
+}
+
+// DownloadWithClient 使用调用方指定的 HTTP 客户端下载锁定官方包。
+func (manager *ModelManager) DownloadWithClient(ctx context.Context, client *http.Client) (ModelStatus, error) {
+	if manager == nil {
+		return ModelStatus{}, fmt.Errorf("声纹模型管理器尚未准备")
+	}
+	return manager.download(ctx, assets.NewDownloader(client))
+}
+
+// download 串行执行下载、校验和安装，避免并发操作覆盖同一模型目录。
+func (manager *ModelManager) download(ctx context.Context, downloader *assets.Downloader) (ModelStatus, error) {
+	if downloader == nil {
+		return ModelStatus{}, fmt.Errorf("声纹模型下载器尚未准备")
 	}
 	manager.operationMu.Lock()
 	defer manager.operationMu.Unlock()
 	manager.setInstalling(true)
 	defer manager.setInstalling(false)
 
-	archivePath, err := manager.downloader.FetchVoiceModel(ctx, manager.asset, manager.cacheDir)
+	archivePath, err := downloader.FetchVoiceModel(ctx, manager.asset, manager.cacheDir)
 	if err != nil {
 		return manager.status(ModelStateUnavailable), fmt.Errorf("下载官方声纹模型失败: %w", err)
 	}

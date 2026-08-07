@@ -41,6 +41,7 @@ const path = ref('')
 const apiKey = ref('')
 const confirmClearASR = ref(false)
 const codexPath = ref('')
+const codexProxyPort = ref<number | string>(0)
 const wakeWord = ref('AI 助手')
 const minutePrompt = ref('')
 const activeSection = ref<
@@ -87,6 +88,7 @@ onMounted(async () => {
   ])
   path.value = workspace.settings.savedPath
   codexPath.value = agent.settings.codex_executable_path
+  codexProxyPort.value = agent.settings.codex_proxy_port
   wakeWord.value = agent.settings.wake_word
   minutePrompt.value = minutes.settings.prompt
   registerDirtyEditors()
@@ -128,6 +130,7 @@ watch(
   () => {
     if (!agent.saving) {
       codexPath.value = agent.settings.codex_executable_path
+      codexProxyPort.value = agent.settings.codex_proxy_port
       wakeWord.value = agent.settings.wake_word
     }
   },
@@ -169,7 +172,17 @@ async function clearASRCredentials(): Promise<void> {
 
 /** saveAgentSettings 保存后继续由后端规范化值回填表单。 */
 async function saveAgentSettings(): Promise<void> {
-  await agent.saveSettings(wakeWord.value, codexPath.value)
+  await agent.saveSettings(
+    wakeWord.value,
+    codexPath.value,
+    currentCodexProxyPort(),
+  )
+}
+
+/** currentCodexProxyPort 将空输入视为直连，让服务端统一校验其他非法值。 */
+function currentCodexProxyPort(): number {
+  const value = Number(codexProxyPort.value)
+  return Number.isFinite(value) ? value : -1
 }
 
 /** saveMinutesSettings 保存生成会议纪要时使用的业务要求。 */
@@ -308,11 +321,18 @@ function registerDirtyEditors(): void {
       isDirty: () =>
         activeSection.value === 'codex' &&
         (codexPath.value !== agent.settings.codex_executable_path ||
+          currentCodexProxyPort() !== agent.settings.codex_proxy_port ||
           wakeWord.value !== agent.settings.wake_word),
       canSave: () => Boolean(wakeWord.value.trim()),
-      save: () => agent.saveSettings(wakeWord.value, codexPath.value),
+      save: () =>
+        agent.saveSettings(
+          wakeWord.value,
+          codexPath.value,
+          currentCodexProxyPort(),
+        ),
       discard: () => {
         codexPath.value = agent.settings.codex_executable_path
+        codexProxyPort.value = agent.settings.codex_proxy_port
         wakeWord.value = agent.settings.wake_word
       },
     }),
@@ -756,6 +776,26 @@ function registerDirtyEditors(): void {
             />
             <p class="ms-help">
               留空时使用系统 PATH 中的 codex；不支持在这里附加命令参数。
+            </p>
+          </div>
+
+          <div class="ms-field">
+            <label for="codex-proxy-port">本机 HTTP(S) 代理端口</label>
+            <input
+              id="codex-proxy-port"
+              v-model.number="codexProxyPort"
+              class="ms-input ms-input--mono"
+              type="number"
+              min="0"
+              max="65535"
+              step="1"
+              inputmode="numeric"
+              placeholder="0 表示直连"
+              :disabled="agent.saving"
+            />
+            <p class="ms-help">
+              填写 0 表示关闭代理；例如 65400。供 Codex
+              与下载官方声纹模型使用，不影响录音和实时转写。
             </p>
           </div>
 

@@ -25,6 +25,7 @@ type AgentServiceProvider func() (AgentServices, error)
 type AgentSettingsDTO struct {
 	WakeWord       string               `json:"wake_word"`
 	ExecutablePath string               `json:"codex_executable_path"`
+	ProxyPort      int                  `json:"codex_proxy_port"`
 	Availability   AgentAvailabilityDTO `json:"availability"`
 	ProbedAt       int64                `json:"probed_at"`
 	UpdatedAt      int64                `json:"updated_at"`
@@ -43,6 +44,7 @@ type AgentAvailabilityDTO struct {
 type SaveAgentSettingsDTO struct {
 	WakeWord       string `json:"wake_word"`
 	ExecutablePath string `json:"codex_executable_path"`
+	ProxyPort      int    `json:"codex_proxy_port"`
 }
 
 // AgentApprovalDTO 是主持人可见的单次原生审批摘要。
@@ -131,7 +133,7 @@ func NewAgentBinding(services AgentServiceProvider, contextProvider ContextProvi
 	return &AgentBinding{services: services, contextProvider: contextProvider, boundary: boundary}
 }
 
-// GetAgentSettings 返回当前唤醒词、executable 和最近探测状态。
+// GetAgentSettings 返回当前唤醒词、Codex 启动配置和最近探测状态。
 func (binding *AgentBinding) GetAgentSettings() Result[AgentSettingsDTO] {
 	return Invoke(binding.boundary, "wails.agent.settings.get", func(_ string) (AgentSettingsDTO, error) {
 		services, ctx, err := binding.current()
@@ -143,14 +145,14 @@ func (binding *AgentBinding) GetAgentSettings() Result[AgentSettingsDTO] {
 	})
 }
 
-// SaveAgentSettings 保存经过领域校验的唤醒词和单 executable。
+// SaveAgentSettings 保存经过领域校验的唤醒词和 Codex 启动配置。
 func (binding *AgentBinding) SaveAgentSettings(input SaveAgentSettingsDTO) Result[AgentSettingsDTO] {
 	return Invoke(binding.boundary, "wails.agent.settings.save", func(_ string) (AgentSettingsDTO, error) {
 		services, ctx, err := binding.current()
 		if err != nil {
 			return AgentSettingsDTO{}, err
 		}
-		view, err := services.Settings.Save(ctx, agentservice.SaveAgentSettingsInput{WakeWord: input.WakeWord, ExecutablePath: input.ExecutablePath})
+		view, err := services.Settings.Save(ctx, agentservice.SaveAgentSettingsInput{WakeWord: input.WakeWord, ExecutablePath: input.ExecutablePath, ProxyPort: input.ProxyPort})
 		return mapAgentSettings(view), err
 	})
 }
@@ -306,7 +308,7 @@ func (binding *AgentBinding) current() (AgentServices, context.Context, error) {
 }
 
 func mapAgentSettings(view agentservice.AgentSettingsView) AgentSettingsDTO {
-	return AgentSettingsDTO{WakeWord: view.WakeWord, ExecutablePath: view.ExecutablePath, Availability: mapAgentAvailability(view.Availability), ProbedAt: view.ProbedAt, UpdatedAt: view.UpdatedAt}
+	return AgentSettingsDTO{WakeWord: view.WakeWord, ExecutablePath: view.ExecutablePath, ProxyPort: view.ProxyPort, Availability: mapAgentAvailability(view.Availability), ProbedAt: view.ProbedAt, UpdatedAt: view.UpdatedAt}
 }
 
 func mapAgentAvailability(value port.AgentAvailability) AgentAvailabilityDTO {
