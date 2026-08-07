@@ -58,7 +58,7 @@ func TestVerifyResources_RejectsVoiceModel(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(directory, "models", "voice-matching-profile.json"), []byte("profile"), 0o600); err != nil {
 		t.Fatalf("写入测试 profile 失败：%v", err)
 	}
-	if err := verifyResources(directory); err == nil || !strings.Contains(err.Error(), "声纹模型") {
+	if err := verifyResources(directory, filepath.Join(directory, "MeetSieve.exe"), "third_party/assets.lock.json"); err == nil || !strings.Contains(err.Error(), "声纹模型") {
 		t.Fatalf("资源目录内置模型应被拒绝：%v", err)
 	}
 }
@@ -77,5 +77,20 @@ FunctionEnd
 Function un.onInit
     !insertmacro EnsureMeetSieveNotRunning
 FunctionEnd
+!insertmacro MUI_LANGUAGE "SimpChinese"
+!insertmacro MUI_PAGE_COMPONENTS
+Function ValidateInstallDirectory
+FunctionEnd
+InstallDir "$PROGRAMFILES64\${INFO_PRODUCTNAME}"
+InstallDirRegKey HKLM "${UNINST_KEY}" "InstallLocation"
 File "/oname=voice-matching-profile.json" "voice-matching-profile.json"
+File "/oname=meetsieve-install.json" "meetsieve-install.json"
+File "/oname=meetsieve-files.json" "meetsieve-files.json"
+Section "桌面快捷方式"
+SectionEnd
+Section "局域网访客防火墙规则"
+profile=private
+SectionEnd
+Delete "$INSTDIR\${PRODUCT_EXECUTABLE}"
+RMDir "$INSTDIR"
 `

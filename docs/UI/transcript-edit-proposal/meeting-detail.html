@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>会议详情原始记录提案 · MeetSieve</title>
+    <link rel="stylesheet" href="proposal.css" />
+    <script src="proposal.js" defer></script>
+  </head>
+  <body>
+    <!-- 本页使用固定示例数据，只用于审核页面结构和交互。 -->
+    <div class="app">
+      <aside class="sidebar">
+        <a class="brand" href="../index.html">
+          <span class="brand-mark">M</span><span>MeetSieve</span>
+        </a>
+        <nav class="nav" aria-label="主导航">
+          <a href="../start.html">开始会议</a>
+          <a class="active" href="../records.html" aria-current="page">会议记录</a>
+          <a href="../people.html">常用小组</a>
+          <a href="../settings.html">设置</a>
+        </nav>
+        <div class="sidebar-foot">
+          <span class="status success">本地已保存</span>
+          <span class="meta">20260805-HAQR-02</span>
+        </div>
+      </aside>
+
+      <main class="main">
+        <header class="titlebar">
+          <span>会议记录 / 未命名会议</span>
+        </header>
+
+        <div class="content">
+          <section class="page-head">
+            <div>
+              <a class="detail-back-link" href="../records.html">返回会议记录</a>
+              <p class="eyebrow">20260805-HAQR-02</p>
+              <h1>未命名会议</h1>
+              <p>刘志勇、李四</p>
+            </div>
+            <span class="status success">本地已保存</span>
+          </section>
+
+          <div class="tabs" role="tablist" aria-label="会议详情">
+            <button class="tab" type="button" role="tab">概览</button>
+            <button class="tab active" type="button" role="tab" aria-selected="true">原始记录</button>
+            <button class="tab" type="button" role="tab">消息与资料</button>
+            <button class="tab" type="button" role="tab">会议纪要</button>
+          </div>
+
+          <section class="card detail-transcript" aria-labelledby="transcript-title">
+            <div class="card-head">
+              <div>
+                <h2 id="transcript-title">原始记录</h2>
+                <p class="muted">9 段记录，其中 3 位未知说话人待确认</p>
+              </div>
+              <a class="btn btn-primary" href="transcript-editor.html">编辑原始记录</a>
+            </div>
+
+            <div aria-label="原始记录列表">
+              <article class="read-item">
+                <div class="read-speaker">
+                  <strong>未知说话人 1</strong>
+                  <span class="meta">00:00:05</span>
+                </div>
+                <p class="read-copy">天津涮羊肉，但是你懒，你就来袋儿大宇或者来袋儿恩来顺，或者来袋儿九环，这都行。你挤碗里，咸你得怼麻酱和开了，后续再加香菜、辣椒油。</p>
+                <button class="btn btn-link" type="button" data-play>播放</button>
+              </article>
+
+              <article class="read-item">
+                <div class="read-speaker">
+                  <strong>李四</strong>
+                  <span class="meta">00:00:27</span>
+                </div>
+                <p class="read-copy">临床实验中观察到的头孢克洛缓释片。</p>
+                <button class="btn btn-link" type="button" data-play>播放</button>
+              </article>
+
+              <article class="read-item">
+                <div class="read-speaker">
+                  <strong>未知说话人 2</strong>
+                  <span class="meta">00:00:31</span>
+                </div>
+                <p class="read-copy">不良反应大多数为轻度，呈一过性，因药物相关的不良反应。</p>
+                <button class="btn btn-link" type="button" data-play>播放</button>
+              </article>
+
+              <article class="read-item">
+                <div class="read-speaker">
+                  <strong>未知说话人 1</strong>
+                  <span class="meta">00:00:44</span>
+                </div>
+                <p class="read-copy">胃肠道反应，腹泻 3.4%，恶心 2.5%，呕吐及消化不良。</p>
+                <button class="btn btn-link" type="button" data-play>播放</button>
+              </article>
+            </div>
+
+            <nav class="pagination" aria-label="原始记录分页">
+              <button class="btn btn-quiet" type="button" disabled>上一页</button>
+              <span class="meta">第 1 页</span>
+              <button class="btn btn-quiet" type="button">下一页</button>
+            </nav>
+          </section>
+        </div>
+      </main>
+    </div>
+  </body>
+</html>

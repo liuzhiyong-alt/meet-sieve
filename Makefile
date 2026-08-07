@@ -5,12 +5,15 @@ WAILS_COMMAND := $(CURDIR)/.tools/bin/wails
 GO_BIN := $(shell mise which go)
 export GOCACHE := $(CURDIR)/.cache/go-build
 WINDOWS_IMAGE := meetsieve-windows-builder:go1.25.9-wails2.13.0
-BUILD_VERSION ?= 0.1.0-alpha
+BUILD_VERSION ?= 0.1.0-alpha.1
+WINDOWS_FILE_VERSION ?= 0.1.0.1
 BUILD_MODE ?= production
-BUILD_COMMIT := $(shell git rev-parse --short=12 HEAD)
+BUILD_COMMIT := $(shell git rev-parse HEAD)
 BUILD_TIME := $(shell date -u '+%Y-%m-%dT%H:%M:%SZ')
+MACOS_DMG := build/bin/MeetSieve-$(BUILD_VERSION)-macos-arm64.dmg
+WINDOWS_INSTALLER := build/bin/MeetSieve-$(BUILD_VERSION)-windows-amd64-installer.exe
 
-.PHONY: bootstrap assets calibrate-voice verify-voice-profile dev fmt lint typecheck test test-race test-contract test-asr-real guest-embed smoke build build-windows-amd64 package-windows verify-package clean
+.PHONY: bootstrap assets calibrate-voice verify-voice-profile verify-build-metadata dev fmt lint typecheck test test-race test-contract test-asr-real guest-embed smoke build build-macos-arm64 package-macos verify-macos-package build-windows-amd64 package-windows verify-windows-package checksums verify-package clean
 
 # bootstrap 安装 mise 声明的工具并按 lockfile 恢复前端依赖。
 bootstrap:
@@ -40,6 +43,13 @@ dev:
 # verify-voice-profile 阻止缺少真实校准记录或模型身份不匹配的发布构建。
 verify-voice-profile:
 	mise exec -- go run ./buildtools/cmd/verifyvoiceprofile
+
+# verify-build-metadata 保证应用、PE 和安装器使用同一组合法构建身份。
+verify-build-metadata:
+	mise exec -- go run ./buildtools/cmd/verifybuildmeta \
+		-version "$(BUILD_VERSION)" \
+		-windows-file-version "$(WINDOWS_FILE_VERSION)" \
+		-wails-config cmd/meetsieve/wails.json
 
 # fmt 仅格式化项目源码和前端配置，不触碰依赖或构建产物。
 fmt:
@@ -82,8 +92,11 @@ guest-embed:
 	mise exec -- pnpm --dir frontend build:embed
 	test -f cmd/meetsieve/frontend/dist/guest/guest.html
 
-# build 生成当前 macOS arm64 的 Wails production 应用包。
-build: assets verify-voice-profile
+# build 保持既有调用兼容，默认生成当前支持的 macOS arm64 production 应用。
+build: build-macos-arm64
+
+# build-macos-arm64 生成完整 macOS arm64 Wails production 应用包。
+build-macos-arm64: assets verify-voice-profile verify-build-metadata
 	cd cmd/meetsieve && GOCACHE="$(GOCACHE)" $(WAILS_COMMAND) build -m -nocolour -trimpath \
 		-ldflags "-X meet-sieve/internal/app/buildinfo.Version=$(BUILD_VERSION) -X meet-sieve/internal/app/buildinfo.Commit=$(BUILD_COMMIT) -X meet-sieve/internal/app/buildinfo.BuildTime=$(BUILD_TIME) -X meet-sieve/internal/app/buildinfo.BuildMode=$(BUILD_MODE)"
 	LC_ALL=C perl -0pi -e 's/[ \t]+$$//mg; s/\n+\z/\n/' frontend/wailsjs/go/models.ts
@@ -93,6 +106,20 @@ build: assets verify-voice-profile
 	mkdir -p build/bin/MeetSieve.app/Contents/Resources/models
 	cp models/voice-matching-profile.json build/bin/MeetSieve.app/Contents/Resources/models/
 	codesign --force --deep --sign - build/bin/MeetSieve.app
+
+# package-macos 使用系统 hdiutil 生成并挂载复核标准只读 DMG。 （生成mac os安装包）
+package-macos: build-macos-arm64
+	buildtools/macos/package.sh \
+		build/bin/MeetSieve.app \
+		"$(MACOS_DMG)" \
+		"MeetSieve $(BUILD_VERSION)"
+	$(MAKE) checksums BUILD_VERSION="$(BUILD_VERSION)"
+
+# verify-macos-package 校验 DMG、Mach-O、动态库、许可证、profile 与资源哈希。
+verify-macos-package:
+	mise exec -- go run ./buildtools/cmd/verifymacos \
+		-app build/bin/MeetSieve.app \
+		-dmg "$(MACOS_DMG)"
 
 # smoke 运行真实音频、ONNX、Codex smoke，并确认 production .app 能保持启动后正常退出。
 smoke: assets
@@ -111,8 +138,8 @@ smoke: assets
 		tail -n "+$$((start_lines + 1))" "$$app_log" | \
 			grep -q '"msg":"Wails event round-trip completed".*"payload":"step0-smoke"'
 
-# build-windows-amd64 在固定 Docker 工具链中生成包含 CGO 依赖的 GUI PE。
-build-windows-amd64: assets verify-voice-profile guest-embed
+# build-windows-amd64 在固定 Docker 工具链中生成包含 CGO 依赖的 GUI PE。 （生成windows安装包）
+build-windows-amd64: assets verify-voice-profile verify-build-metadata guest-embed
 	mise exec -- pnpm --dir frontend build
 	mise exec -- pnpm --dir frontend build:embed
 	docker build --platform linux/amd64 -t $(WINDOWS_IMAGE) buildtools/windows
@@ -122,6 +149,7 @@ build-windows-amd64: assets verify-voice-profile guest-embed
 		-e TARGET_PLATFORM=windows/amd64 \
 		-e BUILD_ACTION=build \
 		-e BUILD_VERSION="$(BUILD_VERSION)" \
+		-e WINDOWS_FILE_VERSION="$(WINDOWS_FILE_VERSION)" \
 		-e BUILD_COMMIT="$(BUILD_COMMIT)" \
 		-e BUILD_TIME="$(BUILD_TIME)" \
 		-e GOCACHE=/work/.cache/windows-go-build \
@@ -130,7 +158,7 @@ build-windows-amd64: assets verify-voice-profile guest-embed
 		$(WINDOWS_IMAGE)
 
 # package-windows 使用同一固定镜像生成包含动态库和许可证的 NSIS 壳。
-package-windows: assets verify-voice-profile guest-embed
+package-windows: assets verify-voice-profile verify-build-metadata guest-embed
 	mise exec -- pnpm --dir frontend build
 	mise exec -- pnpm --dir frontend build:embed
 	docker build --platform linux/amd64 -t $(WINDOWS_IMAGE) buildtools/windows
@@ -140,16 +168,30 @@ package-windows: assets verify-voice-profile guest-embed
 		-e TARGET_PLATFORM=windows/amd64 \
 		-e BUILD_ACTION=package \
 		-e BUILD_VERSION="$(BUILD_VERSION)" \
+		-e WINDOWS_FILE_VERSION="$(WINDOWS_FILE_VERSION)" \
 		-e BUILD_COMMIT="$(BUILD_COMMIT)" \
 		-e BUILD_TIME="$(BUILD_TIME)" \
 		-e GOCACHE=/work/.cache/windows-go-build \
 		-e GOMODCACHE=/work/.cache/windows-go-mod \
 		-v "$(CURDIR):/work" \
 		$(WINDOWS_IMAGE)
+	$(MAKE) checksums BUILD_VERSION="$(BUILD_VERSION)"
 
-# verify-package 校验 PE 架构、GUI subsystem、CGO 链接标记、DLL、许可证和 NSIS。
-verify-package:
-	mise exec -- go run ./buildtools/cmd/verifywindows
+# verify-windows-package 校验 PE、NSIS、安全安装契约、资源哈希和许可证。
+verify-windows-package:
+	mise exec -- go run ./buildtools/cmd/verifywindows \
+		-installer "$(WINDOWS_INSTALLER)"
+
+# checksums 为当前版本已存在的最终安装介质生成可追溯 SHA-256 清单。
+checksums:
+	@mkdir -p build/bin
+	@: > build/bin/SHA256SUMS.txt
+	@if test -f "$(MACOS_DMG)"; then shasum -a 256 "$(MACOS_DMG)" >> build/bin/SHA256SUMS.txt; fi
+	@if test -f "$(WINDOWS_INSTALLER)"; then shasum -a 256 "$(WINDOWS_INSTALLER)" >> build/bin/SHA256SUMS.txt; fi
+	@test -s build/bin/SHA256SUMS.txt
+
+# verify-package 聚合双平台校验；静态通过不替代 Windows 真机验证。
+verify-package: verify-macos-package verify-windows-package checksums
 
 # clean 只删除明确可重建的前端和构建产物，不触碰第三方下载 cache。
 clean:

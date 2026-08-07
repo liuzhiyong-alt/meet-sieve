@@ -36,6 +36,63 @@ func TestProjectNSIS_BlocksInstallAndUninstallWhenAppRuns(t *testing.T) {
 	}
 }
 
+// TestProjectNSIS_ProvidesSafeChineseInstallContract 验证安装器提供中文、安全目录、组件和升级位置契约。
+func TestProjectNSIS_ProvidesSafeChineseInstallContract(t *testing.T) {
+	t.Parallel()
+
+	source := loadProjectNSIS(t)
+	for _, expected := range []string{
+		`!insertmacro MUI_LANGUAGE "SimpChinese"`,
+		"!insertmacro MUI_PAGE_COMPONENTS",
+		`InstallDir "$PROGRAMFILES64\${INFO_PRODUCTNAME}"`,
+		`InstallDirRegKey HKLM "${UNINST_KEY}" "InstallLocation"`,
+		"Function ValidateInstallDirectory",
+		`File "/oname=meetsieve-install.json"`,
+		`File "/oname=meetsieve-files.json"`,
+		`WriteRegStr HKLM "${UNINST_KEY}" "InstallLocation" "$INSTDIR"`,
+		`Section "桌面快捷方式"`,
+		`Section "局域网访客防火墙规则"`,
+		`profile=private`,
+	} {
+		if !strings.Contains(source, expected) {
+			t.Errorf("project.nsi 缺少安全安装契约片段：%q", expected)
+		}
+	}
+}
+
+// TestProjectNSIS_UninstallUsesExplicitProductManifest 验证卸载不递归删除安装目录或用户数据。
+func TestProjectNSIS_UninstallUsesExplicitProductManifest(t *testing.T) {
+	t.Parallel()
+
+	source := loadProjectNSIS(t)
+	for _, forbidden := range []string{
+		`RMDir /r $INSTDIR`,
+		`RMDir /r "$INSTDIR"`,
+		`RMDir /r "$AppData`,
+		`%LocalAppData%\MeetSieve`,
+		"taskkill",
+		"TerminateProcess",
+	} {
+		if strings.Contains(source, forbidden) {
+			t.Errorf("project.nsi 包含危险卸载行为：%q", forbidden)
+		}
+	}
+	for _, expected := range []string{
+		`Delete "$INSTDIR\${PRODUCT_EXECUTABLE}"`,
+		`Delete "$INSTDIR\onnxruntime.dll"`,
+		`Delete "$INSTDIR\ONNXRUNTIME-LICENSE.txt"`,
+		`Delete "$INSTDIR\models\voice-matching-profile.json"`,
+		`Delete "$INSTDIR\meetsieve-install.json"`,
+		`Delete "$INSTDIR\meetsieve-files.json"`,
+		`RMDir "$INSTDIR\models"`,
+		`RMDir "$INSTDIR"`,
+	} {
+		if !strings.Contains(source, expected) {
+			t.Errorf("project.nsi 缺少显式卸载清单：%q", expected)
+		}
+	}
+}
+
 // loadProjectNSIS 读取仓库中的 NSIS 源文件，避免依赖构建产物。
 func loadProjectNSIS(t *testing.T) string {
 	t.Helper()

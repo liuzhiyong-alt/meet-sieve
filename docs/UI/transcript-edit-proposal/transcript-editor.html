@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>编辑原始记录提案 · MeetSieve</title>
+    <link rel="stylesheet" href="proposal.css" />
+    <script src="proposal.js" defer></script>
+  </head>
+  <body>
+    <!-- 本页使用固定示例数据，只用于审核页面结构和交互。 -->
+    <div class="app">
+      <aside class="sidebar">
+        <a class="brand" href="../index.html">
+          <span class="brand-mark">M</span><span>MeetSieve</span>
+        </a>
+        <nav class="nav" aria-label="主导航">
+          <a href="../start.html">开始会议</a>
+          <a class="active" href="../records.html" aria-current="page">会议记录</a>
+          <a href="../people.html">常用小组</a>
+          <a href="../settings.html">设置</a>
+        </nav>
+        <div class="sidebar-foot">
+          <span class="status warning" data-sidebar-status>3 位说话人待确认</span>
+          <span class="meta">20260805-HAQR-02</span>
+        </div>
+      </aside>
+
+      <main class="main">
+        <header class="titlebar">
+          <a href="meeting-detail.html" data-leave-link>返回会议详情</a>
+          <span class="status success" data-file-status>原始记录已刷新</span>
+        </header>
+
+        <div class="content">
+          <section class="page-head">
+            <div>
+              <p class="eyebrow">20260805-HAQR-02</p>
+              <h1>编辑原始记录</h1>
+              <p>可统一指定本场说话人，也可直接修改记录文字。原始文字和每次修改都会保留。</p>
+            </div>
+            <span class="status warning" data-page-status>3 位说话人待确认</span>
+          </section>
+
+          <section class="card speaker-map" aria-labelledby="speaker-map-title">
+            <div class="section-head">
+              <div>
+                <h2 id="speaker-map-title">本场说话人对应关系</h2>
+                <p class="speaker-map-intro">一次指定后会应用到该说话人的所有片段。重叠或识别错误的片段可以单独修改。</p>
+              </div>
+              <span class="meta">影响 8 段记录</span>
+            </div>
+
+            <div class="speaker-map-list">
+              <div class="speaker-map-row">
+                <div class="speaker-map-name">
+                  <strong>未知说话人 1</strong>
+                  <span class="meta">4 段记录</span>
+                </div>
+                <select class="select" aria-label="未知说话人 1 对应的参会人" data-speaker-map="cluster-1">
+                  <option value="未知说话人 1">保持未知</option>
+                  <option value="刘志勇">刘志勇</option>
+                  <option value="李四">李四</option>
+                  <option value="林舟（临时参会人）">林舟（临时参会人）</option>
+                </select>
+              </div>
+
+              <div class="speaker-map-row">
+                <div class="speaker-map-name">
+                  <strong>未知说话人 2</strong>
+                  <span class="meta">3 段记录</span>
+                </div>
+                <select class="select" aria-label="未知说话人 2 对应的参会人" data-speaker-map="cluster-2">
+                  <option value="未知说话人 2">保持未知</option>
+                  <option value="刘志勇">刘志勇</option>
+                  <option value="李四">李四</option>
+                  <option value="林舟（临时参会人）">林舟（临时参会人）</option>
+                </select>
+              </div>
+
+              <div class="speaker-map-row">
+                <div class="speaker-map-name">
+                  <strong>未知说话人 3</strong>
+                  <span class="meta">1 段重叠语音</span>
+                </div>
+                <select class="select" aria-label="未知说话人 3 对应的参会人" data-speaker-map="cluster-3">
+                  <option value="未知说话人 3">保持未知</option>
+                  <option value="刘志勇">刘志勇</option>
+                  <option value="李四">李四</option>
+                  <option value="林舟（临时参会人）">林舟（临时参会人）</option>
+                </select>
+              </div>
+            </div>
+          </section>
+
+          <section class="transcript-section" aria-labelledby="transcript-title">
+            <div class="section-head transcript-toolbar">
+              <div>
+                <h2 id="transcript-title">原始记录</h2>
+                <p class="speaker-map-intro">直接修改文字或选择本段说话人。</p>
+              </div>
+              <div class="transcript-toolbar-actions" aria-live="polite">
+                <button class="btn btn-primary" type="button" data-save-all>保存修改</button>
+              </div>
+            </div>
+
+            <div class="transcript-list">
+              <article class="transcript-item" data-transcript data-cluster="cluster-1">
+                <div class="transcript-meta">
+                  <div class="transcript-meta-left">
+                    <span class="meta">00:00:05-00:00:25</span>
+                    <span class="status warning">待确认</span>
+                  </div>
+                  <div class="transcript-meta-actions">
+                    <button class="btn btn-link" type="button" data-play>播放</button>
+                    <select class="select segment-speaker-select" aria-label="00:00:05 本段说话人" data-segment-speaker>
+                      <option value="未知说话人 1" selected>未知说话人 1</option>
+                      <option value="刘志勇">刘志勇</option>
+                      <option value="李四">李四</option>
+                      <option value="林舟（临时参会人）">林舟（临时参会人）</option>
+                    </select>
+                  </div>
+                </div>
+                <textarea class="textarea transcript-input" rows="1" aria-label="编辑 00:00:05 的记录文字" data-transcript-input>天津涮羊肉，但是你懒，你就来袋儿大宇或者来袋儿恩来顺，或者来袋儿九环，这都行。你挤碗里，咸你得怼麻酱和开了，后续再加香菜、辣椒油，这是第二种。第三种情况也是你们遇见最多的情况，就是你们来天津吃，线下一般情况下，人都会调好。</textarea>
+              </article>
+
+              <article class="transcript-item is-dirty" data-transcript data-cluster="cluster-2">
+                <div class="transcript-meta">
+                  <div class="transcript-meta-left">
+                    <span class="meta">00:00:27-00:00:30</span>
+                    <span class="status info">文字已修改</span>
+                  </div>
+                  <div class="transcript-meta-actions">
+                    <button class="btn btn-link" type="button" data-play>播放</button>
+                    <select class="select segment-speaker-select" aria-label="00:00:27 本段说话人" data-segment-speaker>
+                      <option value="未知说话人 2" selected>未知说话人 2</option>
+                      <option value="刘志勇">刘志勇</option>
+                      <option value="李四">李四</option>
+                      <option value="林舟（临时参会人）">林舟（临时参会人）</option>
+                    </select>
+                  </div>
+                </div>
+                <textarea class="textarea transcript-input" rows="1" aria-label="编辑 00:00:27 的记录文字" data-transcript-input data-saved-value="临床实验中观察到的头孢克洛缓释片。">临床实验中观察到的是头孢克洛缓释片。</textarea>
+              </article>
+
+              <article class="transcript-item" data-transcript data-cluster="cluster-2">
+                <div class="transcript-meta">
+                  <div class="transcript-meta-left">
+                    <span class="meta">00:00:31-00:00:43</span>
+                    <span class="status warning">待确认</span>
+                  </div>
+                  <div class="transcript-meta-actions">
+                    <button class="btn btn-link" type="button" data-play>播放</button>
+                    <select class="select segment-speaker-select" aria-label="00:00:31 本段说话人" data-segment-speaker>
+                      <option value="未知说话人 2" selected>未知说话人 2</option>
+                      <option value="刘志勇">刘志勇</option>
+                      <option value="李四">李四</option>
+                      <option value="林舟（临时参会人）">林舟（临时参会人）</option>
+                    </select>
+                  </div>
+                </div>
+                <textarea class="textarea transcript-input" rows="1" aria-label="编辑 00:00:31 的记录文字" data-transcript-input>不良反应大多数为轻度，呈一过性，因药物相关的不良反应。</textarea>
+              </article>
+
+              <article class="transcript-item" data-transcript data-cluster="cluster-3">
+                <div class="transcript-meta">
+                  <div class="transcript-meta-left">
+                    <span class="meta">00:01:12-00:01:16</span>
+                    <span class="status warning">重叠语音</span>
+                  </div>
+                  <div class="transcript-meta-actions">
+                    <button class="btn btn-link" type="button" data-play>播放</button>
+                    <select class="select segment-speaker-select" aria-label="00:01:12 本段说话人" data-segment-speaker>
+                      <option value="未知说话人 3" selected>未知说话人 3</option>
+                      <option value="刘志勇">刘志勇</option>
+                      <option value="李四">李四</option>
+                      <option value="林舟（临时参会人）">林舟（临时参会人）</option>
+                    </select>
+                  </div>
+                </div>
+                <textarea class="textarea transcript-input" rows="1" aria-label="编辑 00:01:12 的记录文字" data-transcript-input>为什么没有识别出来我是谁？</textarea>
+              </article>
+            </div>
+          </section>
+        </div>
+      </main>
+    </div>
+
+    <div class="modal-backdrop" id="unsaved" role="dialog" aria-modal="true" aria-labelledby="unsaved-title">
+      <div class="modal">
+        <h2 id="unsaved-title">还有修改尚未保存</h2>
+        <p>返回会议详情前，可以保存本页的文字和说话人修改，也可以放弃这些未保存内容。</p>
+        <div class="modal-actions">
+          <button class="btn btn-quiet" type="button" data-close-modal>继续编辑</button>
+          <a class="btn btn-quiet" href="meeting-detail.html">放弃未保存更改</a>
+          <button class="btn btn-primary" type="button" data-save-and-leave>保存并返回</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="toast" aria-live="polite" data-toast></div>
+  </body>
+</html>
