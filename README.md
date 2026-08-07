@@ -8,14 +8,25 @@
 
 [下载 Release](https://github.com/liuzhiyong-alt/meet-sieve/releases) · [提交 Issue](https://github.com/liuzhiyong-alt/meet-sieve/issues) · [Apache-2.0 License](LICENSE)
 
-## 先选择你的使用方式
+### 项目结构
 
-| 你的目标 | 从这里开始 |
-| --- | --- |
-| 不下载源码，直接安装并使用 MeetSieve | [普通用户：下载安装与使用](#普通用户下载安装与使用) |
-| 拉取源码，本地运行、测试或打包 | [开发者：从源码运行与打包](#开发者从源码运行与打包) |
+```text
+cmd/meetsieve/          Wails 桌面应用入口
+frontend/               Vue 3 + TypeScript 前端
+internal/domain/        领域模型和状态
+internal/service/       会议、转写、声纹、纪要等业务编排
+internal/adapter/       音频、火山 ASR、ONNX、Codex 等适配器
+internal/transport/     Wails bindings 与局域网 HTTP
+migrations/sqlite/      版本化 SQLite migration
+models/                 声纹匹配档案与说明，不存放模型权重
+third_party/            第三方运行时与模型资源锁
+build/                  Wails、macOS、Windows 安装资源
+buildtools/             构建、打包和产物校验工具
+tests/                  单元、集成、契约和真实 E2E 测试
+docs/                   产品、技术方案、设计系统与验证记录
+```
 
-## 普通用户：下载安装与使用
+## 下载安装与使用
 
 这一部分按真实使用顺序编排。照着完成“下载 → 安装 → 初始化 → 配置 → 开始会议”即可使用。
 
@@ -243,7 +254,7 @@ MeetSieve 沿用用户原生 Codex 登录、模型、MCP、Apps、sandbox 和审
 
 卸载程序默认只删除应用本体、快捷方式和安装器创建的系统项，**不会删除**会议工作目录、配置、日志或用户模型。完全清理前请先备份需要保留的会议，再手动删除上述目录。完整说明见[安装卸载与数据保留](docs/guide/安装卸载与数据保留.md)。
 
-## 开发者：从源码运行与打包
+## 从源码运行与打包
 
 这一部分面向需要修改、验证或自行构建 MeetSieve 的开发者。
 
@@ -381,26 +392,6 @@ make verify-package BUILD_VERSION=<version> WINDOWS_FILE_VERSION=<a.b.c.d>
 - 支持存储扫描、日志打开和诊断包导出，便于排查本地问题。
 
 MeetSieve 不提供云端账号、团队空间或自动同步。SQLite 与会议文件是唯一事实源，Codex 对话可以恢复或重新创建。
-
-### 项目结构
-
-```text
-cmd/meetsieve/          Wails 桌面应用入口
-frontend/               Vue 3 + TypeScript 前端
-internal/domain/        领域模型和状态
-internal/service/       会议、转写、声纹、纪要等业务编排
-internal/adapter/       音频、火山 ASR、ONNX、Codex 等适配器
-internal/transport/     Wails bindings 与局域网 HTTP
-migrations/sqlite/      版本化 SQLite migration
-models/                 声纹匹配档案与说明，不存放模型权重
-third_party/            第三方运行时与模型资源锁
-build/                  Wails、macOS、Windows 安装资源
-buildtools/             构建、打包和产物校验工具
-tests/                  单元、集成、契约和真实 E2E 测试
-docs/                   产品、技术方案、设计系统与验证记录
-```
-
-详细技术设计见[技术方案](docs/spec/技术方案.md)。
 
 ## 参与贡献
 
